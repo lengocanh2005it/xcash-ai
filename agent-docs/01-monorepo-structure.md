@@ -92,7 +92,20 @@ pnpm build                                # build toàn bộ theo đúng thứ t
 pnpm lint / pnpm test / pnpm type-check   # tương tự, chạy trên toàn bộ package có script tương ứng
 pnpm format                               # format toàn bộ bằng Biome (không lint, chỉ format)
 pnpm verify                               # lint + type-check + test + build — chạy sau MỌI lần sửa code, xem skill verify
+```
 
+## Git hooks (Husky)
+
+Sau `pnpm install`, script `prepare` tự chạy `husky` và gắn hook vào `.git/hooks`.
+
+| Hook | Chạy gì | Mục đích |
+|---|---|---|
+| **pre-commit** | `lint-staged` (Biome trên file staged) + `pnpm type-check` | Bắt lỗi format/lint/kiểu sớm, nhanh |
+| **pre-push** | `pnpm verify` | Đảm bảo test + build pass trước khi đẩy lên remote |
+
+Bỏ qua tạm (khẩn cấp): `git commit --no-verify` / `git push --no-verify`.
+
+```bash
 # Chạy 1 lệnh cho đúng 1 package cụ thể (không qua turbo):
 pnpm --filter @paypilot/backend add <package>       # thêm dependency cho backend
 pnpm --filter @paypilot/frontend add <package>       # thêm dependency cho frontend

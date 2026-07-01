@@ -4,7 +4,7 @@
 
 - Node.js ≥ 20
 - pnpm ≥ 10 (`corepack enable` hoặc cài trực tiếp — repo pin version qua `packageManager` trong `package.json` root)
-- Docker + Docker Compose (PostgreSQL + pgvector, Redis) — file `docker-compose.yml` sẽ được thêm ở Sprint 1 tuần 1, xem `reference/sprint-plan.md`
+- Docker + Docker Compose (PostgreSQL + pgvector, Redis) — file `docker-compose.yml` ở root repo (postgres + redis; nestjs/react service sẽ thêm ở Sprint 1 tuần 1 phần Vinh)
 - `ngrok` (chỉ cần khi test webhook Cas thật ở local — Cas server không gọi được vào `localhost`)
 
 ## Cài đặt lần đầu
@@ -13,8 +13,23 @@
 git clone <repo>
 cd paypilot-ai
 pnpm install
-cp .env.example .env       # điền giá trị thật, KHÔNG commit .env
+
+# Copy env theo từng app (KHÔNG commit file .env thật)
+cp .env.example .env                          # docker compose (postgres + redis)
+cp .env.example apps/backend/.env             # backend — xóa dòng chỉ dành cho FE/docker nếu muốn gọn
+# Hoặc tách tay: xem bảng bên dưới
+echo "VITE_API_BASE_URL=http://localhost:3000/api/v1" > apps/frontend/.env
 ```
+
+**Cấu trúc `.env` trong monorepo:**
+
+| File | Dùng cho | Nội dung chính |
+|---|---|---|
+| `.env` (root) | `docker compose` | `POSTGRES_*`, `REDIS_PORT` |
+| `apps/backend/.env` | NestJS + Prisma | `DATABASE_URL`, JWT, Cas, Redis URL, OpenAI... |
+| `apps/frontend/.env` | Vite | `VITE_*` (bắt buộc prefix `VITE_`) |
+
+`.env.example` ở root là **bản tham chiếu đầy đủ** tất cả biến — khi setup lần đầu copy/split sang từng app theo bảng trên.
 
 ## Biến môi trường — nhóm chính (đầy đủ xem `.env.example` ở root)
 
@@ -30,12 +45,21 @@ cp .env.example .env       # điền giá trị thật, KHÔNG commit .env
 | PayOS (billing) | `PAYOS_CHECKSUM_KEY`, `PAYOS_BILLING_WEBHOOK_URL` | mock qua Postman, chưa có account PayOS thật |
 | Webhook security | `WEBHOOK_SIGNATURE_HEADER`, `WEBHOOK_TIMESTAMP_TOLERANCE_SECONDS`, `WEBHOOK_IDEMPOTENCY_TTL_SECONDS` | **cần đọc kỹ `https://cas.so/general/api/webhook` trước khi code phần verify signature** — tài liệu Cas chưa nêu rõ tên header chữ ký |
 | AI Matching | `AI_MATCHING_AUTO_THRESHOLD=95`, `AI_MATCHING_MIN_THRESHOLD=50` | mặc định, tenant có thể override qua `tenants.matching_threshold` |
-| Frontend | `VITE_API_BASE_URL` | file `.env` riêng trong `apps/frontend`, phải có prefix `VITE_` mới được Vite expose ra client |
+| Frontend | `VITE_API_BASE_URL` | `apps/frontend/.env` — prefix `VITE_` bắt buộc |
+| Docker Compose | `POSTGRES_*`, `REDIS_PORT` | `.env` ở **root** repo |
+| Backend (còn lại) | xem `.env.example` | `apps/backend/.env` |
 
 ## Chạy dev
 
 ```bash
-pnpm dev                 # chạy backend (port 3000) + frontend (port 5173) song song
+# 1. Khởi động PostgreSQL (pgvector) + Redis
+docker compose up -d
+
+# 2. Migrate database (lần đầu hoặc sau khi pull migration mới)
+pnpm --filter @paypilot/backend exec prisma migrate deploy
+
+# 3. Chạy apps
+pnpm dev                 # backend (port 3000) + frontend (port 5173)
 ```
 
 Swagger docs (khi backend đã setup): `http://localhost:3000/api/docs` (đường dẫn cụ thể tùy config trong `main.ts`).

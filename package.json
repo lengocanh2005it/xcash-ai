@@ -15,10 +15,16 @@
     "type-check": "turbo run type-check",
     "verify": "turbo run lint type-check test build",
     "dev:backend": "turbo run dev --filter=@paypilot/backend",
-    "dev:frontend": "turbo run dev --filter=@paypilot/frontend"
+    "dev:frontend": "turbo run dev --filter=@paypilot/frontend",
+    "prepare": "husky"
+  },
+  "lint-staged": {
+    "*.{js,ts,tsx,json,jsonc,css}": "biome check --write --no-errors-on-unmatched"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.5.2",
+    "husky": "^9.1.7",
+    "lint-staged": "^17.0.8",
     "turbo": "^2.5.0"
   }
 }

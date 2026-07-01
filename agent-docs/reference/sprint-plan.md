@@ -55,7 +55,7 @@
   - Test thử bằng tài khoản demo Cas: `bankusrdemo1` / `soproud` / OTP `123456`
 - [ ] Cấu hình Webhook trên Cas Console (thao tác thủ công 1 lần, KHÔNG phải code):
   - Vào `sandbox.console.bankhub.dev` → Developer → Webhooks → Thêm Webhooks
-  - Loại: `TRANSACTIONS`, URL: endpoint backend public (dùng `ngrok http 3000` khi dev local vì Cas server thật không gọi được vào `localhost`)
+  - Loại: `TRANSACTIONS`, URL: `https://<ngrok-id>.ngrok-free.app/api/v1/webhook/cas` khi dev local (`ngrok http 3000`); production dùng URL public HTTPS
   - Đây là webhook DUY NHẤT cho toàn bộ App PayPilot — không lặp lại thao tác này cho từng tenant
 - [ ] Banking module: nhận webhook Balance Hook
   - Webhook endpoint `POST /api/v1/webhook/cas` — **1 URL DUY NHẤT, không có `:tenantId` trong path**

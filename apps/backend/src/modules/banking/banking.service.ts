@@ -1,5 +1,6 @@
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import {
+  BadRequestException,
   ForbiddenException,
   Injectable,
   Logger,
@@ -17,6 +18,11 @@ export interface CasWebhookResult {
   transactionId: string;
   tenantId?: string;
   status?: TransactionStatus;
+}
+
+export interface CasWebhookProbeResult {
+  probe: true;
+  ok: true;
 }
 
 @Injectable()
@@ -81,8 +87,21 @@ export class BankingService {
     }
   }
 
-  async handleCasWebhook(payload: CasWebhookDto): Promise<CasWebhookResult> {
-    const transactionId = payload.transaction.id;
+  async handleCasWebhook(
+    payload: CasWebhookDto,
+  ): Promise<CasWebhookResult | CasWebhookProbeResult> {
+    if (!payload?.transaction?.id) {
+      this.logger.log('Cas webhook probe received (no transaction) — endpoint reachable');
+      return { probe: true, ok: true };
+    }
+
+    const txn = payload.transaction;
+
+    if (!payload.grantId) {
+      throw new BadRequestException('Thiếu grantId trong payload webhook giao dịch');
+    }
+
+    const transactionId = txn.id;
     const idempotencyTtl = Number.parseInt(
       this.configService.get<string>('WEBHOOK_IDEMPOTENCY_TTL_SECONDS', '86400'),
       10,
@@ -142,11 +161,11 @@ export class BankingService {
           tenantId: grant.tenantId,
           grantId: payload.grantId,
           transactionId,
-          amount: new Prisma.Decimal(payload.transaction.amount),
-          content: payload.transaction.description ?? null,
-          senderAccount: payload.transaction.counterAccountName ?? null,
+          amount: new Prisma.Decimal(txn.amount),
+          content: txn.description ?? null,
+          senderAccount: txn.counterAccountName ?? null,
           receiverAccount: null,
-          transactionDate: new Date(payload.transaction.transactionDateTime),
+          transactionDate: new Date(txn.transactionDateTime),
           status: TransactionStatus.pending,
         },
       });
@@ -178,7 +197,7 @@ export class BankingService {
           afterState: {
             transactionId,
             grantId: payload.grantId,
-            amount: payload.transaction.amount,
+            amount: txn.amount,
           },
         },
       });

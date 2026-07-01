@@ -166,7 +166,7 @@ Lưu transaction với đúng tenant_id, chạy tiếp AI Matching
 
 **Cấu hình thực tế trên Cas Console (1 lần duy nhất, không lặp lại cho từng tenant):**
 - Loại webhook: `TRANSACTIONS`
-- URL: endpoint backend PayPilot có thể truy cập từ internet (môi trường dev local cần dùng `ngrok` để tạo URL public tạm thời trỏ vào `localhost`, vì Cas server thật không gọi vào `localhost` được)
+- URL: endpoint backend truy cập được từ internet — dev local dùng **ngrok** (`ngrok http 3000` → `https://<id>.ngrok-free.app/api/v1/webhook/cas`); production dùng URL HTTPS public
 
 ---
 

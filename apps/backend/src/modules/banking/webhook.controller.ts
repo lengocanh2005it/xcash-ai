@@ -1,4 +1,4 @@
-import { Body, Controller, Headers, Post, Req } from '@nestjs/common';
+import { Body, Controller, Headers, Logger, Post, Req } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import type { Request } from 'express';
@@ -8,6 +8,8 @@ import type { CasWebhookDto } from './dto/banking.dto';
 @ApiTags('Webhook')
 @Controller('webhook')
 export class WebhookController {
+  private readonly logger = new Logger(WebhookController.name);
+
   constructor(
     private readonly bankingService: BankingService,
     private readonly configService: ConfigService,
@@ -32,7 +34,27 @@ export class WebhookController {
     const signatureHeader =
       signature ?? (req.headers[configuredHeader.toLowerCase()] as string | undefined);
 
+    const normalizedPayload: CasWebhookDto =
+      payload ?? (rawBody ? (JSON.parse(rawBody) as CasWebhookDto) : {});
+
+    if (process.env.NODE_ENV !== 'production') {
+      this.logger.log('── Cas webhook incoming ──');
+      this.logger.log(`raw body: ${rawBody}`);
+      this.logger.log(`parsed payload: ${JSON.stringify(normalizedPayload, null, 2)}`);
+      this.logger.log(
+        `headers: ${JSON.stringify(
+          {
+            [configuredHeader]: signatureHeader,
+            'x-cas-timestamp': timestamp,
+            'content-type': req.headers['content-type'],
+          },
+          null,
+          2,
+        )}`,
+      );
+    }
+
     this.bankingService.verifyWebhookSignature(rawBody, signatureHeader, timestamp);
-    return this.bankingService.handleCasWebhook(payload);
+    return this.bankingService.handleCasWebhook(normalizedPayload);
   }
 }

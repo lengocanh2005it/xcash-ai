@@ -6,7 +6,7 @@
 - pnpm ≥ 10 (`corepack enable` hoặc cài trực tiếp — repo pin version qua `packageManager` trong `package.json` root)
 - Docker + Docker Compose (PostgreSQL + pgvector, Redis) — file `docker-compose.yml` ở root repo
 - Profile `fullstack`: thêm `backend` + `frontend-dev` (Vite). Profile `production`: `backend` + `frontend` (Nginx static). Xem `deploy/README.md`
-- `ngrok` (chỉ cần khi test webhook Cas thật ở local — Cas server không gọi được vào `localhost`)
+- `ngrok` — **bắt buộc khi test webhook Cas ở local** (Cas server không gọi được `localhost`)
 
 ## Cài đặt lần đầu
 
@@ -16,21 +16,21 @@ cd paypilot-ai
 pnpm install
 
 # Copy env theo từng app (KHÔNG commit file .env thật)
-cp .env.example .env                          # docker compose (postgres + redis)
-cp .env.example apps/backend/.env             # backend — xóa dòng chỉ dành cho FE/docker nếu muốn gọn
-# Hoặc tách tay: xem bảng bên dưới
-echo "VITE_API_BASE_URL=http://localhost:3000/api/v1" > apps/frontend/.env
+cp .env.example .env
+cp apps/backend/.env.example apps/backend/.env
+cp apps/frontend/.env.example apps/frontend/.env
+# Điền CAS_CLIENT_ID / CAS_SECRET_KEY thật vào apps/backend/.env (sandbox console)
 ```
 
 **Cấu trúc `.env` trong monorepo:**
 
 | File | Dùng cho | Nội dung chính |
 |---|---|---|
-| `.env` (root) | `docker compose` | `POSTGRES_*`, `REDIS_PORT` |
-| `apps/backend/.env` | NestJS + Prisma | `DATABASE_URL`, JWT, Cas, Redis URL, OpenAI... |
-| `apps/frontend/.env` | Vite | `VITE_*` (bắt buộc prefix `VITE_`) |
+| `.env` (root) | `docker compose` | `POSTGRES_*`, `REDIS_PORT` + biến fullstack (JWT, Cas, `VITE_API_BASE_URL`) |
+| `apps/backend/.env` | NestJS + Prisma | `DATABASE_URL`, JWT, Cas, Redis, webhook... — template: `apps/backend/.env.example` |
+| `apps/frontend/.env` | Vite | `VITE_*` — template: `apps/frontend/.env.example` |
 
-`.env.example` ở root là **bản tham chiếu đầy đủ** tất cả biến — khi setup lần đầu copy/split sang từng app theo bảng trên.
+`.env.example` ở root là **bản tham chiếu đầy đủ**; mỗi app có `.env.example` riêng để copy nhanh.
 
 ## Biến môi trường — nhóm chính (đầy đủ xem `.env.example` ở root)
 
@@ -42,9 +42,9 @@ echo "VITE_API_BASE_URL=http://localhost:3000/api/v1" > apps/frontend/.env
 | JWT | `JWT_ACCESS_SECRET`, `JWT_ACCESS_EXPIRES_IN=15m`, `JWT_REFRESH_SECRET`, `JWT_REFRESH_EXPIRES_IN=7d` | Access token ngắn hạn, Refresh lưu HttpOnly Cookie |
 | OpenAI | `OPENAI_API_KEY`, `OPENAI_EMBEDDING_MODEL`, `OPENAI_CHAT_MODEL` | công ty cấp sẵn key, không tự train model |
 | Cas SDK | `CAS_API_BASE_URL`, `CAS_CLIENT_ID`, `CAS_SECRET_KEY`, `CAS_GRANT_REDIRECT_URI` | sandbox thật, lấy tại `sandbox.console.bankhub.dev/developer/keys` |
-| Cas Webhook | `NGROK_WEBHOOK_URL` | chỉ cần khi test webhook local qua ngrok |
+| Cas Webhook | `CAS_WEBHOOK_URL` | URL đăng ký trên Cas Console; dev local dùng **ngrok** → `https://<id>.ngrok-free.app/api/v1/webhook/cas` |
 | PayOS (billing) | `PAYOS_CHECKSUM_KEY`, `PAYOS_BILLING_WEBHOOK_URL` | mock qua Postman, chưa có account PayOS thật |
-| Webhook security | `WEBHOOK_SIGNATURE_HEADER`, `WEBHOOK_TIMESTAMP_TOLERANCE_SECONDS`, `WEBHOOK_IDEMPOTENCY_TTL_SECONDS`, `WEBHOOK_SKIP_SIGNATURE_VERIFY` | dev local/ngrok: set `WEBHOOK_SKIP_SIGNATURE_VERIFY=true` để bỏ qua verify chữ ký; production **phải** `false` |
+| Webhook security | `WEBHOOK_SIGNATURE_HEADER`, `WEBHOOK_TIMESTAMP_TOLERANCE_SECONDS`, `WEBHOOK_IDEMPOTENCY_TTL_SECONDS`, `WEBHOOK_SKIP_SIGNATURE_VERIFY` | dev local/ngrok: `WEBHOOK_SKIP_SIGNATURE_VERIFY=true`; production **phải** `false` |
 | AI Matching | `AI_MATCHING_AUTO_THRESHOLD=95`, `AI_MATCHING_MIN_THRESHOLD=50` | mặc định, tenant có thể override qua `tenants.matching_threshold` |
 | Frontend | `VITE_API_BASE_URL` | `apps/frontend/.env` — prefix `VITE_` bắt buộc |
 | Docker Compose | `POSTGRES_*`, `REDIS_PORT` | `.env` ở **root** repo |
@@ -70,16 +70,27 @@ Swagger docs (khi backend đã setup): `http://localhost:3000/api/docs` (đườ
 
 ## Test webhook Cas Balance Hook ở local
 
-Cas server thật **không gọi vào được `localhost`**, nên phải dùng `ngrok`:
+Cas server **không gọi được `localhost`** — phải dùng **ngrok**:
 
 ```bash
+# Terminal 1: backend đang chạy port 3000
+pnpm dev:backend
+
+# Terminal 2: tạo tunnel public
 ngrok http 3000
-# copy URL public (vd: https://abc123.ngrok-free.app) → cấu hình trên
-# sandbox.console.bankhub.dev → Developer → Webhooks → loại TRANSACTIONS
-# URL: https://abc123.ngrok-free.app/api/v1/webhook/cas
+# Forwarding: https://abc123.ngrok-free.app -> http://localhost:3000
 ```
 
-Đây là thao tác cấu hình **1 lần duy nhất cho toàn App** (không lặp lại cho từng tenant) — xem chi tiết tại `reference/business-overview.md` mục "Webhook URL — DÙNG CHUNG 1 URL cho toàn bộ App".
+1. Copy URL ngrok → điền `CAS_WEBHOOK_URL` trong `apps/backend/.env`:
+   `https://abc123.ngrok-free.app/api/v1/webhook/cas`
+2. Cas Console → Developer → Webhooks → loại **TRANSACTIONS** → dán cùng URL trên
+3. Bấm **Gọi thử**
+
+**Lưu ý:** ngrok free đổi URL mỗi lần restart — phải cập nhật lại Cas Console + `.env`.
+
+Production: URL public HTTPS của backend (không cần ngrok).
+
+Đây là thao tác cấu hình **1 lần duy nhất cho toàn App** — xem `reference/business-overview.md` mục "Webhook URL — DÙNG CHUNG 1 URL cho toàn bộ App".
 
 ## Tài khoản demo Cas (sandbox)
 
@@ -104,5 +115,5 @@ OTP:      123456
 |---|---|
 | `pnpm install` báo lỗi workspace | Kiểm tra `package.json` của package mới có `name` dạng `@paypilot/<tên>` và nằm đúng dưới `apps/` hoặc `packages/` chưa |
 | Turbo báo "no script found" | Bình thường nếu package đó chưa cần script đó — không phải lỗi |
-| Webhook Cas không đến local | Ngrok tunnel đã tắt, hoặc URL trên Cas Console chưa cập nhật URL ngrok mới (ngrok free đổi URL mỗi lần restart) |
+| Webhook Cas không đến local | Chưa chạy ngrok, URL Cas Console chưa khớp tunnel mới, hoặc backend chưa listen port 3000 |
 | `grantToken` hết hạn khi test Cas Link | Token chỉ sống 30 phút, dùng 1 lần — tạo lại token mới, không cache/reuse |

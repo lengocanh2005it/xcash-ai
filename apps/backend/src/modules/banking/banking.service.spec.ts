@@ -67,6 +67,13 @@ describe('BankingService', () => {
     service = module.get<BankingService>(BankingService);
   });
 
+  it('returns probe result when Cas Console pings without transaction payload', async () => {
+    const result = await service.handleCasWebhook({ webhookType: 'TRANSACTIONS' });
+
+    expect(result).toEqual({ probe: true, ok: true });
+    expect(redisClient.set).not.toHaveBeenCalled();
+  });
+
   it('returns duplicate when redis idempotency key already exists', async () => {
     redisClient.set.mockResolvedValue(null);
 

@@ -33,6 +33,7 @@ paypilot-ai/
 ├── agent-docs/                             # (không đổi cấu trúc)
 ├── apps/
 │   ├── backend/
+│   │   ├── .env.example                  # template backend (copy → .env)
 │   │   ├── prisma/
 │   │   │   ├── schema.prisma               # 11 bảng đầy đủ + pgvector extension
 │   │   │   └── migrations/

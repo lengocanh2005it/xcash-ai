@@ -18,9 +18,9 @@ cd paypilot-ai
 
 ```bash
 cp .env.example .env
-cp .env.example apps/backend/.env
-# Sửa DATABASE_URL, JWT secrets, Cas keys, FRONTEND_URL, APP_URL...
-echo "VITE_API_BASE_URL=https://YOUR_DOMAIN/api/v1" > apps/frontend/.env
+cp apps/backend/.env.example apps/backend/.env
+cp apps/frontend/.env.example apps/frontend/.env
+# Sửa JWT secrets, Cas keys (sandbox console), FRONTEND_URL / APP_URL khi deploy production
 ```
 
 ## 3. Chạy full stack bằng Docker Compose

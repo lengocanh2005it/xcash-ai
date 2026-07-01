@@ -1,11 +1,11 @@
 import { Type } from 'class-transformer';
-import { IsOptional, IsString } from 'class-validator';
+import { IsNumber, IsOptional, IsString, ValidateNested } from 'class-validator';
 
 export class CasWebhookTransactionDto {
   @IsString()
   id!: string;
 
-  @Type(() => Number)
+  @IsNumber()
   amount!: number;
 
   @IsOptional()
@@ -25,12 +25,16 @@ export class CasWebhookTransactionDto {
 }
 
 export class CasWebhookDto {
+  @IsOptional()
   @IsString()
-  webhookType!: string;
+  webhookType?: string;
 
+  @IsOptional()
   @IsString()
-  grantId!: string;
+  grantId?: string;
 
+  @IsOptional()
+  @ValidateNested()
   @Type(() => CasWebhookTransactionDto)
-  transaction!: CasWebhookTransactionDto;
+  transaction?: CasWebhookTransactionDto;
 }

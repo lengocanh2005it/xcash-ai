@@ -2,22 +2,23 @@
 
 > Mục đích: cho biết **chính xác** cái gì đã tồn tại trong repo ngay lúc này, để agent không cần `find`/`grep`/`ls` lại từ đầu mỗi session mới. File này phải được cập nhật mỗi khi có thay đổi cấu trúc đáng kể (thêm module, thêm page, đổi dependency lớn, thêm service hạ tầng). Nếu file này và thực tế code lệch nhau, **tin thực tế code**, và sửa lại file này ngay sau đó.
 
-Cập nhật lần cuối: sau Sprint 1 tuần 1 (Lê Ngọc Anh) — foundation backend: Prisma schema + migration, Auth, RBAC guards, Cas SDK client, Redis + BullMQ, Swagger, Docker Compose (postgres+redis).
+Cập nhật lần cuối: sau Sprint 1 tuần 1 + đồng bộ docs (Husky, CI workflow, cấu trúc `.env` per-app).
 
 ## Repo đang ở giai đoạn nào
 
-**Trạng thái: Sprint 1 tuần 1 backend (Ngọc Anh) xong.** Đã có: monorepo + tooling, **toàn bộ Prisma schema 11 bảng** + migration đầu tiên, **Auth module** (register/login/refresh/logout/me), **RBAC foundation** (JwtAuthGuard, RolesGuard, PartnerGuard, `@Roles()`), **Cas SDK HTTP client** + endpoint ping demo, **Redis + BullMQ** wiring, **Swagger** tại `/api/docs`, **docker-compose.yml** (PostgreSQL pgvector + Redis). **Chưa có:** Cas Link onboarding (tuần 2), webhook banking, transaction CRUD, frontend thật (Tailwind/ShadCN/Router), CI/CD, deploy VPS.
+**Trạng thái: Sprint 1 tuần 1 backend (Ngọc Anh) xong.** Đã có: monorepo + tooling, **toàn bộ Prisma schema 11 bảng** + migration đầu tiên, **Auth module**, **RBAC foundation**, **Cas SDK HTTP client**, **Redis + BullMQ**, **Swagger**, **docker-compose.yml**, **Husky** (pre-commit/pre-push), **GitHub Actions CI** (`.github/workflows/ci.yml` chạy `pnpm verify`). **Chưa có:** Cas Link onboarding (tuần 2), webhook banking, transaction CRUD, frontend thật (Tailwind/ShadCN/Router), **deploy VPS** (phần CI/CD deploy của Vinh).
 
-Đối chiếu với `reference/sprint-plan.md`: Sprint 1 tuần 1 phần Lê Ngọc Anh **đã xong**; phần Lưu Nguyễn Thế Vinh (Tailwind, ShadCN, Docker full stack, CI/CD, deploy) **chưa làm**.
+Đối chiếu `reference/sprint-plan.md`: Sprint 1 tuần 1 phần Lê Ngọc Anh **đã xong**; phần Vinh — CI verify workflow **đã có**, còn Tailwind/ShadCN, Docker full stack (nestjs+react services), deploy VPS **chưa làm**.
 
 ## Cây file thực tế toàn repo (không tính `node_modules`, `.git`, `.turbo`)
 
 ```
 paypilot-ai/
 ├── .claude/skills/                         # 6 skills (không đổi)
-├── .env.example
-├── .husky/                       # pre-commit, pre-push (Husky)
-├── docker-compose.yml                      # NEW — postgres (pgvector) + redis
+├── .env.example                            # tham chiếu đầy đủ — split sang từng app khi setup
+├── .github/workflows/ci.yml                # GitHub Actions: pnpm verify
+├── .husky/                                 # pre-commit, pre-push
+├── docker-compose.yml                      # postgres (pgvector) + redis
 ├── CLAUDE.md
 ├── agent-docs/                             # (không đổi cấu trúc)
 ├── apps/
@@ -73,7 +74,17 @@ Swagger UI: `http://localhost:3000/api/docs`
 
 (Không đổi — xem block cũ trong git history hoặc file trực tiếp.)
 
-## Scripts thật — thay đổi ở `apps/backend/package.json`
+## Scripts thật — root `package.json` (thêm so với bootstrap)
+
+```
+prepare  → husky   (chạy sau pnpm install, gắn git hooks)
+```
+
+**devDependencies mới:** `husky ^9.1.7`, `lint-staged ^17.0.8`.
+
+**`lint-staged`** (root): `*.{js,ts,tsx,json,jsonc,css}` → `biome check --write --no-errors-on-unmatched`.
+
+## Scripts thật — `apps/backend/package.json` (thêm so với scaffold)
 
 **Thêm so với scaffold:**
 ```
@@ -88,7 +99,7 @@ postinstall      → prisma generate
 
 ## Danh sách việc CHƯA làm
 
-- [ ] `.env` thật (chỉ có `.env.example`) — cần copy và điền `CAS_CLIENT_ID`/`CAS_SECRET_KEY` để test Cas ping
+- [ ] Copy `.env` local từ `.env.example` (gitignore — không commit): root (docker), `apps/backend/.env`, `apps/frontend/.env` — xem `04-environment-setup.md`
 - [ ] Chạy `docker compose up -d` + `pnpm --filter @paypilot/backend exec prisma migrate deploy` trên máy dev (migration file đã có, chưa tự chạy)
 - [ ] `apps/backend/src/modules/onboarding/` — Cas Link Grant/Exchange (Sprint 1 tuần 2)
 - [ ] `apps/backend/src/modules/banking/` — webhook Cas Balance Hook (tuần 2)
@@ -108,6 +119,7 @@ postinstall      → prisma generate
 - [x] Cas SDK: `CasClientService` wrap HTTP với headers `x-client-id`, `x-secret-key`, `X-BankHub-Api-Version`
 - [x] Redis + BullMQ configured (`webhook-processing` queue placeholder)
 - [x] Swagger + global ValidationPipe + CORS + ApiResponse interceptor
+- [x] Husky git hooks — pre-commit (`lint-staged` + `type-check`), pre-push (`pnpm verify`)
 - [x] GitHub Actions CI — `.github/workflows/ci.yml` chạy `pnpm verify` trên push/PR tới `main`/`develop`
 
 ## Quy tắc giữ file này luôn đúng

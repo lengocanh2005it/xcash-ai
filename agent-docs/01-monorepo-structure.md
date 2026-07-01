@@ -38,7 +38,9 @@ paypilot-ai/
 │       └── package.json
 │
 ├── agent-docs/                   # tài liệu cho AI agent — xem agent-docs/README.md
-├── .env.example                  # copy thành .env, KHÔNG commit .env thật
+├── .env.example                  # tham chiếu đầy đủ biến môi trường — split per-app khi setup
+├── .github/workflows/ci.yml      # CI: pnpm verify trên push/PR
+├── .husky/                       # pre-commit, pre-push
 ├── pnpm-workspace.yaml
 ├── turbo.json                    # định nghĩa task pipeline
 ├── package.json                  # root — chỉ chứa script điều phối + devDependency turbo
@@ -141,6 +143,8 @@ Chỉ tách thành package riêng khi code thực sự dùng chung giữa ≥ 2 
 
 Không tạo package cho code chỉ 1 app dùng — giữ trong `apps/<app>/src` như bình thường.
 
-## CI/CD (kế hoạch, xem chi tiết tại `reference/sprint-plan.md` mục DevOps)
+## CI/CD
 
-GitHub Actions sẽ chạy `pnpm turbo run lint test build --filter=...[origin/main]` để chỉ chạy trên package bị ảnh hưởng bởi commit, tận dụng cache của Turborepo giữa các lần chạy CI.
+**Đã có (Sprint 1 tuần 1):** `.github/workflows/ci.yml` — trigger trên `push`/`pull_request` tới `main` hoặc `develop`, chạy `pnpm install --frozen-lockfile` rồi `pnpm verify` (lint + type-check + test + build toàn monorepo).
+
+**Chưa có:** deploy lên VPS, affected-package filter (`turbo --filter=...[origin/main]`), Docker image build/push — xem `reference/sprint-plan.md` mục DevOps (phần Vinh).

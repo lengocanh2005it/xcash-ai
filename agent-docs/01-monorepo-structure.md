@@ -145,6 +145,6 @@ Không tạo package cho code chỉ 1 app dùng — giữ trong `apps/<app>/src`
 
 ## CI/CD
 
-**Đã có (Sprint 1 tuần 1):** `.github/workflows/ci.yml` — trigger trên `push`/`pull_request` tới `main` hoặc `develop`, chạy `pnpm install --frozen-lockfile` rồi `pnpm verify` (lint + type-check + test + build toàn monorepo).
+**Đã có (Sprint 1 tuần 1):** `.github/workflows/ci.yml` — trigger trên `push`/`pull_request` tới `main` hoặc `develop`, chạy `pnpm verify`. `.github/workflows/deploy.yml` — `workflow_dispatch`, SSH deploy lên VPS (cần secrets `DEPLOY_HOST`, `DEPLOY_USER`, `DEPLOY_SSH_KEY`, `DEPLOY_PATH`). Hướng dẫn: `deploy/README.md`.
 
-**Chưa có:** deploy lên VPS, affected-package filter (`turbo --filter=...[origin/main]`), Docker image build/push — xem `reference/sprint-plan.md` mục DevOps (phần Vinh).
+**Chưa có:** affected-package filter (`turbo --filter=...[origin/main]`), Docker image push registry, deploy VPS thật (cần cấu hình secrets + VPS).

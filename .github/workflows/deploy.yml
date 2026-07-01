@@ -1,0 +1,38 @@
+name: Deploy
+
+on:
+  workflow_dispatch:
+    inputs:
+      profile:
+        description: Docker Compose profile
+        required: true
+        default: production
+        type: choice
+        options:
+          - production
+          - fullstack
+
+concurrency:
+  group: deploy-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Deploy to VPS
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          script: |
+            set -euo pipefail
+            cd "${{ secrets.DEPLOY_PATH }}"
+            git fetch origin
+            git checkout main
+            git pull origin main
+            docker compose --profile ${{ inputs.profile }} up -d --build
+            docker compose ps

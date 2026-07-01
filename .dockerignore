@@ -1,0 +1,11 @@
+node_modules
+dist
+.turbo
+coverage
+.git
+.husky
+**/*.log
+apps/backend/dist
+apps/backend/coverage
+apps/frontend/dist
+packages/shared-types/dist

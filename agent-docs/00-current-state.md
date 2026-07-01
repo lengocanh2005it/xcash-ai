@@ -2,13 +2,13 @@
 
 > Mục đích: cho biết **chính xác** cái gì đã tồn tại trong repo ngay lúc này, để agent không cần `find`/`grep`/`ls` lại từ đầu mỗi session mới. File này phải được cập nhật mỗi khi có thay đổi cấu trúc đáng kể (thêm module, thêm page, đổi dependency lớn, thêm service hạ tầng). Nếu file này và thực tế code lệch nhau, **tin thực tế code**, và sửa lại file này ngay sau đó.
 
-Cập nhật lần cuối: sau Sprint 1 tuần 1 + đồng bộ docs (Husky, CI workflow, cấu trúc `.env` per-app).
+Cập nhật lần cuối: sau Sprint 1 tuần 1 — backend (Ngọc Anh) + frontend/DevOps foundation (Thế Vinh).
 
 ## Repo đang ở giai đoạn nào
 
-**Trạng thái: Sprint 1 tuần 1 backend (Ngọc Anh) xong.** Đã có: monorepo + tooling, **toàn bộ Prisma schema 11 bảng** + migration đầu tiên, **Auth module**, **RBAC foundation**, **Cas SDK HTTP client**, **Redis + BullMQ**, **Swagger**, **docker-compose.yml**, **Husky** (pre-commit/pre-push), **GitHub Actions CI** (`.github/workflows/ci.yml` chạy `pnpm verify`). **Chưa có:** Cas Link onboarding (tuần 2), webhook banking, transaction CRUD, frontend thật (Tailwind/ShadCN/Router), **deploy VPS** (phần CI/CD deploy của Vinh).
+**Trạng thái: Sprint 1 tuần 1 xong (cả Ngọc Anh + Thế Vinh).** Backend: Prisma schema 11 bảng, Auth, RBAC, Cas SDK, Redis/BullMQ, Swagger. Frontend foundation: Tailwind v4, ShadCN/UI (button/card/badge/input/skeleton), TanStack Query, Axios client (refresh token interceptor), demo health-check page. DevOps: `docker-compose.yml` full stack (profile `fullstack` / `production`), Dockerfiles (`docker/backend.Dockerfile`, `docker/frontend.Dockerfile`), CI verify + **deploy workflow** (`.github/workflows/deploy.yml`), nginx template (`deploy/nginx/paypilot.conf`).
 
-Đối chiếu `reference/sprint-plan.md`: Sprint 1 tuần 1 phần Lê Ngọc Anh **đã xong**; phần Vinh — CI verify workflow **đã có**, còn Tailwind/ShadCN, Docker full stack (nestjs+react services), deploy VPS **chưa làm**.
+**Chưa có (Sprint 1 tuần 2+):** Cas Link onboarding, webhook banking, transaction CRUD, Layout/Router/Auth UI, deploy VPS thật (cần cấu hình GitHub Secrets + VPS).
 
 ## Cây file thực tế toàn repo (không tính `node_modules`, `.git`, `.turbo`)
 
@@ -16,9 +16,19 @@ Cập nhật lần cuối: sau Sprint 1 tuần 1 + đồng bộ docs (Husky, CI 
 paypilot-ai/
 ├── .claude/skills/                         # 6 skills (không đổi)
 ├── .env.example                            # tham chiếu đầy đủ — split sang từng app khi setup
-├── .github/workflows/ci.yml                # GitHub Actions: pnpm verify
+├── .github/workflows/
+│   ├── ci.yml                              # GitHub Actions: pnpm verify
+│   └── deploy.yml                          # workflow_dispatch deploy VPS qua SSH
+├── .dockerignore
 ├── .husky/                                 # pre-commit, pre-push
-├── docker-compose.yml                      # postgres (pgvector) + redis
+├── docker-compose.yml                      # postgres + redis (+ backend/frontend qua profile)
+├── docker/
+│   ├── backend.Dockerfile
+│   ├── frontend.Dockerfile
+│   └── nginx-frontend.conf
+├── deploy/
+│   ├── README.md                           # hướng dẫn deploy VPS
+│   └── nginx/paypilot.conf
 ├── CLAUDE.md
 ├── agent-docs/                             # (không đổi cấu trúc)
 ├── apps/
@@ -50,8 +60,20 @@ paypilot-ai/
 │   │   └── test/
 │   │       ├── app.e2e-spec.ts
 │   │       └── jest-setup.ts
-│   └── frontend/                           # CHƯA ĐỔI — placeholder React
-├── packages/shared-types/                  # (không đổi nội dung)
+│   └── frontend/
+│       ├── components.json                 # ShadCN config
+│       ├── .env.example                    # VITE_API_BASE_URL
+│       ├── src/
+│       │   ├── main.tsx                    # QueryClientProvider
+│       │   ├── App.tsx                     # foundation demo (health check)
+│       │   ├── components/ui/              # ShadCN: button, card, badge, input, skeleton
+│       │   ├── hooks/useHealthCheck.ts
+│       │   ├── lib/api.ts                  # Axios + refresh interceptor
+│       │   ├── lib/utils.ts                # cn()
+│       │   └── types/auth.ts
+│       ├── vite.config.ts                  # Tailwind v4 + @ alias
+│       └── package.json
+├── packages/shared-types/                  # build → dist/ (CommonJS)
 ├── biome.json, package.json, turbo.json, pnpm-workspace.yaml
 ```
 
@@ -100,13 +122,12 @@ postinstall      → prisma generate
 ## Danh sách việc CHƯA làm
 
 - [ ] Copy `.env` local từ `.env.example` (gitignore — không commit): root (docker), `apps/backend/.env`, `apps/frontend/.env` — xem `04-environment-setup.md`
-- [ ] Chạy `docker compose up -d` + `pnpm --filter @paypilot/backend exec prisma migrate deploy` trên máy dev (migration file đã có, chưa tự chạy)
+- [ ] Chạy `docker compose up -d` + migrate (hoặc `docker compose --profile fullstack up -d --build` cho full stack)
 - [ ] `apps/backend/src/modules/onboarding/` — Cas Link Grant/Exchange (Sprint 1 tuần 2)
 - [ ] `apps/backend/src/modules/banking/` — webhook Cas Balance Hook (tuần 2)
 - [ ] `apps/backend/src/modules/transaction/` — CRUD giao dịch (tuần 2)
-- [ ] Frontend: Tailwind, ShadCN, React Router, TanStack Query, Axios (Vinh tuần 1)
-- [ ] GitHub Actions deploy VPS (Vinh tuần 1 — CI verify workflow đã có tại `.github/workflows/ci.yml`)
-- [ ] ShadCN/UI chưa init ở frontend
+- [ ] Frontend tuần 2: Layout, React Router, Auth UI, Onboarding UI
+- [ ] Cấu hình GitHub Secrets + deploy VPS thật (workflow deploy.yml đã có template)
 
 ## Việc ĐÃ làm xong (mới so với bootstrap)
 
@@ -121,6 +142,11 @@ postinstall      → prisma generate
 - [x] Swagger + global ValidationPipe + CORS + ApiResponse interceptor
 - [x] Husky git hooks — pre-commit (`lint-staged` + `type-check`), pre-push (`pnpm verify`)
 - [x] GitHub Actions CI — `.github/workflows/ci.yml` chạy `pnpm verify` trên push/PR tới `main`/`develop`
+- [x] Frontend foundation (Vinh tuần 1): Tailwind v4, ShadCN/UI, TanStack Query, Axios (`lib/api.ts`), `@/` alias
+- [x] Docker full stack — `docker-compose.yml` profiles `fullstack` (backend + frontend-dev) / `production` (backend + nginx frontend)
+- [x] GitHub Actions deploy — `.github/workflows/deploy.yml` (workflow_dispatch, SSH)
+- [x] Deploy docs + nginx template — `deploy/README.md`, `deploy/nginx/paypilot.conf`
+- [x] `@paypilot/shared-types` build → `dist/` (CommonJS) — FE/BE import từ package exports
 
 ## Quy tắc giữ file này luôn đúng
 

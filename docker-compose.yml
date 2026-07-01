@@ -31,6 +31,69 @@ services:
       timeout: 5s
       retries: 10
 
+  backend:
+    build:
+      context: .
+      dockerfile: docker/backend.Dockerfile
+    container_name: paypilot-backend
+    restart: unless-stopped
+    ports:
+      - '${PORT:-3000}:3000'
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-password}@postgres:5432/${POSTGRES_DB:-paypilot_ai}
+      REDIS_URL: redis://redis:6379
+      JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET:-dev_access_secret_change_me}
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:-dev_refresh_secret_change_me}
+      CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:5173}
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:5173}
+      APP_URL: ${APP_URL:-http://localhost:3000}
+      CAS_API_BASE_URL: ${CAS_API_BASE_URL:-https://sandbox.bankhub.dev}
+      CAS_CLIENT_ID: ${CAS_CLIENT_ID:-}
+      CAS_SECRET_KEY: ${CAS_SECRET_KEY:-}
+      CAS_GRANT_REDIRECT_URI: ${CAS_GRANT_REDIRECT_URI:-http://localhost:5173/onboarding/callback}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    profiles:
+      - fullstack
+      - production
+
+  frontend-dev:
+    build:
+      context: .
+      dockerfile: docker/frontend.Dockerfile
+      target: development
+    container_name: paypilot-frontend-dev
+    restart: unless-stopped
+    ports:
+      - '5173:5173'
+    environment:
+      VITE_API_BASE_URL: ${VITE_API_BASE_URL:-http://localhost:3000/api/v1}
+    depends_on:
+      - backend
+    profiles:
+      - fullstack
+
+  frontend:
+    build:
+      context: .
+      dockerfile: docker/frontend.Dockerfile
+      target: production
+      args:
+        VITE_API_BASE_URL: ${VITE_API_BASE_URL:-http://localhost:3000/api/v1}
+    container_name: paypilot-frontend
+    restart: unless-stopped
+    ports:
+      - '8080:80'
+    depends_on:
+      - backend
+    profiles:
+      - production
+
 volumes:
   paypilot_postgres_data:
   paypilot_redis_data:

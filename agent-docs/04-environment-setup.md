@@ -4,7 +4,8 @@
 
 - Node.js ≥ 20
 - pnpm ≥ 10 (`corepack enable` hoặc cài trực tiếp — repo pin version qua `packageManager` trong `package.json` root)
-- Docker + Docker Compose (PostgreSQL + pgvector, Redis) — file `docker-compose.yml` ở root repo (postgres + redis; nestjs/react service sẽ thêm ở Sprint 1 tuần 1 phần Vinh)
+- Docker + Docker Compose (PostgreSQL + pgvector, Redis) — file `docker-compose.yml` ở root repo
+- Profile `fullstack`: thêm `backend` + `frontend-dev` (Vite). Profile `production`: `backend` + `frontend` (Nginx static). Xem `deploy/README.md`
 - `ngrok` (chỉ cần khi test webhook Cas thật ở local — Cas server không gọi được vào `localhost`)
 
 ## Cài đặt lần đầu
@@ -52,13 +53,16 @@ echo "VITE_API_BASE_URL=http://localhost:3000/api/v1" > apps/frontend/.env
 ## Chạy dev
 
 ```bash
-# 1. Khởi động PostgreSQL (pgvector) + Redis
+# 1. Khởi động PostgreSQL (pgvector) + Redis (chỉ infra)
 docker compose up -d
 
-# 2. Migrate database (lần đầu hoặc sau khi pull migration mới)
+# Hoặc full stack (backend + frontend trong Docker):
+docker compose --profile fullstack up -d --build
+
+# 2. Migrate database (nếu chạy backend ngoài Docker)
 pnpm --filter @paypilot/backend exec prisma migrate deploy
 
-# 3. Chạy apps
+# 3. Chạy apps local (không Docker cho BE/FE)
 pnpm dev                 # backend (port 3000) + frontend (port 5173)
 ```
 

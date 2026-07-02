@@ -10,7 +10,7 @@ export function TenantLayout() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
   return (
-    <div className="flex min-h-svh bg-muted">
+    <div className="flex min-h-svh items-stretch bg-muted">
       <DesktopSidebar
         collapsed={sidebarCollapsed}
         onToggleCollapsed={() => setSidebarCollapsed((value) => !value)}

@@ -4,6 +4,7 @@ export interface OnboardingGrant {
   accountNumber: string | null;
   accountHolderName: string | null;
   bankName: string | null;
+  bankLogo: string | null;
   linkedAt: string;
   status: string;
 }
@@ -33,5 +34,6 @@ export interface BankingCallbackResponse {
   accountNumber: string | null;
   accountHolderName: string | null;
   bankName: string | null;
+  bankLogo: string | null;
   linkedAt: string;
 }

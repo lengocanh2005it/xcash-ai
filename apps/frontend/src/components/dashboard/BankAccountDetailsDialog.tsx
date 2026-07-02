@@ -46,10 +46,20 @@ export function BankAccountDetailsDialog({
           {grants.map((grant) => (
             <div key={grant.id} className="space-y-3 rounded-lg border p-4">
               <div className="flex items-center justify-between gap-2">
-                <Badge variant="secondary" className="bg-primary/10 text-primary">
-                  {grant.bankName ?? 'Ngân hàng'}
-                </Badge>
-                <span className="text-xs text-muted-foreground">
+                <div className="flex min-w-0 items-center gap-2">
+                  {grant.bankLogo ? (
+                    <img
+                      src={grant.bankLogo}
+                      alt={grant.bankName ?? 'Ngân hàng'}
+                      className="size-6 shrink-0 rounded-full object-contain"
+                      loading="lazy"
+                    />
+                  ) : null}
+                  <Badge variant="secondary" className="bg-primary/10 text-primary">
+                    {grant.bankName ?? 'Ngân hàng'}
+                  </Badge>
+                </div>
+                <span className="shrink-0 text-xs text-muted-foreground">
                   Liên kết {formatLinkedAt(grant.linkedAt)}
                 </span>
               </div>

@@ -2,13 +2,17 @@
 
 > Mục đích: cho biết **chính xác** cái gì đã tồn tại trong repo ngay lúc này, để agent không cần `find`/`grep`/`ls` lại từ đầu mỗi session mới. File này phải được cập nhật mỗi khi có thay đổi cấu trúc đáng kể (thêm module, thêm page, đổi dependency lớn, thêm service hạ tầng). Nếu file này và thực tế code lệch nhau, **tin thực tế code**, và sửa lại file này ngay sau đó.
 
-Cập nhật lần cuối: sau Sprint 1 tuần 2 — Cas Link E2E, dashboard Recharts (Thế Vinh).
+Cập nhật lần cuối: Sprint 1 **đã đóng** (07/2026) — smoke test E2E pass (Postman mock webhook); deploy VPS **hoãn Sprint 4**.
 
 ## Repo đang ở giai đoạn nào
 
-**Trạng thái: Sprint 1 tuần 2 xong (cả backend + frontend foundation).** Backend: Onboarding, Banking webhook, Transaction list/detail. Frontend: React Router, TenantLayout (Sidebar thu gọn + Header), Auth, Onboarding Cas Link, Dashboard (stat cards + Recharts + giao dịch gần đây), Transactions list cơ bản.
+**Trạng thái: Sprint 1 xong — sẵn sàng Sprint 2.** Backend: Onboarding, Banking webhook, Transaction list/detail. Frontend: React Router, TenantLayout, Auth, Onboarding Cas Link, Dashboard (Recharts + stat cards), Transactions list.
 
-**Chưa có (Sprint 2+):** AI matching pipeline, Invoice/Customer CRUD UI, Partner Dashboard đầy đủ, deploy VPS thật.
+**Smoke test E2E đã pass (local):** Register → Cas Link (sandbox) → Postman mock `POST /webhook/cas` → Dashboard/Transactions hiển thị giao dịch thật. Webhook Cas Console / ngrok **không bắt buộc** khi dùng Postman gọi thẳng `localhost`.
+
+**Chưa có (Sprint 2+):** AI matching pipeline, Invoice/Customer CRUD UI, Partner Dashboard đầy đủ.
+
+**Hoãn Sprint 4:** deploy VPS thật + GitHub Secrets + HTTPS production (workflow `deploy.yml` + `deploy/README.md` đã có template, chưa chạy trên VPS).
 
 ## Cây file thực tế toàn repo (không tính `node_modules`, `.git`, `.turbo`)
 
@@ -145,11 +149,15 @@ postinstall      → prisma generate
 
 ## Danh sách việc CHƯA làm
 
-- [ ] Copy `.env` local từ `.env.example` (gitignore — không commit): root (docker), `apps/backend/.env`, `apps/frontend/.env` — xem `04-environment-setup.md`
-- [ ] Chạy `docker compose up -d` + migrate (hoặc `docker compose --profile fullstack up -d --build` cho full stack)
-- [ ] Smoke test E2E: Register → Onboarding Cas Link → webhook → xem Transactions trên UI
-- [ ] Cấu hình GitHub Secrets + deploy VPS thật (workflow deploy.yml đã có template)
-- [ ] AI matching pipeline (Sprint 2)
+- [ ] AI matching pipeline (Sprint 2 tuần 3)
+- [ ] Invoice / Customer CRUD (Sprint 2)
+- [ ] Deploy VPS thật + HTTPS production (**hoãn Sprint 4** — xem `deploy/README.md`)
+
+## Việc Sprint 1 đã đóng (07/2026)
+
+- [x] Copy `.env` local + `docker compose up -d` + migrate (môi trường dev team)
+- [x] Smoke test E2E: Register → Cas Link → Postman mock webhook → xem Transactions/Dashboard trên UI
+- [x] GitHub Actions CI — `pnpm verify` trên push/PR
 
 ## Việc ĐÃ làm xong (mới so với bootstrap)
 
@@ -181,6 +189,8 @@ postinstall      → prisma generate
 - [x] ShadCN/UI first — ưu tiên `@/components/ui/*`; thêm component qua `shadcn add`; docs [ui.shadcn.com/docs/components](https://ui.shadcn.com/docs/components); `table`, `label` đã có
 - [x] `AuthProvider` + `ProtectedRoute`/`GuestRoute` — redirect theo auth + onboarding status
 - [x] Dependencies FE mới: `react-router-dom`, `sonner` (toast)
+- [x] Dashboard `GET /transactions?limit=100` (max BE); fix lỗi `limit=200` → 400
+- [x] `RecentTransactionsCard` — nút "Xem tất cả" luôn ở đáy card (`mt-auto`)
 
 ## Quy tắc giữ file này luôn đúng
 

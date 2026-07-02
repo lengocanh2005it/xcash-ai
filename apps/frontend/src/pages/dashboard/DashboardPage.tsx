@@ -17,7 +17,7 @@ import {
 } from '@/lib/dashboard-transactions';
 import type { TransactionListResponse } from '@/types/transaction';
 
-const DASHBOARD_TRANSACTION_LIMIT = 200;
+const DASHBOARD_TRANSACTION_LIMIT = 100;
 
 export default function DashboardPage() {
   const { user, onboardingStatus } = useAuth();

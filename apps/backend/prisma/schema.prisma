@@ -189,6 +189,7 @@ model CasGrant {
   accountNumber String?        @map("account_number")
   accountHolderName String?    @map("account_holder_name")
   bankName      String?        @map("bank_name")
+  bankLogo      String?        @map("bank_logo")
   status        CasGrantStatus @default(active)
   linkedAt      DateTime       @default(now()) @map("linked_at")
 

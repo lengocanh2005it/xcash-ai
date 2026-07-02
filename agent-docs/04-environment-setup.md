@@ -6,7 +6,7 @@
 - pnpm ≥ 10 (`corepack enable` hoặc cài trực tiếp — repo pin version qua `packageManager` trong `package.json` root)
 - Docker + Docker Compose (PostgreSQL + pgvector, Redis) — file `docker-compose.yml` ở root repo
 - Profile `fullstack`: thêm `backend` + `frontend-dev` (Vite). Profile `production`: `backend` + `frontend` (Nginx static). Xem `deploy/README.md`
-- `ngrok` — **bắt buộc khi test webhook Cas ở local** (Cas server không gọi được `localhost`)
+- `ngrok` — chỉ cần khi test webhook **từ Cas Console** (Cas server không gọi được `localhost`). **Không cần** nếu mock webhook bằng Postman/curl gọi thẳng `localhost:3000` (xem mục Smoke test E2E bên dưới).
 
 ## Cài đặt lần đầu
 
@@ -92,6 +92,40 @@ Production: URL public HTTPS của backend (không cần ngrok).
 
 Đây là thao tác cấu hình **1 lần duy nhất cho toàn App** — xem `reference/business-overview.md` mục "Webhook URL — DÙNG CHUNG 1 URL cho toàn bộ App".
 
+**Thay thế (khuyến nghị cho smoke test Sprint 1):** dùng Postman/curl gọi thẳng `http://localhost:3000/api/v1/webhook/cas` — không cần ngrok, không cần Cas Console "Gọi thử". Xem mục **Smoke test E2E** bên dưới.
+
+## Smoke test E2E (Sprint 1 — đã pass)
+
+Luồng chuẩn để đóng Sprint 1 trên local:
+
+1. `docker compose up -d` + migrate + `pnpm dev`
+2. **Register** + **Login** trên UI (`localhost:5173`)
+3. **Onboarding → Liên kết ngân hàng** (Cas Link sandbox thật) → lấy `grantId` từ `GET /api/v1/onboarding/status`
+4. **Postman/curl** mock webhook (đặt `WEBHOOK_SKIP_SIGNATURE_VERIFY=true` trong `apps/backend/.env`):
+
+```bash
+curl -X POST "http://localhost:3000/api/v1/webhook/cas" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "webhookType": "TRANSACTIONS",
+    "grantId": "<grantId từ onboarding/status>",
+    "transaction": {
+      "id": "mock-txn-001",
+      "amount": 1500000,
+      "description": "Thanh toan HD001 Nguyen Van A",
+      "transactionDateTime": "2026-07-02T10:30:00.000Z",
+      "counterAccountName": "Nguyen Van A",
+      "fiName": "VCB"
+    }
+  }'
+```
+
+5. Mở **Dashboard** / **Giao dịch** — thấy giao dịch mới. Mỗi lần gửi mock dùng `transaction.id` **khác nhau** (idempotency Redis 24h).
+
+**Lưu ý Dashboard:** FE gọi `GET /transactions?limit=100` (max BE cho phép).
+
+**Deploy VPS:** hoãn **Sprint 4** — không chặn đóng Sprint 1. Xem `deploy/README.md` khi sẵn sàng production.
+
 ## Tài khoản demo Cas (sandbox)
 
 Dùng khi test luồng Cas Link (liên kết ngân hàng) ở Onboarding. Grant token dùng scope **`identity,transaction`** (`identity` để gọi `GET /identity`, `transaction` cho Balance Hook), **không** dùng `qrpay` (luồng đăng ký QR Pay merchant — form xác thực STK/tên TK hay lỗi sandbox).
@@ -123,3 +157,4 @@ Luồng đúng: chọn ngân hàng → **đăng nhập iBanking** trong popup (k
 | `grantToken` hết hạn khi test Cas Link | Token chỉ sống 30 phút, dùng 1 lần — tạo lại token mới, không cache/reuse |
 | Cas Link báo lỗi ở form xác thực STK/tên TK | Đang dùng nhầm scope `qrpay` — PayPilot cần `identity,transaction`. Restart backend, bấm lại Liên kết ngân hàng |
 | Callback `/onboarding/banking/callback` lỗi `Cas API error 400` sau khi Cas Link thành công | Thường do thiếu scope `identity` khi gọi `GET /identity`, hoặc `publicToken` đã dùng (bấm lại từ đầu, tạo grant mới). Restart backend sau khi đổi scope |
+| Dashboard hiện 0 giao dịch dù webhook OK | FE gọi `limit>100` → BE trả 400; Dashboard dùng `limit=100` |

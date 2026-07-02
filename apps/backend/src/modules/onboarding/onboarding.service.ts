@@ -44,10 +44,12 @@ export class OnboardingService {
     let accountNumber: string | null = null;
     let accountHolderName: string | null = null;
     let bankName: string | null = null;
+    let bankLogo: string | null = null;
 
     try {
       const identity = await this.casClient.getIdentity(exchange.accessToken);
-      ({ accountNumber, accountHolderName, bankName } = this.casClient.parseIdentity(identity));
+      ({ accountNumber, accountHolderName, bankName, bankLogo } =
+        this.casClient.parseIdentity(identity));
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       this.logger.warn(
@@ -72,6 +74,7 @@ export class OnboardingService {
         accountNumber,
         accountHolderName,
         bankName,
+        bankLogo,
         status: 'active',
       },
       update: {
@@ -79,6 +82,7 @@ export class OnboardingService {
         accountNumber,
         accountHolderName,
         bankName,
+        bankLogo,
         status: 'active',
         linkedAt: new Date(),
       },
@@ -105,6 +109,7 @@ export class OnboardingService {
       accountNumber: grant.accountNumber,
       accountHolderName: grant.accountHolderName,
       bankName: grant.bankName,
+      bankLogo: grant.bankLogo,
       linkedAt: grant.linkedAt.toISOString(),
     };
   }
@@ -119,6 +124,7 @@ export class OnboardingService {
         accountNumber: true,
         accountHolderName: true,
         bankName: true,
+        bankLogo: true,
         linkedAt: true,
         status: true,
       },

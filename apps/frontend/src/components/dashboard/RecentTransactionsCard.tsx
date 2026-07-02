@@ -49,12 +49,14 @@ export function RecentTransactionsCard({ items, isLoading }: RecentTransactionsC
           </div>
         )}
 
-        <Button asChild size="sm" variant="ghost" className="mt-4 h-auto w-fit px-0">
-          <Link to="/transactions">
-            Xem tất cả
-            <ArrowRight className="size-4" />
-          </Link>
-        </Button>
+        <div className="mt-auto pt-4">
+          <Button asChild size="sm" variant="ghost" className="h-auto w-fit px-2">
+            <Link to="/transactions">
+              Xem tất cả
+              <ArrowRight className="size-4" />
+            </Link>
+          </Button>
+        </div>
       </CardContent>
     </Card>
   );

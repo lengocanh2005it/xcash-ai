@@ -148,4 +148,4 @@ Không tạo package cho code chỉ 1 app dùng — giữ trong `apps/<app>/src`
 
 **Đã có (Sprint 1 tuần 1):** `.github/workflows/ci.yml` — trigger trên `push`/`pull_request` tới `main` hoặc `develop`, chạy `pnpm verify`. `.github/workflows/deploy.yml` — `workflow_dispatch`, SSH deploy lên VPS (cần secrets `DEPLOY_HOST`, `DEPLOY_USER`, `DEPLOY_SSH_KEY`, `DEPLOY_PATH`). Hướng dẫn: `deploy/README.md`.
 
-**Chưa có:** affected-package filter (`turbo --filter=...[origin/main]`), Docker image push registry, deploy VPS thật (cần cấu hình secrets + VPS).
+**Chưa có / hoãn Sprint 4:** affected-package filter (`turbo --filter=...[origin/main]`), Docker image push registry, **deploy VPS thật** (secrets + VPS + HTTPS — template workflow/docs đã sẵn, chưa chạy production).

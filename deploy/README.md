@@ -1,6 +1,8 @@
 # Deploy PayPilot AI lên VPS
 
-Hướng dẫn triển khai production cơ bản cho Sprint 1. Cần VPS Ubuntu 22.04+, Docker, Docker Compose, Nginx.
+> **Lịch triển khai:** Sprint 1 đã đóng trên local — **deploy VPS thật hoãn Sprint 4**. File này + workflow `.github/workflows/deploy.yml` là template sẵn sàng, chưa chạy trên production.
+
+Hướng dẫn triển khai production. Cần VPS Ubuntu 22.04+, Docker, Docker Compose, Nginx.
 
 ## 1. Chuẩn bị VPS
 

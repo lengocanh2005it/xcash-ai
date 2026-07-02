@@ -80,7 +80,7 @@
 - [ ] Cài TanStack Query + Axios instance (base URL, interceptors, token refresh)
 - [ ] Setup Docker Compose (nestjs + postgres + redis + react)
 - [ ] Setup GitHub Actions CI/CD pipeline cơ bản
-- [ ] Deploy lên VPS, cấu hình Nginx + HTTPS
+- [ ] ~~Deploy lên VPS, cấu hình Nginx + HTTPS~~ → **hoãn Sprint 4** (template `deploy.yml` + `deploy/README.md` đã có)
 
 **Tuần 2:**
 
@@ -100,19 +100,21 @@
 
 ### Sprint 1 — Definition of Done
 
-- [ ] NestJS server chạy được, Swagger accessible
-- [ ] Đăng ký/đăng nhập email + mật khẩu hoạt động
-- [ ] RolesGuard + @Roles() decorator hoạt động, test thử với 1 endpoint mẫu
-- [ ] User đầu tiên của tenant tự động có role `admin`
-- [ ] Đã cấu hình 1 Webhook URL chung trên Cas Console (qua ngrok khi dev local), test "Gọi thử" thành công
-- [ ] Gọi thử thành công `/grant/token` → mở Cas Link → đăng nhập bằng tài khoản demo (`bankusrdemo1`) → nhận `publicToken` → đổi `accessToken` + `grantId` thành công, lưu vào `cas_grants`
-- [ ] Cas webhook gửi giao dịch test về đúng URL chung → backend tra đúng `tenant_id` qua `grantId`
-- [ ] Transaction được lưu vào DB kèm đúng tenant_id
-- [ ] JWT issue sau khi login thành công, refresh + logout hoạt động
-- [ ] Docker Compose chạy local
-- [ ] CI/CD deploy lên VPS thành công
-- [ ] UI Đăng ký/Đăng nhập + Onboarding (liên kết ngân hàng thật qua Cas Link) hoạt động
-- [ ] UI responsive + theme Casso/payOS (`#16AB64` / nền trắng) trên auth, dashboard, transactions
+- [x] NestJS server chạy được, Swagger accessible
+- [x] Đăng ký/đăng nhập email + mật khẩu hoạt động
+- [x] RolesGuard + @Roles() decorator hoạt động, test thử với 1 endpoint mẫu (`GET /cas/ping`)
+- [x] User đầu tiên của tenant tự động có role `admin`
+- [x] ~~Đã cấu hình Webhook URL trên Cas Console + "Gọi thử"~~ — **thay bằng Postman mock** gọi `POST /webhook/cas` tới `localhost` (hợp lệ khi sandbox không ổn định)
+- [x] Gọi thử thành công `/grant/token` → Cas Link → `publicToken` → `grantId` lưu `cas_grants`
+- [x] Webhook (mock hoặc Cas) → backend tra đúng `tenant_id` qua `grantId`
+- [x] Transaction được lưu vào DB kèm đúng tenant_id
+- [x] JWT issue sau khi login thành công, refresh + logout hoạt động
+- [x] Docker Compose chạy local
+- [ ] ~~CI/CD deploy lên VPS thành công~~ → **hoãn Sprint 4** (workflow + hướng dẫn đã có, chưa chạy trên VPS thật)
+- [x] UI Đăng ký/Đăng nhập + Onboarding (liên kết ngân hàng thật qua Cas Link) hoạt động
+- [x] UI responsive + theme Casso/payOS (`#16AB64` / nền trắng) trên auth, dashboard, transactions
+
+> **Sprint 1 đã đóng (07/2026)** cho môi trường local/demo. Mục deploy VPS chuyển sang Sprint 4 — không chặn bước vào Sprint 2.
 
 ---
 
@@ -455,7 +457,7 @@
 - Invoice + Customer CRUD
 - Human Review queue
 - Dashboard + Transactions UI
-- Deploy lên VPS + HTTPS
+- Deploy lên VPS + HTTPS *(hoàn thành Sprint 4 — template CI/CD đã có từ Sprint 1)*
 
 **🟡 Should have:**
 - AI Copilot

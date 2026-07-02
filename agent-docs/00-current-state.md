@@ -129,6 +129,7 @@ paypilot-ai/
 | PUT | `/invoices/:id` | Admin, Accountant | Cập nhật hóa đơn |
 | DELETE | `/invoices/:id` | Admin, Accountant | Xóa hóa đơn (soft delete) |
 | POST | `/invoices/import` | Admin, Accountant | Import Excel/CSV |
+| GET | `/invoices/import/template` | Admin, Accountant | Tải file Excel mẫu import hóa đơn |
 
 Swagger UI: `http://localhost:3000/api/docs`
 

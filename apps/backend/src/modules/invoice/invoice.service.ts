@@ -5,28 +5,26 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { Prisma, InvoiceStatus as PrismaInvoiceStatus } from '@prisma/client';
-import * as XLSX from 'xlsx';
 import { PrismaService } from '../../prisma/prisma.service';
 import { EmbeddingService } from '../ai/embedding.service';
 import { CustomerService } from '../customer/customer.service';
 import type { CreateInvoiceDto } from './dto/create-invoice.dto';
 import type { ListInvoicesQueryDto } from './dto/list-invoices.dto';
 import type { UpdateInvoiceDto } from './dto/update-invoice.dto';
+import {
+  generateInvoiceImportTemplate,
+  INVOICE_IMPORT_MAX_FILE_BYTES,
+  INVOICE_IMPORT_TEMPLATE_FILENAME,
+  parseInvoiceImportBuffer,
+} from './utils/invoice-import.util';
 import { buildVietQrImageUrl } from './utils/vietqr';
+
+export { INVOICE_IMPORT_TEMPLATE_FILENAME };
 
 interface UploadedImportFile {
   buffer: Buffer;
   originalname?: string;
   mimetype?: string;
-}
-
-interface ImportRow {
-  invoice_code: string;
-  customer_name: string;
-  amount: number;
-  due_date?: string;
-  phone?: string;
-  email?: string;
 }
 
 @Injectable()
@@ -240,23 +238,48 @@ export class InvoiceService {
     };
   }
 
+  generateImportTemplate(): { buffer: Buffer; filename: string } {
+    return {
+      buffer: generateInvoiceImportTemplate(),
+      filename: INVOICE_IMPORT_TEMPLATE_FILENAME,
+    };
+  }
+
   async importFromFile(tenantId: string, file: UploadedImportFile) {
     if (!file?.buffer?.length) {
-      throw new BadRequestException('File import không hợp lệ');
+      throw new BadRequestException(
+        'File import không hợp lệ. Vui lòng chọn file .xlsx và thử lại.',
+      );
     }
 
-    const rows = this.parseImportFile(file);
-    if (rows.length === 0) {
-      throw new BadRequestException('File không có dữ liệu hợp lệ');
+    if (file.buffer.length > INVOICE_IMPORT_MAX_FILE_BYTES) {
+      throw new BadRequestException(
+        `File vượt quá ${INVOICE_IMPORT_MAX_FILE_BYTES / (1024 * 1024)}MB. Vui lòng chia nhỏ file.`,
+      );
+    }
+
+    const parsed = parseInvoiceImportBuffer(file.buffer);
+
+    if (parsed.headerError) {
+      throw new BadRequestException(parsed.headerError);
+    }
+
+    if (parsed.validRows.length === 0) {
+      throw new BadRequestException({
+        message:
+          'Không có dòng hợp lệ để import. Kiểm tra lại định dạng file hoặc tải file mẫu tại GET /api/v1/invoices/import/template.',
+        errors: parsed.errors,
+      });
     }
 
     const results = {
       imported: 0,
       skipped: 0,
-      errors: [] as string[],
+      skipped_empty_rows: parsed.skippedEmptyRows,
+      errors: [...parsed.errors] as string[],
     };
 
-    for (const [index, row] of rows.entries()) {
+    for (const row of parsed.validRows) {
       try {
         const existing = await this.prisma.invoice.findFirst({
           where: { tenantId, invoiceCode: row.invoice_code, deletedAt: null },
@@ -293,60 +316,11 @@ export class InvoiceService {
         results.imported += 1;
       } catch (error) {
         results.errors.push(
-          `Dòng ${index + 2}: ${error instanceof Error ? error.message : 'Lỗi không xác định'}`,
+          `Dòng ${row.source_row_number}: ${error instanceof Error ? error.message : 'Lỗi không xác định'}`,
         );
       }
     }
 
     return results;
-  }
-
-  private parseImportFile(file: UploadedImportFile): ImportRow[] {
-    const workbook = XLSX.read(file.buffer, { type: 'buffer' });
-    const sheetName = workbook.SheetNames[0];
-    if (!sheetName) return [];
-
-    const sheet = workbook.Sheets[sheetName];
-    const rawRows = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, { defval: '' });
-
-    return rawRows
-      .map((row) => this.normalizeImportRow(row))
-      .filter((row): row is ImportRow => row !== null);
-  }
-
-  private normalizeImportRow(row: Record<string, unknown>): ImportRow | null {
-    const get = (...keys: string[]) => {
-      for (const key of keys) {
-        const found = Object.entries(row).find(
-          ([k]) => k.toLowerCase().replace(/\s+/g, '_') === key,
-        );
-        if (found && String(found[1]).trim()) {
-          return String(found[1]).trim();
-        }
-      }
-      return '';
-    };
-
-    const invoiceCode = get('invoice_code', 'ma_hoa_don', 'ma_hd', 'invoice');
-    const customerName = get('customer_name', 'ten_khach_hang', 'khach_hang', 'customer');
-    const amountRaw = get('amount', 'so_tien', 'tien');
-    const amount = Number.parseFloat(amountRaw.replace(/[^\d.]/g, ''));
-
-    if (!invoiceCode || !customerName || !Number.isFinite(amount) || amount <= 0) {
-      return null;
-    }
-
-    const dueDate = get('due_date', 'han_thanh_toan', 'due');
-    const phone = get('phone', 'sdt', 'so_dien_thoai');
-    const email = get('email');
-
-    return {
-      invoice_code: invoiceCode,
-      customer_name: customerName,
-      amount,
-      ...(dueDate ? { due_date: dueDate } : {}),
-      ...(phone ? { phone } : {}),
-      ...(email ? { email } : {}),
-    };
   }
 }

@@ -7,6 +7,7 @@ import {
   Post,
   Put,
   Query,
+  StreamableFile,
   UploadedFile,
   UseGuards,
   UseInterceptors,
@@ -42,9 +43,27 @@ export class InvoiceController {
     return this.invoiceService.findAll(user.tenantId as string, query);
   }
 
+  @Get('import/template')
+  @Roles(Role.ADMIN, Role.ACCOUNTANT)
+  @ApiOperation({
+    summary: 'Tải file Excel mẫu để import hóa đơn',
+    description: 'Xem hướng dẫn đầy đủ tại agent-docs/reference/invoice-import-guide.md',
+  })
+  downloadImportTemplate(): StreamableFile {
+    const { buffer, filename } = this.invoiceService.generateImportTemplate();
+    return new StreamableFile(buffer, {
+      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      disposition: `attachment; filename="${filename}"`,
+    });
+  }
+
   @Post('import')
   @Roles(Role.ADMIN, Role.ACCOUNTANT)
-  @ApiOperation({ summary: 'Import hóa đơn từ Excel/CSV' })
+  @ApiOperation({
+    summary: 'Import hóa đơn từ Excel/CSV',
+    description:
+      'Dùng file mẫu từ GET /invoices/import/template. Cột bắt buộc: ma_hoa_don, ten_khach_hang, so_tien.',
+  })
   @ApiConsumes('multipart/form-data')
   @UseInterceptors(FileInterceptor('file'))
   import(@CurrentUser() user: AuthenticatedUser, @UploadedFile() file: UploadedImportFile) {

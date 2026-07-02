@@ -76,3 +76,7 @@ Chỉ role **Admin** hoặc **Accountant** được import.
 - Khách hàng mới được tạo tự động nếu chưa có (theo tên).
 - Hệ thống tự **embedding** hóa đơn + khách hàng mới (cần `OPENAI_API_KEY` trên server).
 - Có thể mock webhook Cas với nội dung chứa `ma_hoa_don` để test AI matching.
+
+## Tính năng dự kiến (chưa có)
+
+**AI Smart Excel Import** — nếu file Excel có cột tên khác chuẩn (vd `Giá trị`, `Tên KH`, `Mã đơn`), hệ thống sẽ dùng AI gợi ý ghép cột đúng định dạng, cho kế toán xác nhận trước khi import. Hiện tại vui lòng dùng file mẫu hoặc đặt tên cột theo bảng trên. Chi tiết kỹ thuật: `business-overview.md` mục Future Enhancements.

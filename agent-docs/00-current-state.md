@@ -169,6 +169,7 @@ postinstall      → prisma generate
 - [ ] AI Explain endpoint (Sprint 2 tuần 4)
 - [ ] FE Dashboard/Transactions nâng cấp — confidence badge, detail sheet (Sprint 2 tuần 3 Vinh)
 - [ ] Deploy VPS thật + HTTPS production (**hoãn Sprint 4** — xem `deploy/README.md`)
+- [ ] **AI Smart Excel Import** (Sprint 3+) — AI gợi ý map cột Excel lộn xộn → định dạng chuẩn, user confirm trước import (xem `reference/business-overview.md` Future Enhancements)
 
 ## Việc Sprint 1 đã đóng (07/2026)
 

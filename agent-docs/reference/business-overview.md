@@ -1479,6 +1479,7 @@ Giao diện chat đơn giản, kế toán gõ câu hỏi:
 - **PayOS production** — đăng ký tài khoản PayOS thật cho luồng billing, thay thế Postman mock
 - **Production Cas keys** — xin `x-client-id`/`x-secret-key` môi trường production từ Cas (hiện tại đang dùng sandbox key)
 - **OCR Invoice** — đọc hóa đơn scan, tự động tạo invoice trong hệ thống
+- **AI Smart Excel Import** — tự nhận diện/ghép cột file Excel lộn xộn về định dạng chuẩn (`ma_hoa_don`, `ten_khach_hang`, `so_tien`...). Gợi ý triển khai: (1) mở rộng alias + fuzzy match header không cần AI; (2) gửi header + vài dòng mẫu cho `gpt-4o-mini` trả JSON column mapping; (3) user xác nhận mapping trước khi import; (4) luôn giữ rule validation sau AI (đặc biệt `so_tien`). Phù hợp Sprint 3+ (cùng hạ tầng OpenAI đã có). Không gửi cả file cho LLM — chỉ header + sample rows.
 - **ERP Connector** — SAP, Odoo, MISA, KiotViet
 - **Open Banking Integration** — kết nối trực tiếp API ngân hàng
 - **Predictive Cash Flow** — dự báo dòng tiền dựa trên lịch sử

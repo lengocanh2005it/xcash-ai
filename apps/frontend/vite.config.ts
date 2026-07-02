@@ -9,6 +9,8 @@ export default defineConfig({
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src'),
+      // Vite cần ESM — bundle trực tiếp từ source TS (dist/ là CommonJS cho NestJS)
+      '@paypilot/shared-types': path.resolve(__dirname, '../../packages/shared-types/src/index.ts'),
     },
   },
   server: {

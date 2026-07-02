@@ -94,13 +94,17 @@ Production: URL public HTTPS của backend (không cần ngrok).
 
 ## Tài khoản demo Cas (sandbox)
 
-Dùng khi test luồng Cas Link (liên kết ngân hàng) ở Onboarding:
+Dùng khi test luồng Cas Link (liên kết ngân hàng) ở Onboarding. Grant token dùng scope **`identity,transaction`** (`identity` để gọi `GET /identity`, `transaction` cho Balance Hook), **không** dùng `qrpay` (luồng đăng ký QR Pay merchant — form xác thực STK/tên TK hay lỗi sandbox).
+
+**Sandbox ngân hàng:** VietinBank demo (`bankusrdemo1`) hay bị lock bởi Cas ID — ưu tiên thử **Vietcombank (VCB)** khi test Cas Link.
 
 ```
 username: bankusrdemo1
 password: soproud
 OTP:      123456
 ```
+
+Luồng đúng: chọn ngân hàng → **đăng nhập iBanking** trong popup (không nhập form xác thực QR Pay, không quét Cas ID).
 
 ## Mock data có sẵn
 
@@ -117,3 +121,5 @@ OTP:      123456
 | Turbo báo "no script found" | Bình thường nếu package đó chưa cần script đó — không phải lỗi |
 | Webhook Cas không đến local | Chưa chạy ngrok, URL Cas Console chưa khớp tunnel mới, hoặc backend chưa listen port 3000 |
 | `grantToken` hết hạn khi test Cas Link | Token chỉ sống 30 phút, dùng 1 lần — tạo lại token mới, không cache/reuse |
+| Cas Link báo lỗi ở form xác thực STK/tên TK | Đang dùng nhầm scope `qrpay` — PayPilot cần `identity,transaction`. Restart backend, bấm lại Liên kết ngân hàng |
+| Callback `/onboarding/banking/callback` lỗi `Cas API error 400` sau khi Cas Link thành công | Thường do thiếu scope `identity` khi gọi `GET /identity`, hoặc `publicToken` đã dùng (bấm lại từ đầu, tạo grant mới). Restart backend sau khi đổi scope |

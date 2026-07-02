@@ -21,7 +21,7 @@ export default function LoginPage() {
     try {
       await login({ email, password });
       toast.success('Đăng nhập thành công');
-      navigate('/onboarding');
+      navigate('/dashboard', { replace: true });
     } catch (error) {
       toast.error(getErrorMessage(error, 'Email hoặc mật khẩu không đúng'));
     } finally {

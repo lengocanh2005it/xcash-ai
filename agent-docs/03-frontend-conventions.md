@@ -26,7 +26,9 @@ pnpm dlx shadcn@latest add table label select dialog sheet separator tabs alert
 
 Chỉ compose wrapper mỏng ở `components/layout/` (app shell) hoặc `components/shared/` (vd `ThemeToggle` bọc `Button`) — logic/style lõi vẫn từ ShadCN.
 
-**Đã cài trong repo (`components/ui/`):** `button`, `card`, `badge`, `input`, `skeleton`, `table`, `label`. Các màn Sprint 2+ (invoice, review, settings...) thêm `select`, `dialog`, `sheet`, `tabs`... qua CLI trước khi code.
+**Đã cài trong repo (`components/ui/`):** `button`, `card`, `badge`, `input`, `skeleton`, `table`, `label`, `dialog`. Các màn Sprint 2+ (invoice, review, settings...) thêm `select`, `sheet`, `tabs`... qua CLI trước khi code.
+
+**Dashboard charts (Recharts):** aggregate client-side từ `GET /transactions?limit=200` — `TransactionTrendChart` (AreaChart 7 ngày), `TransactionStatusChart` (Donut trạng thái), helper tại `lib/dashboard-transactions.ts`. Màu chart dùng CSS variables `--chart-1`…`--chart-5` trong `index.css` (hỗ trợ dark mode). Sprint 2+ sẽ chuyển doanh thu / AI stats sang `/analytics/*` khi backend có endpoint.
 
 ## Dark / Light mode
 

@@ -5,6 +5,7 @@ import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { JwtAuthGuard, RolesGuard } from '../../common/guards/auth.guards';
 import type { AuthenticatedUser } from '../../common/types/authenticated-user.type';
+import { CAS_DEFAULT_GRANT_SCOPES } from '../cas/cas-client.service';
 import { BankingCallbackDto, GrantTokenQueryDto } from './dto/onboarding.dto';
 import { OnboardingService } from './onboarding.service';
 
@@ -19,7 +20,7 @@ export class OnboardingController {
   @Roles(Role.ADMIN, Role.ACCOUNTANT)
   @ApiOperation({ summary: 'Tạo grantToken để mở Cas Link' })
   createGrantToken(@Query() query: GrantTokenQueryDto) {
-    return this.onboardingService.createGrantToken(query.scopes ?? 'qrpay');
+    return this.onboardingService.createGrantToken(query.scopes ?? CAS_DEFAULT_GRANT_SCOPES);
   }
 
   @Post('banking/callback')

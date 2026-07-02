@@ -7,14 +7,18 @@ import { DesktopSidebar, MobileSidebar } from './Sidebar';
 
 export function TenantLayout() {
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
   return (
-    <div className="flex min-h-svh bg-[#F8FAFB]">
-      <DesktopSidebar />
+    <div className="flex min-h-svh items-stretch bg-muted">
+      <DesktopSidebar
+        collapsed={sidebarCollapsed}
+        onToggleCollapsed={() => setSidebarCollapsed((value) => !value)}
+      />
       <MobileSidebar open={mobileNavOpen} onClose={() => setMobileNavOpen(false)} />
 
       <div className="flex min-w-0 flex-1 flex-col">
-        <div className="sticky top-0 z-30 flex items-center gap-3 border-b bg-white px-4 py-3 lg:hidden">
+        <div className="sticky top-0 z-30 flex items-center gap-3 border-b border-border bg-background px-4 py-3 lg:hidden">
           <Button
             type="button"
             variant="outline"

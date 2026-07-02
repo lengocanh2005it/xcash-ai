@@ -6,7 +6,11 @@ import { ThemeToggle } from '@/components/shared/ThemeToggle';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { getErrorMessage } from '@/hooks/useAuth';
 import { useOnboardingMutations } from '@/hooks/useOnboarding';
-import { extractPublicToken } from '@/lib/casLink';
+import {
+  CAS_LINK_FAILED_TOAST,
+  parseCasLinkCallback,
+  postCasLinkMessageToOpener,
+} from '@/lib/casLink';
 
 export default function OnboardingCallbackPage() {
   const navigate = useNavigate();
@@ -19,23 +23,38 @@ export default function OnboardingCallbackPage() {
       return;
     }
 
-    const publicToken = extractPublicToken(searchParams.toString());
-    if (!publicToken) {
-      toast.error('Không tìm thấy publicToken từ Cas Link');
+    handledRef.current = true;
+    const result = parseCasLinkCallback(searchParams.toString());
+
+    if (result.status === 'cancelled') {
+      if (postCasLinkMessageToOpener(result)) {
+        window.close();
+        return;
+      }
+
+      toast.error(CAS_LINK_FAILED_TOAST);
       navigate('/onboarding', { replace: true });
       return;
     }
 
-    handledRef.current = true;
+    if (result.status === 'error') {
+      if (postCasLinkMessageToOpener(result)) {
+        window.close();
+        return;
+      }
 
-    if (window.opener) {
-      window.opener.postMessage({ type: 'CAS_LINK_SUCCESS', publicToken }, window.location.origin);
+      toast.error(result.message || CAS_LINK_FAILED_TOAST);
+      navigate('/onboarding', { replace: true });
+      return;
+    }
+
+    if (postCasLinkMessageToOpener(result)) {
       window.close();
       return;
     }
 
     completeCallback
-      .mutateAsync(publicToken)
+      .mutateAsync(result.publicToken)
       .then(() => {
         toast.success('Liên kết ngân hàng thành công!');
         navigate('/dashboard', { replace: true });
@@ -47,7 +66,7 @@ export default function OnboardingCallbackPage() {
   }, [completeCallback, navigate, searchParams]);
 
   return (
-    <div className="relative flex min-h-svh items-center justify-center bg-white px-4 py-8">
+    <div className="relative flex min-h-svh items-center justify-center bg-background px-4 py-8">
       <div className="pointer-events-none absolute inset-x-0 top-0 h-40 bg-gradient-to-b from-primary/10 to-transparent" />
       <div className="absolute top-4 right-4">
         <ThemeToggle />

@@ -187,6 +187,7 @@ model CasGrant {
   grantId       String         @unique @map("grant_id")
   accessToken   String         @map("access_token")
   accountNumber String?        @map("account_number")
+  accountHolderName String?    @map("account_holder_name")
   bankName      String?        @map("bank_name")
   status        CasGrantStatus @default(active)
   linkedAt      DateTime       @default(now()) @map("linked_at")

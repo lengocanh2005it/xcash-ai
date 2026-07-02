@@ -1,34 +1,42 @@
 import { useQuery } from '@tanstack/react-query';
-import { ArrowRight, CheckCircle2 } from 'lucide-react';
+import { ArrowRight, Crown, Receipt } from 'lucide-react';
+import { useMemo } from 'react';
 import { Link } from 'react-router-dom';
+import { BankStatusCard } from '@/components/dashboard/BankStatusCard';
+import { DashboardStatCard } from '@/components/dashboard/DashboardStatCard';
+import { RecentTransactionsCard } from '@/components/dashboard/RecentTransactionsCard';
+import { TransactionStatusChart } from '@/components/dashboard/TransactionStatusChart';
+import { TransactionTrendChart } from '@/components/dashboard/TransactionTrendChart';
 import { Header } from '@/components/layout/Header';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Skeleton } from '@/components/ui/skeleton';
 import { useAuth } from '@/hooks/useAuth';
 import { getApiData } from '@/lib/api';
+import {
+  buildDailyTransactionTrend,
+  buildTransactionStatusBreakdown,
+} from '@/lib/dashboard-transactions';
+import type { TransactionListResponse } from '@/types/transaction';
 
-interface TransactionListResponse {
-  items: Array<{
-    id: string;
-    transactionId: string;
-    amount: string;
-    content: string | null;
-    status: string;
-    transactionDate: string;
-  }>;
-  total: number;
-}
+const DASHBOARD_TRANSACTION_LIMIT = 200;
 
 export default function DashboardPage() {
   const { user, onboardingStatus } = useAuth();
+  const bankingLinked = Boolean(onboardingStatus?.bankingLinked);
 
   const { data, isLoading } = useQuery({
-    queryKey: ['transactions', 'recent'],
-    queryFn: () => getApiData<TransactionListResponse>('/transactions?limit=5'),
-    enabled: Boolean(onboardingStatus?.bankingLinked),
+    queryKey: ['transactions', 'dashboard'],
+    queryFn: () =>
+      getApiData<TransactionListResponse>(`/transactions?limit=${DASHBOARD_TRANSACTION_LIMIT}`),
+    enabled: bankingLinked,
     refetchInterval: 10_000,
   });
+
+  const trendData = useMemo(() => buildDailyTransactionTrend(data?.items ?? []), [data?.items]);
+  const statusData = useMemo(
+    () => buildTransactionStatusBreakdown(data?.items ?? []),
+    [data?.items],
+  );
+  const recentItems = useMemo(() => (data?.items ?? []).slice(0, 5), [data?.items]);
 
   return (
     <>
@@ -36,90 +44,38 @@ export default function DashboardPage() {
 
       <div className="space-y-6 p-4 sm:p-6">
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-          <Card>
-            <CardHeader className="pb-2">
-              <CardDescription>Trạng thái ngân hàng</CardDescription>
-              <CardTitle className="text-lg">
-                {onboardingStatus?.bankingLinked ? 'Đã liên kết' : 'Chưa liên kết'}
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              {onboardingStatus?.bankingLinked ? (
-                <p className="flex items-center gap-2 text-sm text-primary">
-                  <CheckCircle2 className="size-4" />
-                  Sẵn sàng nhận giao dịch
-                </p>
-              ) : (
-                <Button asChild size="sm" variant="outline">
-                  <Link to="/onboarding">Tiếp tục onboarding</Link>
-                </Button>
-              )}
-            </CardContent>
-          </Card>
+          <BankStatusCard bankingLinked={bankingLinked} grants={onboardingStatus?.grants ?? []} />
 
-          <Card>
-            <CardHeader className="pb-2">
-              <CardDescription>Tổng giao dịch</CardDescription>
-              <CardTitle className="text-lg">{data?.total ?? 0}</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <Button asChild size="sm" variant="ghost">
+          <DashboardStatCard
+            label="Tổng giao dịch"
+            value={data?.total ?? 0}
+            icon={Receipt}
+            footer={
+              <Button asChild size="sm" variant="ghost" className="h-auto px-0">
                 <Link to="/transactions">
                   Xem giao dịch
                   <ArrowRight className="size-4" />
                 </Link>
               </Button>
-            </CardContent>
-          </Card>
+            }
+          />
 
-          <Card>
-            <CardHeader className="pb-2">
-              <CardDescription>Gói dịch vụ</CardDescription>
-              <CardTitle className="text-lg">Free</CardTitle>
-            </CardHeader>
-            <CardContent>
+          <DashboardStatCard
+            label="Gói dịch vụ"
+            value="Free"
+            icon={Crown}
+            footer={
               <p className="text-sm text-muted-foreground">Nâng cấp gói sẽ có ở Sprint sau</p>
-            </CardContent>
-          </Card>
+            }
+          />
         </div>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>Giao dịch gần đây</CardTitle>
-            <CardDescription>Danh sách 5 giao dịch mới nhất</CardDescription>
-          </CardHeader>
-          <CardContent>
-            {isLoading ? (
-              <div className="space-y-2">
-                <Skeleton className="h-10 w-full" />
-                <Skeleton className="h-10 w-full" />
-                <Skeleton className="h-10 w-full" />
-              </div>
-            ) : !data?.items.length ? (
-              <p className="py-6 text-center text-sm text-muted-foreground">
-                Chưa có giao dịch nào. Giao dịch sẽ xuất hiện sau khi Cas gửi webhook.
-              </p>
-            ) : (
-              <div className="space-y-2">
-                {data.items.map((txn) => (
-                  <div
-                    key={txn.id}
-                    className="flex flex-col gap-2 rounded-lg border px-4 py-3 text-sm sm:flex-row sm:items-center sm:justify-between"
-                  >
-                    <div>
-                      <p className="font-medium">{txn.transactionId}</p>
-                      <p className="text-xs text-muted-foreground">{txn.content ?? '—'}</p>
-                    </div>
-                    <div className="text-right">
-                      <p className="font-medium">{Number(txn.amount).toLocaleString('vi-VN')}đ</p>
-                      <p className="text-xs text-muted-foreground">{txn.status}</p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </CardContent>
-        </Card>
+        <TransactionTrendChart data={trendData} isLoading={bankingLinked && isLoading} />
+
+        <div className="grid gap-4 lg:grid-cols-2">
+          <RecentTransactionsCard items={recentItems} isLoading={bankingLinked && isLoading} />
+          <TransactionStatusChart data={statusData} isLoading={bankingLinked && isLoading} />
+        </div>
       </div>
     </>
   );

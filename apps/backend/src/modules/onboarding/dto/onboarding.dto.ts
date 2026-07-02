@@ -9,7 +9,7 @@ export class BankingCallbackDto {
 }
 
 export class GrantTokenQueryDto {
-  @ApiPropertyOptional({ example: 'qrpay', default: 'qrpay' })
+  @ApiPropertyOptional({ example: 'identity,transaction', default: 'identity,transaction' })
   @IsOptional()
   @IsString()
   scopes?: string;

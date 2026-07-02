@@ -1,17 +1,19 @@
-import { ConflictException, Injectable } from '@nestjs/common';
+import { ConflictException, Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../../prisma/prisma.service';
-import { CasClientService } from '../cas/cas-client.service';
+import { CAS_DEFAULT_GRANT_SCOPES, CasClientService } from '../cas/cas-client.service';
 
 @Injectable()
 export class OnboardingService {
+  private readonly logger = new Logger(OnboardingService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly casClient: CasClientService,
     private readonly configService: ConfigService,
   ) {}
 
-  async createGrantToken(scopes = 'qrpay') {
+  async createGrantToken(scopes = CAS_DEFAULT_GRANT_SCOPES) {
     const redirectUri = this.configService.get<string>(
       'CAS_GRANT_REDIRECT_URI',
       'http://localhost:5173/onboarding/callback',
@@ -23,17 +25,35 @@ export class OnboardingService {
       language: 'vi',
     });
 
+    const linkBaseUrl = this.configService.get<string>(
+      'CAS_LINK_BASE_URL',
+      'https://dev.link.bankhub.dev',
+    );
+
     return {
       grantToken: result.grantToken,
       expiresAt: result.expiresAt ?? null,
       redirectUri,
+      linkBaseUrl,
     };
   }
 
   async handleBankingCallback(tenantId: string, publicToken: string) {
     const exchange = await this.casClient.exchangeGrant(publicToken);
-    const identity = await this.casClient.getIdentity(exchange.accessToken);
-    const { accountNumber, bankName } = this.casClient.parseIdentity(identity);
+
+    let accountNumber: string | null = null;
+    let accountHolderName: string | null = null;
+    let bankName: string | null = null;
+
+    try {
+      const identity = await this.casClient.getIdentity(exchange.accessToken);
+      ({ accountNumber, accountHolderName, bankName } = this.casClient.parseIdentity(identity));
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.logger.warn(
+        `Cas GET /identity failed for grant ${exchange.grantId}, saving grant without account metadata: ${message}`,
+      );
+    }
 
     const existingGrant = await this.prisma.casGrant.findUnique({
       where: { grantId: exchange.grantId },
@@ -50,12 +70,14 @@ export class OnboardingService {
         grantId: exchange.grantId,
         accessToken: exchange.accessToken,
         accountNumber,
+        accountHolderName,
         bankName,
         status: 'active',
       },
       update: {
         accessToken: exchange.accessToken,
         accountNumber,
+        accountHolderName,
         bankName,
         status: 'active',
         linkedAt: new Date(),
@@ -72,6 +94,7 @@ export class OnboardingService {
         afterState: {
           grantId: grant.grantId,
           accountNumber: grant.accountNumber,
+          accountHolderName: grant.accountHolderName,
           bankName: grant.bankName,
         },
       },
@@ -80,6 +103,7 @@ export class OnboardingService {
     return {
       grantId: grant.grantId,
       accountNumber: grant.accountNumber,
+      accountHolderName: grant.accountHolderName,
       bankName: grant.bankName,
       linkedAt: grant.linkedAt.toISOString(),
     };
@@ -93,6 +117,7 @@ export class OnboardingService {
         id: true,
         grantId: true,
         accountNumber: true,
+        accountHolderName: true,
         bankName: true,
         linkedAt: true,
         status: true,

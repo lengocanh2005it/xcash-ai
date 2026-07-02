@@ -3,7 +3,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 
 export default function PartnerPage() {
   return (
-    <div className="min-h-svh bg-muted/20">
+    <div className="min-h-svh bg-muted">
       <Header
         title="Partner Dashboard"
         description="Khu vực dành cho Cas Partner — sẽ được triển khai ở Sprint 3"

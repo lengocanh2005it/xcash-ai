@@ -1,6 +1,6 @@
 import { Role } from '@paypilot/shared-types';
-import { CheckCircle2, Circle, Landmark, Loader2 } from 'lucide-react';
-import { useEffect, useRef, useState } from 'react';
+import { CheckCircle2, Circle, Landmark, Loader2, LogOut } from 'lucide-react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { Header } from '@/components/layout/Header';
@@ -10,16 +10,53 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Skeleton } from '@/components/ui/skeleton';
 import { getErrorMessage, useAuth } from '@/hooks/useAuth';
 import { useOnboardingMutations } from '@/hooks/useOnboarding';
-import { openCasLinkPopup } from '@/lib/casLink';
+import { CAS_LINK_FAILED_TOAST, type CasLinkMessage, openCasLinkPopup } from '@/lib/casLink';
 import { cn } from '@/lib/utils';
 
 export default function OnboardingPage() {
   const navigate = useNavigate();
-  const { user, onboardingStatus, isOnboardingLoading } = useAuth();
+  const { user, onboardingStatus, isOnboardingLoading, logout } = useAuth();
   const { createGrantToken, completeCallback } = useOnboardingMutations();
   const [isLinking, setIsLinking] = useState(false);
   const popupRef = useRef<Window | null>(null);
+  const popupPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const linkFlowSettledRef = useRef(false);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
   const canLinkBanking = user?.role === Role.ADMIN || user?.role === Role.ACCOUNTANT;
+
+  const handleLogout = async () => {
+    setIsLoggingOut(true);
+    try {
+      await logout();
+      toast.success('Đã đăng xuất');
+      navigate('/login', { replace: true });
+    } catch {
+      toast.error('Không thể đăng xuất, vui lòng thử lại');
+    } finally {
+      setIsLoggingOut(false);
+    }
+  };
+
+  const clearPopupPoll = useCallback(() => {
+    if (popupPollRef.current) {
+      clearInterval(popupPollRef.current);
+      popupPollRef.current = null;
+    }
+  }, []);
+
+  const watchPopupClose = (popup: Window) => {
+    clearPopupPoll();
+    popupPollRef.current = setInterval(() => {
+      if (popup.closed) {
+        clearPopupPoll();
+        setIsLinking(false);
+        if (!linkFlowSettledRef.current) {
+          toast.error(CAS_LINK_FAILED_TOAST);
+        }
+        linkFlowSettledRef.current = false;
+      }
+    }, 500);
+  };
 
   useEffect(() => {
     if (!isOnboardingLoading && onboardingStatus?.bankingLinked) {
@@ -33,12 +70,35 @@ export default function OnboardingPage() {
         return;
       }
 
-      const payload = event.data as { type?: string; publicToken?: string } | undefined;
-      if (payload?.type !== 'CAS_LINK_SUCCESS' || !payload.publicToken) {
+      const payload = event.data as CasLinkMessage | undefined;
+      if (!payload?.type) {
+        return;
+      }
+
+      if (payload.type === 'CAS_LINK_CANCELLED') {
+        linkFlowSettledRef.current = true;
+        popupRef.current?.close();
+        clearPopupPoll();
+        setIsLinking(false);
+        toast.error(CAS_LINK_FAILED_TOAST);
+        return;
+      }
+
+      if (payload.type === 'CAS_LINK_ERROR') {
+        linkFlowSettledRef.current = true;
+        popupRef.current?.close();
+        clearPopupPoll();
+        setIsLinking(false);
+        toast.error(payload.message || CAS_LINK_FAILED_TOAST);
+        return;
+      }
+
+      if (payload.type !== 'CAS_LINK_SUCCESS' || !payload.publicToken) {
         return;
       }
 
       try {
+        linkFlowSettledRef.current = true;
         await completeCallback.mutateAsync(payload.publicToken);
         popupRef.current?.close();
         toast.success('Liên kết ngân hàng thành công!');
@@ -46,26 +106,34 @@ export default function OnboardingPage() {
       } catch (error) {
         toast.error(getErrorMessage(error, 'Không thể hoàn tất liên kết ngân hàng'));
       } finally {
+        clearPopupPoll();
         setIsLinking(false);
       }
     };
 
     window.addEventListener('message', handleMessage);
-    return () => window.removeEventListener('message', handleMessage);
-  }, [completeCallback, navigate]);
+    return () => {
+      window.removeEventListener('message', handleMessage);
+      clearPopupPoll();
+    };
+  }, [completeCallback, navigate, clearPopupPoll]);
 
   const handleLinkBanking = async () => {
+    linkFlowSettledRef.current = false;
     setIsLinking(true);
 
     try {
       const result = await createGrantToken.mutateAsync();
-      const popup = openCasLinkPopup(result.grantToken, result.redirectUri);
+      const popup = openCasLinkPopup(result.grantToken, result.redirectUri, result.linkBaseUrl);
       popupRef.current = popup;
 
       if (!popup) {
         toast.error('Trình duyệt đã chặn popup. Vui lòng cho phép popup và thử lại.');
         setIsLinking(false);
+        return;
       }
+
+      watchPopupClose(popup);
     } catch (error) {
       toast.error(getErrorMessage(error, 'Không thể mở Cas Link'));
       setIsLinking(false);
@@ -81,10 +149,22 @@ export default function OnboardingPage() {
   }
 
   return (
-    <div className="min-h-svh bg-[#F8FAFB]">
+    <div className="min-h-svh bg-muted">
       <Header
         title="Thiết lập ban đầu"
         description="Hoàn tất các bước dưới đây để bắt đầu nhận giao dịch tự động"
+        actions={
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={handleLogout}
+            disabled={isLoggingOut}
+          >
+            <LogOut className="size-4" />
+            {isLoggingOut ? 'Đang đăng xuất...' : 'Đăng xuất'}
+          </Button>
+        }
       />
 
       <div className="mx-auto grid max-w-4xl gap-4 p-4 sm:gap-6 sm:p-6">

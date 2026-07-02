@@ -2,11 +2,11 @@
 
 > Mục đích: cho biết **chính xác** cái gì đã tồn tại trong repo ngay lúc này, để agent không cần `find`/`grep`/`ls` lại từ đầu mỗi session mới. File này phải được cập nhật mỗi khi có thay đổi cấu trúc đáng kể (thêm module, thêm page, đổi dependency lớn, thêm service hạ tầng). Nếu file này và thực tế code lệch nhau, **tin thực tế code**, và sửa lại file này ngay sau đó.
 
-Cập nhật lần cuối: sau Sprint 1 tuần 2 — backend (Ngọc Anh) + frontend auth/onboarding (Thế Vinh).
+Cập nhật lần cuối: sau Sprint 1 tuần 2 — Cas Link E2E, dashboard Recharts (Thế Vinh).
 
 ## Repo đang ở giai đoạn nào
 
-**Trạng thái: Sprint 1 tuần 2 xong (cả backend + frontend foundation).** Backend: Onboarding, Banking webhook, Transaction list/detail. Frontend: React Router, TenantLayout (Sidebar + Header), Auth (Register/Login), Onboarding (Cas Link popup + callback), Dashboard + Transactions list cơ bản.
+**Trạng thái: Sprint 1 tuần 2 xong (cả backend + frontend foundation).** Backend: Onboarding, Banking webhook, Transaction list/detail. Frontend: React Router, TenantLayout (Sidebar thu gọn + Header), Auth, Onboarding Cas Link, Dashboard (stat cards + Recharts + giao dịch gần đây), Transactions list cơ bản.
 
 **Chưa có (Sprint 2+):** AI matching pipeline, Invoice/Customer CRUD UI, Partner Dashboard đầy đủ, deploy VPS thật.
 
@@ -39,7 +39,9 @@ paypilot-ai/
 │   │   │   └── migrations/
 │   │   │       ├── migration_lock.toml
 │   │   │       └── 20260301120000_init_sprint1_week1/
-│   │   ├── package.json                    # đã thêm NestJS deps, Prisma 6, bcryptjs
+│   │   ├── package.json                    # đã thêm NestJS deps, Prisma 6, bcryptjs, SWC
+│   │   ├── nest-cli.json                   # builder: swc
+│   │   ├── .swcrc                          # decoratorMetadata cho Nest DI
 │   │   ├── src/
 │   │   │   ├── main.ts                     # global prefix api/v1, Swagger, CORS, ValidationPipe, cookie-parser, rawBody: true (webhook signature)
 │   │   │   ├── app.module.ts
@@ -66,7 +68,7 @@ paypilot-ai/
 │   │       └── jest-setup.ts
 │   └── frontend/
 │       ├── vite.config.ts                  # Tailwind v4 + @ alias
-│       ├── package.json                    # + react-router-dom, sonner
+│       ├── package.json                    # + react-router-dom, sonner, recharts
 │       ├── src/
 │       │   ├── main.tsx                    # QueryClientProvider
 │       │   ├── App.tsx                     # React Router + AuthProvider + Toaster
@@ -74,18 +76,19 @@ paypilot-ai/
 │       │   ├── contexts/theme-context.tsx  # dark/light mode (localStorage paypilot-theme)
 │       │   ├── routes/ProtectedRoute.tsx   # GuestRoute, ProtectedRoute (onboarding gate)
 │       │   ├── components/
-│       │   │   ├── layout/                 # TenantLayout, Sidebar, Header, AuthLayout
-│       │   │   ├── shared/ThemeToggle.tsx
-│       │   │   └── ui/                     # ShadCN: button, card, badge, input, skeleton, table, label
+│       │   │   ├── layout/                 # TenantLayout, Sidebar (collapse), Header, AuthLayout
+│       │   │   ├── dashboard/              # BankStatusCard, TransactionTrendChart, TransactionStatusChart, RecentTransactionsCard
+│       │   │   ├── shared/                 # ThemeToggle, SensitiveField
+│       │   │   └── ui/                     # ShadCN: button, card, badge, input, skeleton, table, label, dialog
 │       │   ├── pages/
 │       │   │   ├── auth/                   # LoginPage, RegisterPage
 │       │   │   ├── onboarding/             # OnboardingPage, OnboardingCallbackPage (Cas Link)
-│       │   │   ├── dashboard/              # DashboardPage
+│       │   │   ├── dashboard/              # DashboardPage (Recharts: area 7 ngày + donut trạng thái)
 │       │   │   ├── transactions/           # TransactionsPage
 │       │   │   └── partner/                # PartnerPage placeholder (Sprint 3)
 │       │   ├── hooks/useAuth.ts, useOnboarding.ts, useHealthCheck.ts
-│       │   ├── lib/api.ts, casLink.ts, errors.ts, utils.ts
-│       │   └── types/auth.ts, onboarding.ts
+│       │   ├── lib/api.ts, casLink.ts, dashboard-transactions.ts, mask-sensitive.ts, errors.ts, utils.ts
+│       │   └── types/auth.ts, onboarding.ts, transaction.ts
 ├── packages/shared-types/                  # build → dist/ (CommonJS)
 ├── biome.json, package.json, turbo.json, pnpm-workspace.yaml
 ```
@@ -136,7 +139,9 @@ postinstall      → prisma generate
 
 **Dependencies mới chính:** `@nestjs/config`, `@nestjs/swagger`, `@nestjs/jwt`, `@nestjs/passport`, `@nestjs/bullmq`, `@prisma/client` ^6.8, `bcryptjs`, `bullmq`, `class-validator`, `class-transformer`, `cookie-parser`, `ioredis`, `passport`, `passport-jwt`, `@paypilot/shared-types`.
 
-**DevDependencies mới:** `prisma` ^6.8, `@types/bcryptjs`, `@types/cookie-parser`, `@types/passport-jwt`.
+**DevDependencies mới:** `prisma` ^6.8, `@types/bcryptjs`, `@types/cookie-parser`, `@types/passport-jwt`, `@swc/core`, `@swc/cli`.
+
+**Build:** `nest build` dùng **SWC** (`nest-cli.json` → `compilerOptions.builder: "swc"`, config `.swcrc`). Type-check vẫn qua `tsc --noEmit` riêng trong `pnpm verify` — SWC chỉ transpile, không thay type-check.
 
 ## Danh sách việc CHƯA làm
 

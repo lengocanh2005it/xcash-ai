@@ -861,19 +861,27 @@ Dùng tabs layout ngang:
 // openCasLink — mở Cas Link để liên kết ngân hàng
 async function openCasLink() {
   // 1. Backend tạo grantToken
-  const { grantToken } = await api.post("/onboarding/banking/grant-token")
+  const { grantToken, redirectUri, linkBaseUrl } = await api.post("/onboarding/banking/grant-token")
 
-  // 2. Mở Cas Link trong popup, truyền grantToken
-  const casLinkUrl = `https://link.bankhub.dev?grantToken=${grantToken}&redirectUri=${encodeURIComponent(window.location.origin + "/onboarding/callback")}`
+  // 2. Mở Cas Link trong popup (sandbox: dev.link.bankhub.dev; production: link.bankhub.dev)
+  const casLinkUrl = `${linkBaseUrl}?grantToken=${grantToken}&redirectUri=${encodeURIComponent(redirectUri)}&iframe=false`
   const popup = window.open(casLinkUrl, "cas-link", "width=480,height=640")
 
-  // 3. Lắng nghe message từ popup khi có publicToken (redirect callback gửi về qua postMessage)
+  // 3. Lắng nghe message từ popup (success / cancel / error)
   window.addEventListener("message", async (event) => {
     if (event.data?.type === "CAS_LINK_SUCCESS") {
       await api.post("/onboarding/banking/callback", { publicToken: event.data.publicToken })
       popup.close()
       queryClient.invalidateQueries({ queryKey: ["banking-accounts"] })
       toast.success("Liên kết ngân hàng thành công!")
+    }
+    if (event.data?.type === "CAS_LINK_CANCELLED") {
+      popup.close()
+      toast.error("Liên kết ngân hàng thất bại. Vui lòng thử lại.")
+    }
+    if (event.data?.type === "CAS_LINK_ERROR") {
+      popup.close()
+      toast.error(event.data.message ?? "Liên kết ngân hàng thất bại. Vui lòng thử lại.")
     }
   })
 }

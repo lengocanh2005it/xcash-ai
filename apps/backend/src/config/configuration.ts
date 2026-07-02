@@ -1,3 +1,14 @@
+function resolveCasLinkBaseUrl(): string {
+  if (process.env.CAS_LINK_BASE_URL) {
+    return process.env.CAS_LINK_BASE_URL;
+  }
+
+  const apiBaseUrl = process.env.CAS_API_BASE_URL ?? 'https://sandbox.bankhub.dev';
+  return apiBaseUrl.includes('sandbox')
+    ? 'https://dev.link.bankhub.dev'
+    : 'https://link.bankhub.dev';
+}
+
 export default () => ({
   NODE_ENV: process.env.NODE_ENV ?? 'development',
   PORT: Number.parseInt(process.env.PORT ?? '3000', 10),
@@ -10,6 +21,7 @@ export default () => ({
   JWT_REFRESH_SECRET: process.env.JWT_REFRESH_SECRET ?? 'dev-refresh-secret-change-me',
   JWT_REFRESH_EXPIRES_IN: process.env.JWT_REFRESH_EXPIRES_IN ?? '7d',
   CAS_API_BASE_URL: process.env.CAS_API_BASE_URL ?? 'https://sandbox.bankhub.dev',
+  CAS_LINK_BASE_URL: resolveCasLinkBaseUrl(),
   CAS_API_VERSION: process.env.CAS_API_VERSION ?? '2023-01-01',
   CAS_CLIENT_ID: process.env.CAS_CLIENT_ID ?? '',
   CAS_SECRET_KEY: process.env.CAS_SECRET_KEY ?? '',

@@ -56,6 +56,15 @@ async function fetchSession(): Promise<AuthSessionData | null> {
     return null;
   } catch {
     setAccessToken(null);
+    try {
+      await axios.post(
+        `${import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:3000/api/v1'}/auth/logout`,
+        {},
+        { withCredentials: true },
+      );
+    } catch {
+      // Stale cookie — already invalid.
+    }
     return null;
   }
 }

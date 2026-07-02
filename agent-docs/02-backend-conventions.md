@@ -121,6 +121,11 @@ Xem code mẫu đầy đủ tại [`reference/rbac.md`](./reference/rbac.md#impl
 
 Idempotency luôn chạy **trước** bước đếm quota — nếu không, Cas retry webhook sẽ đếm quota 2 lần cho cùng 1 giao dịch.
 
+## Build & dev
+
+- **`nest build`** / **`nest start --watch`** (`pnpm dev:backend`) dùng **SWC** — cấu hình `nest-cli.json` (`builder: "swc"`) + `.swcrc` (`legacyDecorator`, `decoratorMetadata` bắt buộc cho DI; `module.type: commonjs` để `node dist/main` / `start:prod` chạy được).
+- **Type-check** vẫn chạy `tsc --noEmit` riêng trong `pnpm verify` / `pnpm type-check` — không gộp vào SWC (`typeCheck: false` trong nest-cli) để tránh chậm lại lúc dev watch.
+
 ## Response format chuẩn (toàn bộ endpoint)
 
 ```json

@@ -47,6 +47,28 @@ async function refreshAccessToken(): Promise<string | null> {
   return token;
 }
 
+function isAuthBypassRoute(url?: string): boolean {
+  if (!url) {
+    return false;
+  }
+
+  return (
+    url.includes('/auth/refresh') ||
+    url.includes('/auth/login') ||
+    url.includes('/auth/register') ||
+    url.includes('/auth/logout')
+  );
+}
+
+async function clearStaleRefreshSession() {
+  accessToken = null;
+  try {
+    await axios.post(`${API_BASE_URL}/auth/logout`, {}, { withCredentials: true });
+  } catch {
+    // Cookie may already be invalid — ignore.
+  }
+}
+
 api.interceptors.response.use(
   (response) => response,
   async (error: AxiosError) => {
@@ -56,14 +78,19 @@ api.interceptors.response.use(
       error.response?.status === 401 &&
       originalRequest &&
       !originalRequest._retry &&
-      !originalRequest.url?.includes('/auth/refresh')
+      !isAuthBypassRoute(originalRequest.url)
     ) {
       originalRequest._retry = true;
 
       if (!refreshPromise) {
-        refreshPromise = refreshAccessToken().finally(() => {
-          refreshPromise = null;
-        });
+        refreshPromise = refreshAccessToken()
+          .catch(async () => {
+            await clearStaleRefreshSession();
+            return null;
+          })
+          .finally(() => {
+            refreshPromise = null;
+          });
       }
 
       const newToken = await refreshPromise;

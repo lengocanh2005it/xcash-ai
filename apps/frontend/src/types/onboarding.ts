@@ -2,6 +2,7 @@ export interface OnboardingGrant {
   id: string;
   grantId: string;
   accountNumber: string | null;
+  accountHolderName: string | null;
   bankName: string | null;
   linkedAt: string;
   status: string;
@@ -24,11 +25,13 @@ export interface GrantTokenResponse {
   grantToken: string;
   expiresAt: string | null;
   redirectUri: string;
+  linkBaseUrl: string;
 }
 
 export interface BankingCallbackResponse {
   grantId: string;
   accountNumber: string | null;
+  accountHolderName: string | null;
   bankName: string | null;
   linkedAt: string;
 }

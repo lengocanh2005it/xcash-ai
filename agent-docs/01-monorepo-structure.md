@@ -18,6 +18,7 @@ paypilot-ai/
 │   │   │   └── modules/         # (tạo mới) — mỗi domain 1 module, xem 02-backend-conventions.md
 │   │   ├── test/
 │   │   ├── nest-cli.json
+│   │   ├── .swcrc                 # SWC compiler (nest build / dev watch)
 │   │   ├── tsconfig.json
 │   │   └── package.json
 │   │

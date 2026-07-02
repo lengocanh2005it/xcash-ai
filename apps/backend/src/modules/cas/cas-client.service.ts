@@ -1,6 +1,8 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 
+export const CAS_DEFAULT_GRANT_SCOPES = 'identity,transaction';
+
 export interface CasGrantTokenRequest {
   scopes: string;
   language?: string;
@@ -21,12 +23,77 @@ export interface CasIdentityAccount {
   accountNumber?: string;
   bankName?: string;
   fiName?: string;
+  accountHolderName?: string;
+  holderName?: string;
+  accountName?: string;
 }
 
 export interface CasIdentityResponse {
   accountNumber?: string;
   bankName?: string;
+  accountHolderName?: string;
+  holderName?: string;
+  accountName?: string;
+  legalName?: string;
   accounts?: CasIdentityAccount[];
+}
+
+function extractCasErrorMessage(data: unknown, status: number): string {
+  if (typeof data === 'object' && data !== null) {
+    const record = data as Record<string, unknown>;
+    const message = record.errorMessage ?? record.message ?? record.error ?? record.errorCode;
+    if (message) {
+      return String(message);
+    }
+    if ('raw' in record && record.raw) {
+      return String(record.raw);
+    }
+  }
+
+  return `Cas API error ${status}`;
+}
+
+function unwrapCasPayload(data: unknown): Record<string, unknown> {
+  if (typeof data !== 'object' || data === null) {
+    return {};
+  }
+
+  const record = data as Record<string, unknown>;
+  if (typeof record.data === 'object' && record.data !== null) {
+    return record.data as Record<string, unknown>;
+  }
+
+  return record;
+}
+
+export function mapGrantExchangeResponse(data: unknown): CasGrantExchangeResponse {
+  const payload = unwrapCasPayload(data);
+  const accessToken = payload.accessToken ?? payload.access_token;
+  const grantId = payload.grantId ?? payload.grant_id;
+
+  if (!accessToken || !grantId) {
+    throw new Error('Cas /grant/exchange response thiếu accessToken hoặc grantId');
+  }
+
+  return {
+    accessToken: String(accessToken),
+    grantId: String(grantId),
+  };
+}
+
+export function mapGrantTokenResponse(data: unknown): CasGrantTokenResponse {
+  const payload = unwrapCasPayload(data);
+  const grantToken = payload.grantToken ?? payload.grant_token ?? payload.linkToken;
+
+  if (!grantToken) {
+    throw new Error('Cas /grant/token response thiếu grantToken');
+  }
+
+  const expiresAt = payload.expiresAt ?? payload.expires_at;
+  return {
+    grantToken: String(grantToken),
+    expiresAt: expiresAt ? String(expiresAt) : undefined,
+  };
 }
 
 @Injectable()
@@ -52,7 +119,7 @@ export class CasClientService {
   }
 
   async createGrantToken(payload: CasGrantTokenRequest): Promise<CasGrantTokenResponse> {
-    return this.request<CasGrantTokenResponse>('/grant/token', {
+    const data = await this.request<unknown>('/grant/token', {
       method: 'POST',
       body: JSON.stringify({
         scopes: payload.scopes,
@@ -60,13 +127,17 @@ export class CasClientService {
         redirectUri: payload.redirectUri,
       }),
     });
+
+    return mapGrantTokenResponse(data);
   }
 
   async exchangeGrant(publicToken: string): Promise<CasGrantExchangeResponse> {
-    return this.request<CasGrantExchangeResponse>('/grant/exchange', {
+    const data = await this.request<unknown>('/grant/exchange', {
       method: 'POST',
       body: JSON.stringify({ publicToken }),
     });
+
+    return mapGrantExchangeResponse(data);
   }
 
   async getIdentity(accessToken: string): Promise<CasIdentityResponse> {
@@ -79,11 +150,23 @@ export class CasClientService {
 
   parseIdentity(identity: CasIdentityResponse): {
     accountNumber: string | null;
+    accountHolderName: string | null;
     bankName: string | null;
   } {
     const firstAccount = identity.accounts?.[0];
+    const accountHolderName =
+      identity.accountHolderName ??
+      identity.holderName ??
+      identity.accountName ??
+      identity.legalName ??
+      firstAccount?.accountHolderName ??
+      firstAccount?.holderName ??
+      firstAccount?.accountName ??
+      null;
+
     return {
       accountNumber: identity.accountNumber ?? firstAccount?.accountNumber ?? null,
+      accountHolderName: accountHolderName ? String(accountHolderName) : null,
       bankName: identity.bankName ?? firstAccount?.bankName ?? firstAccount?.fiName ?? null,
     };
   }
@@ -98,7 +181,7 @@ export class CasClientService {
 
     try {
       await this.createGrantToken({
-        scopes: 'qrpay',
+        scopes: CAS_DEFAULT_GRANT_SCOPES,
         redirectUri: this.configService.get<string>(
           'CAS_GRANT_REDIRECT_URI',
           'http://localhost:5173/onboarding/callback',
@@ -139,10 +222,8 @@ export class CasClientService {
     }
 
     if (!response.ok) {
-      const errorMessage =
-        typeof data === 'object' && data !== null && 'message' in data
-          ? String((data as { message: unknown }).message)
-          : `Cas API error ${response.status}`;
+      const errorMessage = extractCasErrorMessage(data, response.status);
+      this.logger.warn(`Cas ${init.method ?? 'GET'} ${path} failed: ${errorMessage}`);
       throw new Error(errorMessage);
     }
 
@@ -161,11 +242,11 @@ export class CasClientService {
     const response = await fetch(`${this.baseUrl}${path}`, {
       ...init,
       headers: {
-        'Content-Type': 'application/json',
         'x-client-id': this.clientId,
         'x-secret-key': this.secretKey,
         'X-BankHub-Api-Version': this.apiVersion,
-        Authorization: `Bearer ${accessToken}`,
+        // Cas quickstart: Authorization header is the raw access token (no Bearer prefix).
+        Authorization: accessToken,
         ...(init.headers ?? {}),
       },
     });
@@ -181,13 +262,12 @@ export class CasClientService {
     }
 
     if (!response.ok) {
-      const errorMessage =
-        typeof data === 'object' && data !== null && 'message' in data
-          ? String((data as { message: unknown }).message)
-          : `Cas API error ${response.status}`;
+      const errorMessage = extractCasErrorMessage(data, response.status);
+      this.logger.warn(`Cas ${init.method ?? 'GET'} ${path} failed: ${errorMessage}`);
       throw new Error(errorMessage);
     }
 
-    return data as T;
+    const payload = unwrapCasPayload(data);
+    return payload as T;
   }
 }

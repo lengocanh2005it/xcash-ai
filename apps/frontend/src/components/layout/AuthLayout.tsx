@@ -13,7 +13,7 @@ export function AuthLayout({
   children: ReactNode;
 }) {
   return (
-    <div className="relative min-h-svh bg-white px-4 py-8 sm:px-6">
+    <div className="relative min-h-svh bg-background px-4 py-8 sm:px-6">
       <div className="pointer-events-none absolute inset-x-0 top-0 h-64 bg-gradient-to-b from-primary/10 to-transparent" />
       <div className="absolute top-4 right-4 z-10">
         <ThemeToggle />

@@ -7,7 +7,9 @@ export function useOnboardingMutations() {
 
   const createGrantToken = useMutation({
     mutationFn: () =>
-      postApiData<GrantTokenResponse>('/onboarding/banking/grant-token?scopes=qrpay'),
+      postApiData<GrantTokenResponse>(
+        '/onboarding/banking/grant-token?scopes=identity,transaction',
+      ),
   });
 
   const completeCallback = useMutation({

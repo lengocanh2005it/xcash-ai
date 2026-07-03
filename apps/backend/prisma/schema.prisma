@@ -18,21 +18,22 @@ enum Role {
 
 enum TransactionStatus {
   pending
-  matched
+  classified
   review
   skipped
 }
 
-enum InvoiceStatus {
-  unpaid
-  partial
-  paid
-  overpaid
-}
-
-enum MatchType {
+enum ClassificationType {
   auto
   manual
+}
+
+enum AccountType {
+  asset
+  liability
+  equity
+  revenue
+  expense
 }
 
 enum CasGrantStatus {
@@ -61,34 +62,34 @@ enum PaymentOrderStatus {
 }
 
 model Tenant {
-  id                 String   @id @default(uuid())
-  businessName       String   @map("business_name")
-  matchingThreshold  Int      @default(95) @map("matching_threshold")
-  createdAt          DateTime @default(now()) @map("created_at")
-  updatedAt          DateTime @updatedAt @map("updated_at")
+  id                       String   @id @default(uuid())
+  businessName             String   @map("business_name")
+  classificationThreshold  Int      @default(85) @map("classification_threshold")
+  createdAt                DateTime @default(now()) @map("created_at")
+  updatedAt                DateTime @updatedAt @map("updated_at")
 
-  users         User[]
-  customers     Customer[]
-  invoices      Invoice[]
-  transactions  Transaction[]
-  auditLogs     AuditLog[]
-  casGrants     CasGrant[]
-  subscriptions Subscription[]
+  users               User[]
+  transactions        Transaction[]
+  auditLogs           AuditLog[]
+  casGrants           CasGrant[]
+  subscriptions       Subscription[]
+  chartOfAccounts     ChartOfAccount[]
+  classifications     TransactionClassification[]
 
   @@map("tenants")
 }
 
 model User {
-  id           String   @id @default(uuid())
-  tenantId     String?  @map("tenant_id")
+  id           String    @id @default(uuid())
+  tenantId     String?   @map("tenant_id")
   name         String
-  email        String   @unique
-  passwordHash String   @map("password_hash")
+  email        String    @unique
+  passwordHash String    @map("password_hash")
   role         Role
-  invitedById  String?  @map("invited_by")
+  invitedById  String?   @map("invited_by")
   invitedAt    DateTime? @map("invited_at")
-  createdAt    DateTime @default(now()) @map("created_at")
-  updatedAt    DateTime @updatedAt @map("updated_at")
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
 
   tenant    Tenant? @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   invitedBy User?   @relation("UserInvites", fields: [invitedById], references: [id], onDelete: SetNull)
@@ -96,48 +97,6 @@ model User {
 
   @@index([tenantId])
   @@map("users")
-}
-
-model Customer {
-  id              String    @id @default(uuid())
-  tenantId        String    @map("tenant_id")
-  name            String
-  phone           String?
-  email           String?
-  accountNumbers  String[]  @default([]) @map("account_numbers")
-  embedding       Unsupported("vector")?
-  deletedAt       DateTime? @map("deleted_at")
-  createdAt       DateTime  @default(now()) @map("created_at")
-  updatedAt       DateTime  @updatedAt @map("updated_at")
-
-  tenant   Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  invoices Invoice[]
-
-  @@index([tenantId])
-  @@map("customers")
-}
-
-model Invoice {
-  id          String        @id @default(uuid())
-  tenantId    String        @map("tenant_id")
-  customerId  String        @map("customer_id")
-  invoiceCode String        @map("invoice_code")
-  amount      Decimal       @db.Decimal(18, 2)
-  paidAmount  Decimal       @default(0) @map("paid_amount") @db.Decimal(18, 2)
-  status      InvoiceStatus @default(unpaid)
-  dueDate     DateTime?     @map("due_date")
-  embedding   Unsupported("vector")?
-  deletedAt   DateTime?     @map("deleted_at")
-  createdAt   DateTime      @default(now()) @map("created_at")
-  updatedAt   DateTime      @updatedAt @map("updated_at")
-
-  tenant  Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  customer Customer       @relation(fields: [customerId], references: [id], onDelete: Cascade)
-  matches InvoiceMatch[]
-
-  @@unique([tenantId, invoiceCode])
-  @@index([tenantId])
-  @@map("invoices")
 }
 
 model Transaction {
@@ -151,47 +110,70 @@ model Transaction {
   content         String?
   transactionDate DateTime          @map("transaction_date")
   status          TransactionStatus @default(pending)
-  confidenceScore Int?              @map("confidence_score")
   createdAt       DateTime          @default(now()) @map("created_at")
   updatedAt       DateTime          @updatedAt @map("updated_at")
 
-  tenant  Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  matches InvoiceMatch[]
+  tenant         Tenant                     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  classification TransactionClassification?
 
   @@index([tenantId])
   @@index([grantId])
+  @@index([tenantId, status])
   @@map("transactions")
 }
 
-model InvoiceMatch {
-  id              String    @id @default(uuid())
-  transactionId   String    @map("transaction_id")
-  invoiceId       String    @map("invoice_id")
-  matchedAmount   Decimal   @map("matched_amount") @db.Decimal(18, 2)
-  confidenceScore Int       @map("confidence_score")
-  matchType       MatchType @map("match_type")
-  matchedBy       String    @map("matched_by")
-  createdAt       DateTime  @default(now()) @map("created_at")
+model ChartOfAccount {
+  id          String      @id @default(uuid())
+  tenantId    String      @map("tenant_id")
+  accountCode String      @map("account_code")
+  accountName String      @map("account_name")
+  accountType AccountType @map("account_type")
+  parentCode  String?     @map("parent_code")
+  isActive    Boolean     @default(true) @map("is_active")
+  createdAt   DateTime    @default(now()) @map("created_at")
+  updatedAt   DateTime    @updatedAt @map("updated_at")
 
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, accountCode])
+  @@index([tenantId])
+  @@map("chart_of_accounts")
+}
+
+model TransactionClassification {
+  id                 String             @id @default(uuid())
+  tenantId           String             @map("tenant_id")
+  transactionId      String             @unique @map("transaction_id")
+  debitAccount       String             @map("debit_account")
+  creditAccount      String             @map("credit_account")
+  amount             Decimal            @db.Decimal(18, 2)
+  confidenceScore    Int                @map("confidence_score")
+  classificationType ClassificationType @map("classification_type")
+  classifiedBy       String             @map("classified_by")
+  reason             String?
+  embedding          Unsupported("vector(1536)")?
+  status             TransactionStatus  @default(pending)
+  createdAt          DateTime           @default(now()) @map("created_at")
+  updatedAt          DateTime           @updatedAt @map("updated_at")
+
+  tenant      Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   transaction Transaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
-  invoice     Invoice     @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
 
-  @@index([transactionId])
-  @@index([invoiceId])
-  @@map("invoice_matches")
+  @@index([tenantId, status])
+  @@map("transaction_classifications")
 }
 
 model CasGrant {
-  id            String         @id @default(uuid())
-  tenantId      String         @map("tenant_id")
-  grantId       String         @unique @map("grant_id")
-  accessToken   String         @map("access_token")
-  accountNumber String?        @map("account_number")
-  accountHolderName String?    @map("account_holder_name")
-  bankName      String?        @map("bank_name")
-  bankLogo      String?        @map("bank_logo")
-  status        CasGrantStatus @default(active)
-  linkedAt      DateTime       @default(now()) @map("linked_at")
+  id                String         @id @default(uuid())
+  tenantId          String         @map("tenant_id")
+  grantId           String         @unique @map("grant_id")
+  accessToken       String         @map("access_token")
+  accountNumber     String?        @map("account_number")
+  accountHolderName String?        @map("account_holder_name")
+  bankName          String?        @map("bank_name")
+  bankLogo          String?        @map("bank_logo")
+  status            CasGrantStatus @default(active)
+  linkedAt          DateTime       @default(now()) @map("linked_at")
 
   tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 

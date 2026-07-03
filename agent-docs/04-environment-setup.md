@@ -12,7 +12,7 @@
 
 ```bash
 git clone <repo>
-cd paypilot-ai
+cd klassi-ai
 pnpm install
 
 # Copy env theo từng app (KHÔNG commit file .env thật)
@@ -45,7 +45,7 @@ cp apps/frontend/.env.example apps/frontend/.env
 | Cas Webhook | `CAS_WEBHOOK_URL` | URL đăng ký trên Cas Console; dev local dùng **ngrok** → `https://<id>.ngrok-free.app/api/v1/webhook/cas` |
 | PayOS (billing) | `PAYOS_CHECKSUM_KEY`, `PAYOS_BILLING_WEBHOOK_URL` | mock qua Postman, chưa có account PayOS thật |
 | Webhook security | `WEBHOOK_SIGNATURE_HEADER`, `WEBHOOK_TIMESTAMP_TOLERANCE_SECONDS`, `WEBHOOK_IDEMPOTENCY_TTL_SECONDS`, `WEBHOOK_SKIP_SIGNATURE_VERIFY` | dev local/ngrok: `WEBHOOK_SKIP_SIGNATURE_VERIFY=true`; production **phải** `false` |
-| AI Matching | `AI_MATCHING_AUTO_THRESHOLD=95`, `AI_MATCHING_MIN_THRESHOLD=50` | mặc định, tenant có thể override qua `tenants.matching_threshold` |
+| AI Classification | `AI_CLASSIFICATION_THRESHOLD=85` | mặc định, tenant có thể override qua `tenants.classification_threshold` |
 | Frontend | `VITE_API_BASE_URL` | `apps/frontend/.env` — prefix `VITE_` bắt buộc |
 | Docker Compose | `POSTGRES_*`, `REDIS_PORT` | `.env` ở **root** repo |
 | Backend (còn lại) | xem `.env.example` | `apps/backend/.env` |
@@ -60,7 +60,7 @@ docker compose up -d
 docker compose --profile fullstack up -d --build
 
 # 2. Migrate database (nếu chạy backend ngoài Docker)
-pnpm --filter @paypilot/backend exec prisma migrate deploy
+pnpm --filter @klassi/backend exec prisma migrate deploy
 
 # 3. Chạy apps local (không Docker cho BE/FE)
 pnpm dev                 # backend (port 3000) + frontend (port 5173)
@@ -144,17 +144,16 @@ Luồng đúng: chọn ngân hàng → **đăng nhập iBanking** trong popup (k
 
 3 file Excel mẫu để test import/webhook nằm ở: (đường dẫn gốc ngoài repo, copy vào `apps/backend/test/fixtures/` khi cần dùng cho integration test)
 - `customers_import.xlsx` — mẫu import khách hàng
-- `invoices_import.xlsx` — mẫu import hóa đơn
 - `transactions_sample.xlsx` — mẫu payload giao dịch, dùng làm dữ liệu mock khi Cas sandbox không ổn định (xem rủi ro trong `reference/sprint-plan.md`)
 
 ## Troubleshooting nhanh
 
 | Vấn đề | Nguyên nhân thường gặp |
 |---|---|
-| `pnpm install` báo lỗi workspace | Kiểm tra `package.json` của package mới có `name` dạng `@paypilot/<tên>` và nằm đúng dưới `apps/` hoặc `packages/` chưa |
+| `pnpm install` báo lỗi workspace | Kiểm tra `package.json` của package mới có `name` dạng `@klassi/<tên>` và nằm đúng dưới `apps/` hoặc `packages/` chưa |
 | Turbo báo "no script found" | Bình thường nếu package đó chưa cần script đó — không phải lỗi |
 | Webhook Cas không đến local | Chưa chạy ngrok, URL Cas Console chưa khớp tunnel mới, hoặc backend chưa listen port 3000 |
 | `grantToken` hết hạn khi test Cas Link | Token chỉ sống 30 phút, dùng 1 lần — tạo lại token mới, không cache/reuse |
-| Cas Link báo lỗi ở form xác thực STK/tên TK | Đang dùng nhầm scope `qrpay` — PayPilot cần `identity,transaction`. Restart backend, bấm lại Liên kết ngân hàng |
+| Cas Link báo lỗi ở form xác thực STK/tên TK | Đang dùng nhầm scope `qrpay` — Klassi AI cần `identity,transaction`. Restart backend, bấm lại Liên kết ngân hàng |
 | Callback `/onboarding/banking/callback` lỗi `Cas API error 400` sau khi Cas Link thành công | Thường do thiếu scope `identity` khi gọi `GET /identity`, hoặc `publicToken` đã dùng (bấm lại từ đầu, tạo grant mới). Restart backend sau khi đổi scope |
 | Dashboard hiện 0 giao dịch dù webhook OK | FE gọi `limit>100` → BE trả 400; Dashboard dùng `limit=100` |

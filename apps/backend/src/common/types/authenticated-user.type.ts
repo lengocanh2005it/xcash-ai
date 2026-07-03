@@ -1,4 +1,4 @@
-import type { Role } from '@paypilot/shared-types';
+import type { Role } from '@klassi/shared-types';
 
 export interface AuthenticatedUser {
   id: string;

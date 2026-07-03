@@ -1,4 +1,4 @@
-# 🎨 PayPilot AI — UI Design Specification
+# 🎨 Klassi AI — UI Design Specification
 
 > Tài liệu này mô tả chi tiết từng màn hình để AI generate code React (JSX + Tailwind CSS + ShadCN/UI + TanStack Query).
 
@@ -27,16 +27,15 @@ Toàn bộ app dùng layout 2 cột: **Sidebar cố định bên trái + Main co
 ┌─────────────────────────────────────────────────────┐
 │  Sidebar (w-64, fixed)  │  Main Content (flex-1)    │
 │                         │                            │
-│  Logo PayPilot AI       │  Header (sticky top)      │
+│  Logo Klassi AI         │  Header (sticky top)      │
 
 │                         │  ├── Page title            │
 │  Navigation:            │  └── Action buttons        │
 │  • Dashboard            │                            │
 │  • Transactions         │  Content Area              │
 │  • Human Review 🔴3     │  (overflow-y-auto)         │
-│  • Invoices             │                            │
-│  • Customers            │                            │
-│  • Analytics            │                            │
+│  • Báo cáo              │                            │
+│  • Danh mục TK          │                            │
 │  • AI Copilot           │                            │
 │  • Settings             │                            │
 │                         │                            │
@@ -83,11 +82,11 @@ Tham chiếu trực tiếp [`casso.vn`](https://casso.vn) và [`payos.vn`](https
 ### Color convention (confidence / status)
 
 ```
-- Confidence ≥ 95%: Badge / text `primary` hoặc variant success (xanh #16AB64)
-- Confidence 50–95%: Badge variant="warning" (vàng)
-- Confidence < 50%: Badge variant="destructive" (đỏ)
+- Confidence ≥ 85%: Badge / text `primary` hoặc variant success (xanh #16AB64) — Auto Classify
+- Confidence 50–85%: Badge variant="warning" (vàng) — Human Review
+- Confidence < 50%: Badge variant="destructive" (đỏ) — Cần xem xét kỹ
 
-- Status Matched: primary/xanh | Status Review: vàng
+- Status Classified: primary/xanh | Status Review: vàng
 - Status Pending: xám | Status Skipped: outline
 ```
 
@@ -709,7 +708,7 @@ Click vào row → Sheet từ phải với tabs:
 │                                                      │
 │              Chat Area (flex-1, overflow-y-auto)     │
 │                                                      │
-│  🤖 Xin chào! Tôi là AI Copilot của PayPilot.       │
+│  🤖 Xin chào! Tôi là AI Copilot của Klassi AI.       │
 │     Bạn có thể hỏi tôi về doanh thu, công nợ,       │
 │     hóa đơn hoặc khách hàng.                        │
 │                                                      │
@@ -826,7 +825,7 @@ Dùng tabs layout ngang:
   <CardHeader>
     <CardTitle>Tài khoản ngân hàng</CardTitle>
     <p className="text-sm text-muted-foreground">
-      Liên kết tài khoản ngân hàng để PayPilot tự động nhận giao dịch
+      Liên kết tài khoản ngân hàng để Klassi AI tự động nhận và phân loại giao dịch
     </p>
   </CardHeader>
   <CardContent>
@@ -919,7 +918,7 @@ async function openCasLink() {
 
 ### Tab Billing
 
-> Hiển thị gói hiện tại + usage, cho phép nâng cấp qua PayOS. Lưu ý: đây là PayOS account của chính PayPilot, khác hẳn use case PayOS đã loại bỏ ở luồng nghiệp vụ — chỉ Admin xem/thao tác được (xem `RBAC.md`).
+> Hiển thị gói hiện tại + usage, cho phép nâng cấp qua PayOS. Lưu ý: đây là PayOS account của chính Klassi AI, dùng để thu phí dịch vụ từ doanh nghiệp — chỉ Admin xem/thao tác được (xem `rbac.md`).
 
 ```jsx
 <Card>
@@ -1107,7 +1106,7 @@ Partner Dashboard dùng layout **đơn giản hơn**, không có Sidebar 8 mục
 
 ```
 ┌─────────────────────────────────────────────────────┐
-│ Top Nav: PayPilot AI — Partner Console    [Logout]  │
+│ Top Nav: Klassi AI — Partner Console      [Logout]  │
 ├─────────────────────────────────────────────────────┤
 │ Stats Row (grid grid-cols-4 gap-4)                   │
 │ ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐│

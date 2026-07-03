@@ -28,7 +28,7 @@ export function TenantLayout() {
           >
             <Menu className="size-4" />
           </Button>
-          <p className="truncate font-semibold text-primary">PayPilot AI</p>
+          <p className="truncate font-semibold text-primary">Klassi AI</p>
           <div className="ml-auto">
             <ThemeToggle />
           </div>

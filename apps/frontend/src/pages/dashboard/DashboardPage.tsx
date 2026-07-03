@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { AlertCircle, Brain, Clock, TrendingUp } from 'lucide-react';
+import { AlertCircle, Brain, CheckCircle2, Clock } from 'lucide-react';
 import { useMemo } from 'react';
 import { BankStatusCard } from '@/components/dashboard/BankStatusCard';
 import { DashboardStatCard } from '@/components/dashboard/DashboardStatCard';
@@ -38,18 +38,22 @@ export default function DashboardPage() {
   const statusData = useMemo(() => buildTransactionStatusBreakdown(items), [items]);
   const recentItems = useMemo(() => items.slice(0, 5), [items]);
 
-  const revenueFooter =
-    stats.revenueChangePercent != null ? (
+  const classifiedFooter =
+    stats.classifiedChangePercent != null ? (
       <p
         className={
-          stats.revenueChangePercent >= 0 ? 'text-xs text-primary' : 'text-xs text-destructive'
+          stats.classifiedChangePercent >= 0 ? 'text-xs text-primary' : 'text-xs text-destructive'
         }
       >
-        {stats.revenueChangePercent >= 0 ? '↑' : '↓'}{' '}
-        {Math.abs(stats.revenueChangePercent).toFixed(1)}% so với hôm qua
+        {stats.classifiedChangePercent >= 0 ? '↑' : '↓'}{' '}
+        {Math.abs(stats.classifiedChangePercent).toFixed(1)}% so với hôm qua
       </p>
     ) : (
-      <p className="text-xs text-muted-foreground">Chưa có dữ liệu so sánh hôm qua</p>
+      <p className="text-xs text-muted-foreground">
+        {stats.classifiedTodayCount > 0
+          ? `Doanh thu hôm nay: ${formatCurrency(stats.todayRevenue)}`
+          : 'Chưa có GD định khoản hôm nay'}
+      </p>
     );
 
   return (
@@ -61,45 +65,43 @@ export default function DashboardPage() {
 
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
           {bankingLinked && isLoading ? (
-            (['revenue', 'pending', 'review', 'accuracy'] as const).map((key) => (
+            (['classified', 'pending', 'review', 'accuracy'] as const).map((key) => (
               <Skeleton key={key} className="h-[120px] w-full rounded-xl" />
             ))
           ) : (
             <>
               <DashboardStatCard
-                label="Doanh thu hôm nay"
-                value={formatCurrency(stats.todayRevenue)}
-                icon={TrendingUp}
-                footer={revenueFooter}
+                label="Định khoản hôm nay"
+                value={stats.classifiedTodayCount}
+                icon={CheckCircle2}
+                footer={classifiedFooter}
               />
               <DashboardStatCard
-                label="Giao dịch chưa xử lý"
+                label="Chờ định khoản"
                 value={stats.pendingCount}
                 icon={Clock}
-                footer={<p className="text-xs text-muted-foreground">Đang chờ AI ghép hóa đơn</p>}
+                footer={<p className="text-xs text-muted-foreground">Đang chờ AI xử lý</p>}
               />
               <DashboardStatCard
-                label="Chờ review"
+                label="Chờ Human Review"
                 value={stats.reviewCount}
                 icon={AlertCircle}
                 footer={
                   stats.reviewCount > 0 ? (
-                    <p className="text-xs text-amber-600">Cần xem xét thủ công</p>
+                    <p className="text-xs text-amber-600">Cần kế toán xem xét</p>
                   ) : (
                     <p className="text-xs text-muted-foreground">Không có giao dịch cần xem xét</p>
                   )
                 }
               />
               <DashboardStatCard
-                label="AI Match accuracy"
+                label="Độ chính xác AI"
                 value={
                   stats.aiAccuracyPercent != null ? `${stats.aiAccuracyPercent.toFixed(1)}%` : '—'
                 }
                 icon={Brain}
                 footer={
-                  <p className="text-xs text-muted-foreground">
-                    Tỷ lệ confidence ≥ 95% trên giao dịch đã xử lý
-                  </p>
+                  <p className="text-xs text-muted-foreground">Tỷ lệ tự tin ≥ 85% (ngưỡng TT133)</p>
                 }
               />
             </>

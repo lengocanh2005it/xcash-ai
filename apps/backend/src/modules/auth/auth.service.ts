@@ -1,13 +1,14 @@
 import { randomUUID } from 'node:crypto';
+import { Role } from '@klassi/shared-types';
 import { ConflictException, Injectable, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
-import { Role } from '@paypilot/shared-types';
 import { Role as PrismaRole } from '@prisma/client';
 import * as bcrypt from 'bcryptjs';
 import type { AuthenticatedUser, AuthJwtPayload } from '../../common/types/authenticated-user.type';
 import { PrismaService } from '../../prisma/prisma.service';
 import { RedisService } from '../../redis/redis.service';
+import { ChartOfAccountsService } from '../chart-of-accounts/chart-of-accounts.service';
 import type { LoginDto, RegisterDto } from './dto/auth.dto';
 
 export interface AuthSession {
@@ -25,6 +26,7 @@ export class AuthService {
     private readonly jwtService: JwtService,
     private readonly configService: ConfigService,
     private readonly redisService: RedisService,
+    private readonly chartOfAccountsService: ChartOfAccountsService,
   ) {
     this.refreshTtlSeconds = this.parseDurationToSeconds(
       this.configService.get<string>('JWT_REFRESH_EXPIRES_IN', '7d'),
@@ -83,10 +85,13 @@ export class AuthService {
         },
       });
 
-      return createdUser;
+      return { createdUser, tenantId: tenant.id };
     });
 
-    return this.issueTokens(this.toAuthenticatedUser(user));
+    // Seed TT133 chart of accounts after successful registration
+    this.chartOfAccountsService.seedTt133(user.tenantId).catch(() => {});
+
+    return this.issueTokens(this.toAuthenticatedUser(user.createdUser));
   }
 
   async login(dto: LoginDto): Promise<AuthSession> {

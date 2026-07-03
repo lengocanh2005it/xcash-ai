@@ -36,7 +36,7 @@ const PAGE_SIZE = 20;
 const STATUS_OPTIONS = [
   { value: '', label: 'Tất cả trạng thái' },
   { value: 'pending', label: 'Chờ xử lý' },
-  { value: 'matched', label: 'Đã khớp' },
+  { value: 'classified', label: 'Đã định khoản' },
   { value: 'review', label: 'Cần review' },
   { value: 'skipped', label: 'Bỏ qua' },
 ];
@@ -271,6 +271,7 @@ export default function TransactionsPage() {
                     <TableHead className="py-3 text-right">Số tiền</TableHead>
                     <TableHead className="py-3">Nội dung</TableHead>
                     <TableHead className="py-3">Người gửi</TableHead>
+                    <TableHead className="py-3 text-center">TK Nợ/Có</TableHead>
                     <TableHead className="py-3 text-center">Confidence</TableHead>
                     <TableHead className="py-3 text-right">Trạng thái</TableHead>
                   </TableRow>
@@ -292,8 +293,19 @@ export default function TransactionsPage() {
                         {txn.content ?? '—'}
                       </TableCell>
                       <TableCell className="text-sm">{txn.senderAccount ?? '—'}</TableCell>
+                      <TableCell className="text-center font-mono text-xs">
+                        {txn.classification ? (
+                          <span>
+                            {txn.classification.debitAccount}/{txn.classification.creditAccount}
+                          </span>
+                        ) : (
+                          <span className="text-muted-foreground">—</span>
+                        )}
+                      </TableCell>
                       <TableCell className="text-center">
-                        <ConfidenceBadge score={txn.confidenceScore} />
+                        <ConfidenceBadge
+                          score={txn.classification?.confidenceScore ?? txn.confidenceScore}
+                        />
                       </TableCell>
                       <TableCell className="text-right">
                         <div className="flex justify-end">

@@ -26,14 +26,14 @@ pnpm dlx shadcn@latest add table label select dialog sheet separator tabs alert
 
 Chỉ compose wrapper mỏng ở `components/layout/` (app shell) hoặc `components/shared/` (vd `ThemeToggle` bọc `Button`) — logic/style lõi vẫn từ ShadCN.
 
-**Đã cài trong repo (`components/ui/`):** `button`, `card`, `badge`, `input`, `skeleton`, `table`, `label`, `dialog`. Các màn Sprint 2+ (invoice, review, settings...) thêm `select`, `sheet`, `tabs`... qua CLI trước khi code.
+**Đã cài trong repo (`components/ui/`):** `button`, `card`, `badge`, `input`, `skeleton`, `table`, `label`, `dialog`, `sheet`, `tabs`. Các màn Sprint 3+ (settings, copilot...) thêm component qua CLI trước khi code.
 
 **Dashboard charts (Recharts):** aggregate client-side từ `GET /transactions?limit=100` (max BE cho phép) — `TransactionTrendChart` (AreaChart 7 ngày), `TransactionStatusChart` (Donut trạng thái), helper tại `lib/dashboard-transactions.ts`. Màu chart dùng CSS variables `--chart-1`…`--chart-5` trong `index.css` (hỗ trợ dark mode). Sprint 2+ sẽ chuyển doanh thu / AI stats sang `/analytics/*` khi backend có endpoint.
 
 ## Dark / Light mode
 
 - Dùng class `.dark` trên `document.documentElement` (token màu đã khai báo trong `apps/frontend/src/index.css`).
-- `ThemeProvider` (`contexts/theme-context.tsx`) + `ThemeToggle` (`components/shared/ThemeToggle.tsx`) — lưu preference vào `localStorage` key `paypilot-theme`.
+- `ThemeProvider` (`contexts/theme-context.tsx`) + `ThemeToggle` (`components/shared/ThemeToggle.tsx`) — lưu preference vào `localStorage` key `klassi-theme`.
 - Lần đầu vào app: nếu chưa có key, fallback theo `prefers-color-scheme`; `index.html` có inline script nhỏ để tránh flash theme sai lúc load.
 - **Vị trí toggle trên UI:** Sidebar (tenant layout), Header (onboarding/partner), góc phải trên (auth layout). Mọi layout mới phải có chỗ toggle theme, không tạo logic riêng lẻ.
 
@@ -72,9 +72,9 @@ apps/frontend/src/
 │   ├── dashboard/
 │   ├── transactions/
 │   ├── review/                     # Human Review Queue
-│   ├── invoices/
-│   ├── customers/
-│   ├── analytics/
+│   ├── reports/                    # Báo cáo thu/chi + export Excel
+│   ├── accounts/                   # Danh mục tài khoản TT133
+│   ├── analytics/                  # Sprint 3+
 │   ├── copilot/                    # AI Copilot chat
 │   ├── settings/                   # tabs: Banking/Billing/Notification/Team/KB/Threshold
 │   └── partner/                    # Partner Dashboard — layout RIÊNG, xem bên dưới
@@ -84,7 +84,7 @@ apps/frontend/src/
 │   └── shared/                     # ConfidenceBadge, StatusBadge, EmptyState, TableSkeleton, ThemeToggle...
 ├── contexts/
 │   ├── auth-context.tsx
-│   └── theme-context.tsx           # dark/light mode (localStorage paypilot-theme)
+│   └── theme-context.tsx           # dark/light mode (localStorage klassi-theme)
 ├── hooks/
 │   ├── useAuth.ts
 │   ├── usePermission.ts             # xem reference/rbac.md mục Frontend — Ẩn/hiện UI theo role
@@ -103,10 +103,10 @@ apps/frontend/src/
 | | Tenant Layout | Partner Layout |
 |---|---|---|
 | Role | Admin / Accountant / Viewer | Cas Partner |
-| Route | `/dashboard`, `/transactions`, `/invoices`... (8 màn hình) | `/partner` |
-| Sidebar | Có, 8 mục | Không, chỉ top nav |
+| Route | `/dashboard`, `/transactions`, `/review`, `/reports`, `/accounts`... | `/partner` |
+| Sidebar | Có, menu Klassi AI | Không, chỉ top nav |
 
-Chi tiết đầy đủ 2 layout tại [`reference/ui-design.md`](./reference/ui-design.md#-global-layout-tenant--mục-18) mục Global Layout và mục 9 Partner Dashboard. **Không import component/API nghiệp vụ (`/transactions`, `/invoices`, `/customers`) vào bất kỳ đâu trong `pages/partner/`** — đây là dấu hiệu thiết kế sai đã được cảnh báo rõ trong tài liệu gốc.
+Chi tiết đầy đủ 2 layout tại [`reference/ui-design.md`](./reference/ui-design.md#-global-layout-tenant--mục-18) mục Global Layout và mục 9 Partner Dashboard. **Không import component/API nghiệp vụ tenant (`/transactions`, `/review`, `/reports`) vào bất kỳ đâu trong `pages/partner/`**.
 
 ## RBAC trên frontend — không tin FE ẩn nút là đủ
 
@@ -114,7 +114,7 @@ Backend luôn validate lại role ở mọi endpoint (xem `agent-docs/02-backend
 
 ```tsx
 const { can } = usePermission();
-{can('invoice:create') && <Button onClick={openCreateDialog}>+ Tạo hóa đơn</Button>}
+{can('classification:correct') && <Button onClick={openCorrectDialog}>Sửa định khoản</Button>}
 ```
 
 Bảng permission đầy đủ để implement `usePermission` lấy từ [`reference/rbac.md`](./reference/rbac.md#5-frontend--ẩnhiện-ui-theo-role).
@@ -162,7 +162,7 @@ Nguồn sự thật palette brand: mục **Brand palette** trong `reference/ui-d
 
 ## Types dùng chung với backend
 
-Import enum/type từ `@paypilot/shared-types` thay vì tự định nghĩa lại (vd: `Role`, `TransactionStatus`, `InvoiceStatus`, `SubscriptionPlan`). Nếu BE trả thêm field mới, cập nhật type ở `packages/shared-types/src/index.ts` trước, rồi dùng lại ở FE — không duplicate định nghĩa.
+Import enum/type từ `@klassi/shared-types` thay vì tự định nghĩa lại (vd: `Role`, `TransactionStatus`, `ClassificationType`, `AccountType`, `SubscriptionPlan`). Nếu BE trả thêm field mới, cập nhật type ở `packages/shared-types/src/index.ts` trước, rồi dùng lại ở FE — không duplicate định nghĩa.
 
 ## States bắt buộc cho mọi màn hình danh sách/bảng
 

@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { Sparkles } from 'lucide-react';
 import { ConfidenceBadge } from '@/components/shared/ConfidenceBadge';
+import { TransactionStatusBadge } from '@/components/shared/TransactionStatusBadge';
 import {
   Sheet,
   SheetContent,
@@ -11,12 +12,7 @@ import {
 import { Skeleton } from '@/components/ui/skeleton';
 import { getApiData } from '@/lib/api';
 import { formatCurrency, formatTransactionDateTime } from '@/lib/dashboard-transactions';
-import type {
-  MatchCandidate,
-  TransactionDetail,
-  TransactionMatchesResponse,
-  TransactionSummary,
-} from '@/types/transaction';
+import type { TransactionDetail, TransactionSummary } from '@/types/transaction';
 
 interface TransactionDetailSheetProps {
   transaction: TransactionSummary | null;
@@ -31,20 +27,14 @@ export function TransactionDetailSheet({
 }: TransactionDetailSheetProps) {
   const transactionId = transaction?.id;
 
-  const { data: detail, isLoading: isDetailLoading } = useQuery({
+  const { data: detail, isLoading } = useQuery({
     queryKey: ['transactions', transactionId, 'detail'],
     queryFn: () => getApiData<TransactionDetail>(`/transactions/${transactionId}`),
     enabled: open && Boolean(transactionId),
   });
 
-  const { data: matches, isLoading: isMatchesLoading } = useQuery({
-    queryKey: ['transactions', transactionId, 'matches'],
-    queryFn: () => getApiData<TransactionMatchesResponse>(`/transactions/${transactionId}/matches`),
-    enabled: open && Boolean(transactionId),
-  });
-
   const displayTxn = detail ?? transaction;
-  const topCandidates = (matches?.candidates ?? []).slice(0, 3);
+  const classification = detail?.classification ?? transaction?.classification;
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -58,14 +48,14 @@ export function TransactionDetailSheet({
           ) : null}
         </SheetHeader>
 
-        {isDetailLoading && !displayTxn ? (
+        {isLoading && !displayTxn ? (
           <div className="space-y-3">
             <Skeleton className="h-8 w-2/3" />
             <Skeleton className="h-20 w-full" />
             <Skeleton className="h-32 w-full" />
           </div>
         ) : displayTxn ? (
-          <div className="space-y-6">
+          <div className="mt-4 space-y-6">
             <div>
               <p className="text-2xl font-bold text-primary">
                 {formatCurrency(Number(displayTxn.amount))}
@@ -76,10 +66,13 @@ export function TransactionDetailSheet({
               {displayTxn.senderAccount ? (
                 <p className="mt-1 text-sm">{displayTxn.senderAccount}</p>
               ) : null}
+              <div className="mt-2">
+                <TransactionStatusBadge status={displayTxn.status} />
+              </div>
             </div>
 
             <div>
-              <p className="text-sm font-medium">Nội dung gốc</p>
+              <p className="text-sm font-medium">Nội dung giao dịch</p>
               <p className="mt-1 rounded-lg border bg-muted/30 p-3 text-sm">
                 {displayTxn.content ? `"${displayTxn.content}"` : '—'}
               </p>
@@ -88,52 +81,44 @@ export function TransactionDetailSheet({
             <div className="space-y-3">
               <div className="flex items-center gap-2">
                 <Sparkles className="size-4 text-primary" />
-                <p className="text-sm font-semibold">Gợi ý AI (top 3)</p>
+                <p className="text-sm font-semibold">Định khoản AI</p>
               </div>
 
-              {isMatchesLoading ? (
-                <div className="space-y-2">
-                  <Skeleton className="h-16 w-full" />
-                  <Skeleton className="h-16 w-full" />
-                </div>
-              ) : topCandidates.length === 0 ? (
+              {!classification ? (
                 <p className="text-sm text-muted-foreground">
-                  Chưa có gợi ý khớp. AI sẽ phân tích sau khi giao dịch được xử lý.
+                  Chưa có định khoản. AI sẽ xử lý giao dịch này sớm.
                 </p>
               ) : (
-                <div className="space-y-2">
-                  {topCandidates.map((candidate) => (
-                    <MatchSuggestionCard key={candidate.invoiceId} candidate={candidate} />
-                  ))}
+                <div className="rounded-lg border p-4 space-y-3">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <p className="text-xs text-muted-foreground uppercase tracking-wide">TK Nợ</p>
+                      <p className="mt-0.5 text-lg font-bold font-mono text-red-600">
+                        {classification.debitAccount}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-muted-foreground uppercase tracking-wide">TK Có</p>
+                      <p className="mt-0.5 text-lg font-bold font-mono text-green-600">
+                        {classification.creditAccount}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-xs text-muted-foreground">Phân loại</p>
+                      <p className="text-sm">
+                        {classification.classificationType === 'auto' ? 'Tự động (AI)' : 'Thủ công'}
+                      </p>
+                    </div>
+                    <ConfidenceBadge score={classification.confidenceScore} />
+                  </div>
                 </div>
               )}
-            </div>
-
-            <div className="rounded-lg border border-dashed bg-muted/20 p-3">
-              <p className="text-sm font-medium">Giải thích AI</p>
-              <p className="mt-1 text-sm text-muted-foreground">
-                Tính năng giải thích chi tiết sẽ có ở Sprint sau khi API explanation sẵn sàng.
-              </p>
             </div>
           </div>
         ) : null}
       </SheetContent>
     </Sheet>
-  );
-}
-
-function MatchSuggestionCard({ candidate }: { candidate: MatchCandidate }) {
-  return (
-    <div className="rounded-lg border p-3">
-      <div className="flex items-start justify-between gap-2">
-        <div>
-          <p className="text-sm font-medium">Hóa đơn #{candidate.invoiceCode}</p>
-          <p className="mt-0.5 text-sm text-muted-foreground">
-            {candidate.customerName} • {formatCurrency(candidate.amount)}
-          </p>
-        </div>
-        <ConfidenceBadge score={candidate.confidenceScore} />
-      </div>
-    </div>
   );
 }

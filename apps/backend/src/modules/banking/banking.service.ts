@@ -9,19 +9,19 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { Prisma, SubscriptionPlan, TransactionStatus } from '@prisma/client';
+import { Prisma, SubscriptionPlan } from '@prisma/client';
 import type { Queue } from 'bullmq';
 import { PrismaService } from '../../prisma/prisma.service';
 import { WEBHOOK_QUEUE } from '../../queue/queue.module';
 import { RedisService } from '../../redis/redis.service';
-import { AI_MATCHING_JOB } from '../ai/matching.processor';
+import { AI_CLASSIFY_JOB } from '../ai/classification.processor';
 import type { CasWebhookDto } from './dto/banking.dto';
 
 export interface CasWebhookResult {
   duplicate: boolean;
   transactionId: string;
   tenantId?: string;
-  status?: TransactionStatus;
+  status?: string;
 }
 
 export interface CasWebhookProbeResult {
@@ -171,7 +171,7 @@ export class BankingService {
           senderAccount: txn.counterAccountName ?? null,
           receiverAccount: null,
           transactionDate: new Date(txn.transactionDateTime),
-          status: TransactionStatus.pending,
+          status: 'pending',
         },
       });
 
@@ -210,7 +210,7 @@ export class BankingService {
       return transaction;
     });
 
-    await this.webhookQueue.add(AI_MATCHING_JOB, { transactionDbId: saved.id });
+    await this.webhookQueue.add(AI_CLASSIFY_JOB, { transactionDbId: saved.id });
 
     return {
       duplicate: false,

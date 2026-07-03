@@ -1,4 +1,12 @@
-import type { TransactionStatus } from '@paypilot/shared-types';
+import type { TransactionStatus } from '@klassi/shared-types';
+
+export interface TransactionClassificationSummary {
+  debitAccount: string;
+  creditAccount: string;
+  confidenceScore: number;
+  classificationType: string;
+  status: string;
+}
 
 export interface TransactionSummary {
   id: string;
@@ -9,6 +17,7 @@ export interface TransactionSummary {
   status: TransactionStatus | string;
   confidenceScore: number | null;
   transactionDate: string;
+  classification?: TransactionClassificationSummary | null;
 }
 
 export interface TransactionDetail extends TransactionSummary {
@@ -23,18 +32,4 @@ export interface TransactionListResponse {
   page: number;
   limit: number;
   total: number;
-}
-
-export interface MatchCandidate {
-  invoiceId: string;
-  invoiceCode: string;
-  customerId: string;
-  customerName: string;
-  amount: number;
-  confidenceScore: number;
-  semanticSimilarity: number;
-}
-
-export interface TransactionMatchesResponse {
-  candidates: MatchCandidate[];
 }

@@ -54,14 +54,14 @@ export function RevenueLineChart({ data, isLoading }: RevenueLineChartProps) {
     <Card className="h-full">
       <CardHeader className="pb-2">
         <CardTitle className="text-base">Doanh thu 7 ngày qua</CardTitle>
-        <CardDescription>Tổng tiền giao dịch đã khớp theo ngày</CardDescription>
+        <CardDescription>Tổng doanh thu (GD thu) đã định khoản theo ngày</CardDescription>
       </CardHeader>
       <CardContent>
         {isLoading ? (
           <Skeleton className="h-[280px] w-full" />
         ) : !hasData ? (
           <div className="flex h-[280px] items-center justify-center rounded-lg border border-dashed bg-muted/30 px-4 text-center text-sm text-muted-foreground">
-            Chưa có doanh thu. Biểu đồ sẽ hiện sau khi có giao dịch đã khớp.
+            Chưa có doanh thu. Biểu đồ sẽ hiện sau khi có giao dịch thu đã định khoản.
           </div>
         ) : (
           <ResponsiveContainer width="100%" height={280}>

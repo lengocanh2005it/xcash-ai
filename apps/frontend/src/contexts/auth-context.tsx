@@ -1,5 +1,5 @@
-import type { ApiResponse } from '@paypilot/shared-types';
-import { Role } from '@paypilot/shared-types';
+import type { ApiResponse } from '@klassi/shared-types';
+import { Role } from '@klassi/shared-types';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import axios from 'axios';
 import {

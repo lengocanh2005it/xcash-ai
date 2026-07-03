@@ -1,11 +1,12 @@
+import { Role } from '@klassi/shared-types';
 import { ConflictException, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import { Test, TestingModule } from '@nestjs/testing';
-import { Role } from '@paypilot/shared-types';
 import * as bcrypt from 'bcryptjs';
 import { PrismaService } from '../../prisma/prisma.service';
 import { RedisService } from '../../redis/redis.service';
+import { ChartOfAccountsService } from '../chart-of-accounts/chart-of-accounts.service';
 import { AuthService } from './auth.service';
 
 jest.mock('bcryptjs', () => ({
@@ -65,6 +66,10 @@ describe('AuthService', () => {
           },
         },
         { provide: RedisService, useValue: { client: redisClient } },
+        {
+          provide: ChartOfAccountsService,
+          useValue: { seedTt133: jest.fn().mockResolvedValue(undefined) },
+        },
       ],
     }).compile();
 

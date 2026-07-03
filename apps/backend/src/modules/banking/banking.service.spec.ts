@@ -151,7 +151,7 @@ describe('BankingService', () => {
       status: TransactionStatus.pending,
     });
     expect(redisClient.set).toHaveBeenCalledWith('webhook:cas:txn:txn-1', '1', 'EX', 86400, 'NX');
-    expect(webhookQueue.add).toHaveBeenCalledWith('ai-matching', { transactionDbId: 'db-txn-1' });
+    expect(webhookQueue.add).toHaveBeenCalledWith('ai-classify', { transactionDbId: 'db-txn-1' });
   });
 
   it('rejects invalid webhook signature when verify is enabled', () => {

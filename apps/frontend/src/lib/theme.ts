@@ -1,4 +1,4 @@
-export const THEME_STORAGE_KEY = 'paypilot-theme';
+export const THEME_STORAGE_KEY = 'klassi-theme';
 
 export type Theme = 'light' | 'dark';
 

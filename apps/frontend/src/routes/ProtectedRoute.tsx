@@ -1,4 +1,4 @@
-import { Role } from '@klassi/shared-types';
+import { Role } from '@xcash/shared-types';
 import { Navigate, useLocation } from 'react-router-dom';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useAuth } from '@/hooks/useAuth';

@@ -2,8 +2,8 @@
  * Seed dữ liệu demo đa dạng cho 1 tenant (giao dịch + định khoản TT133).
  *
  * Chạy:
- *   pnpm --filter @klassi/backend run prisma:seed:demo
- *   pnpm --filter @klassi/backend run prisma:seed:demo -- lengocanhpyne363@gmail.com
+ *   pnpm --filter @xcash/backend run prisma:seed:demo
+ *   pnpm --filter @xcash/backend run prisma:seed:demo -- lengocanhpyne363@gmail.com
  */
 import {
   type AccountType,
@@ -31,6 +31,8 @@ interface SeedClassification {
 interface SeedTransaction {
   key: string;
   content: string;
+  /** Tên đối tác giao dịch (giống counterAccountName từ Cas webhook) */
+  sender: string;
   amount: number;
   daysAgo: number;
   status: TransactionStatus;
@@ -42,6 +44,7 @@ const DEMO_TRANSACTIONS: SeedTransaction[] = [
   {
     key: 'rev-abc',
     content: 'CONG TY ABC CK TIEN HANG THANG 6',
+    sender: 'CONG TY TNHH ABC',
     amount: 15_000_000,
     daysAgo: 0,
     status: 'classified',
@@ -58,6 +61,7 @@ const DEMO_TRANSACTIONS: SeedTransaction[] = [
   {
     key: 'rev-xyz',
     content: 'KHACH HANG XYZ TT DON HANG DH240601',
+    sender: 'CONG TY XYZ',
     amount: 8_500_000,
     daysAgo: 2,
     status: 'classified',
@@ -74,6 +78,7 @@ const DEMO_TRANSACTIONS: SeedTransaction[] = [
   {
     key: 'rev-service',
     content: 'THU PHI DICH VU TU CONG TY DEF',
+    sender: 'CONG TY DEF',
     amount: 4_200_000,
     daysAgo: 4,
     status: 'classified',
@@ -91,6 +96,7 @@ const DEMO_TRANSACTIONS: SeedTransaction[] = [
   {
     key: 'exp-salary',
     content: 'TRA LUONG NV THANG 6',
+    sender: 'CHI LUONG NHAN VIEN',
     amount: -45_000_000,
     daysAgo: 3,
     status: 'classified',
@@ -107,6 +113,7 @@ const DEMO_TRANSACTIONS: SeedTransaction[] = [
   {
     key: 'exp-electric',
     content: 'THANH TOAN HOA DON DIEN EVN THANG 6',
+    sender: 'CONG TY DIEN LUC EVN',
     amount: -3_200_000,
     daysAgo: 5,
     status: 'classified',
@@ -123,6 +130,7 @@ const DEMO_TRANSACTIONS: SeedTransaction[] = [
   {
     key: 'exp-office',
     content: 'MUA VAN PHONG PHAM FAHASA',
+    sender: 'NHA SACH FAHASA',
     amount: -1_250_000,
     daysAgo: 6,
     status: 'classified',
@@ -139,6 +147,7 @@ const DEMO_TRANSACTIONS: SeedTransaction[] = [
   {
     key: 'exp-shipping',
     content: 'CHI PHI VAN CHUYEN GHTK T6',
+    sender: 'GIAO HANG TIET KIEM',
     amount: -890_000,
     daysAgo: 7,
     status: 'classified',
@@ -155,6 +164,7 @@ const DEMO_TRANSACTIONS: SeedTransaction[] = [
   {
     key: 'exp-tax',
     content: 'NOP THUE GTGT QUY 2/2026',
+    sender: 'KHO BAC NHA NUOC',
     amount: -12_000_000,
     daysAgo: 8,
     status: 'classified',
@@ -171,6 +181,7 @@ const DEMO_TRANSACTIONS: SeedTransaction[] = [
   {
     key: 'exp-interest',
     content: 'TRA LAI VAY NGAN HANG VCB',
+    sender: 'NGAN HANG VIETCOMBANK',
     amount: -2_100_000,
     daysAgo: 9,
     status: 'classified',
@@ -188,6 +199,7 @@ const DEMO_TRANSACTIONS: SeedTransaction[] = [
   {
     key: 'review-transfer',
     content: 'CK TU NGUYEN VAN A CHUYEN KHOAN',
+    sender: 'NGUYEN VAN A',
     amount: 5_000_000,
     daysAgo: 0,
     status: 'review',
@@ -204,6 +216,7 @@ const DEMO_TRANSACTIONS: SeedTransaction[] = [
   {
     key: 'review-unknown',
     content: 'TT CHUA RO NOI DUNG GD',
+    sender: 'KHONG RO',
     amount: -500_000,
     daysAgo: 0,
     status: 'review',
@@ -220,6 +233,7 @@ const DEMO_TRANSACTIONS: SeedTransaction[] = [
   {
     key: 'review-refund',
     content: 'HOAN TIEN KHACH HANG LE',
+    sender: 'KHACH HANG LE',
     amount: -1_100_000,
     daysAgo: 1,
     status: 'review',
@@ -236,6 +250,7 @@ const DEMO_TRANSACTIONS: SeedTransaction[] = [
   {
     key: 'review-rent',
     content: 'TT TIEN THUE MAT BANG Q2',
+    sender: 'CONG TY BAT DONG SAN',
     amount: -18_000_000,
     daysAgo: 2,
     status: 'review',
@@ -253,6 +268,7 @@ const DEMO_TRANSACTIONS: SeedTransaction[] = [
   {
     key: 'manual-fix',
     content: 'THU TIEN MAT KHACH LE KHONG CO HD',
+    sender: 'KHACH LE',
     amount: 2_000_000,
     daysAgo: 3,
     status: 'classified',
@@ -270,6 +286,7 @@ const DEMO_TRANSACTIONS: SeedTransaction[] = [
   {
     key: 'skipped-dup',
     content: 'GD TRUNG LAP BO QUA',
+    sender: 'KHONG RO',
     amount: -100_000,
     daysAgo: 10,
     status: 'skipped',
@@ -287,6 +304,7 @@ const DEMO_TRANSACTIONS: SeedTransaction[] = [
   {
     key: 'pending-new',
     content: 'GD MOI VUA NHAN CHO AI XU LY',
+    sender: 'KHACH HANG MOI',
     amount: 3_500_000,
     daysAgo: 0,
     status: 'pending',
@@ -294,6 +312,7 @@ const DEMO_TRANSACTIONS: SeedTransaction[] = [
   {
     key: 'pending-out',
     content: 'CHI PHI QUANG CAO FACEBOOK T7',
+    sender: 'FACEBOOK ADS',
     amount: -2_800_000,
     daysAgo: 0,
     status: 'pending',
@@ -302,6 +321,7 @@ const DEMO_TRANSACTIONS: SeedTransaction[] = [
   {
     key: 'prev-rev',
     content: 'DOANH THU BAN HANG THANG 5',
+    sender: 'CONG TY TNHH ABC',
     amount: 22_000_000,
     daysAgo: 35,
     status: 'classified',
@@ -318,6 +338,7 @@ const DEMO_TRANSACTIONS: SeedTransaction[] = [
   {
     key: 'prev-salary',
     content: 'TRA LUONG NV THANG 5',
+    sender: 'CHI LUONG NHAN VIEN',
     amount: -42_000_000,
     daysAgo: 38,
     status: 'classified',
@@ -334,6 +355,7 @@ const DEMO_TRANSACTIONS: SeedTransaction[] = [
   {
     key: 'prev-rent',
     content: 'THANH TOAN TIEN THUE VP THANG 5',
+    sender: 'CONG TY CHO THUE VP',
     amount: -15_000_000,
     daysAgo: 40,
     status: 'classified',
@@ -350,6 +372,7 @@ const DEMO_TRANSACTIONS: SeedTransaction[] = [
   {
     key: 'prev-supplies',
     content: 'MUA NGUYEN LIEU SAN XUAT',
+    sender: 'NHA CUNG CAP NVL',
     amount: -9_500_000,
     daysAgo: 42,
     status: 'classified',
@@ -401,7 +424,7 @@ async function ensureCasGrant(tenantId: string): Promise<string> {
       grantId: `demo-grant-${tenantId.slice(0, 8)}`,
       accessToken: 'demo-access-token',
       accountNumber: '1903658888',
-      accountHolderName: 'CONG TY TNHH DEMO KLASSI',
+      accountHolderName: 'CONG TY TNHH DEMO X-CASH',
       bankName: 'Vietcombank',
       bankLogo: null,
       status: 'active',
@@ -443,7 +466,7 @@ async function seedTransactions(
         grantId,
         transactionId: `${SEED_PREFIX}${item.key}`,
         amount: item.amount,
-        senderAccount: item.amount < 0 ? '1903658888' : '0123456789',
+        senderAccount: item.sender,
         receiverAccount: item.amount >= 0 ? '1903658888' : '9876543210',
         content: item.content,
         transactionDate,

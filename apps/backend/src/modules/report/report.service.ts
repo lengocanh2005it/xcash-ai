@@ -177,6 +177,87 @@ export class ReportService {
     });
   }
 
+  async getComparison(tenantId: string, year: number, month: number) {
+    const [current, previous] = await Promise.all([
+      this.getSummary(tenantId, year, month),
+      this.getSummary(tenantId, month === 1 ? year - 1 : year, month === 1 ? 12 : month - 1),
+    ]);
+
+    const pctChange = (curr: number, prev: number) => {
+      if (prev === 0) return curr > 0 ? 100 : 0;
+      return Math.round(((curr - prev) / prev) * 100);
+    };
+
+    return {
+      current: current.summary,
+      previous: previous.summary,
+      currentStats: current.stats,
+      previousStats: previous.stats,
+      changes: {
+        revenue: pctChange(current.summary.totalRevenue, previous.summary.totalRevenue),
+        expense: pctChange(current.summary.totalExpense, previous.summary.totalExpense),
+        net: pctChange(current.summary.net, previous.summary.net),
+        aiAccuracy: pctChange(current.stats.aiAccuracy, previous.stats.aiAccuracy),
+      },
+    };
+  }
+
+  async getTopAccounts(tenantId: string, year: number, month: number, limit: number) {
+    const from = new Date(year, month - 1, 1);
+    const to = new Date(year, month, 1);
+
+    const classifications = await this.prisma.transactionClassification.findMany({
+      where: {
+        tenantId,
+        status: TransactionStatus.classified,
+        transaction: { transactionDate: { gte: from, lt: to } },
+      },
+      select: { debitAccount: true, creditAccount: true, amount: true },
+    });
+
+    const expenseMap = new Map<string, number>();
+    const revenueMap = new Map<string, number>();
+
+    for (const c of classifications) {
+      const amt = Number(c.amount);
+      expenseMap.set(c.debitAccount, (expenseMap.get(c.debitAccount) ?? 0) + amt);
+      revenueMap.set(c.creditAccount, (revenueMap.get(c.creditAccount) ?? 0) + amt);
+    }
+
+    const codes = [...new Set([...expenseMap.keys(), ...revenueMap.keys()])];
+    const accounts =
+      codes.length > 0
+        ? await this.prisma.chartOfAccount.findMany({
+            where: { tenantId, accountCode: { in: codes } },
+            select: { accountCode: true, accountName: true, accountType: true },
+          })
+        : [];
+
+    const accountInfo = new Map(accounts.map((a) => [a.accountCode, a]));
+
+    const topExpense = [...expenseMap.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, limit)
+      .map(([code, total]) => ({
+        accountCode: code,
+        accountName: accountInfo.get(code)?.accountName ?? code,
+        accountType: accountInfo.get(code)?.accountType ?? 'unknown',
+        total,
+      }));
+
+    const topRevenue = [...revenueMap.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, limit)
+      .map(([code, total]) => ({
+        accountCode: code,
+        accountName: accountInfo.get(code)?.accountName ?? code,
+        accountType: accountInfo.get(code)?.accountType ?? 'unknown',
+        total,
+      }));
+
+    return { topExpense, topRevenue };
+  }
+
   private updateAccount(
     map: Map<string, AccountSummary>,
     code: string,

@@ -1,4 +1,3 @@
-import { Role } from '@klassi/shared-types';
 import {
   Body,
   Controller,
@@ -11,6 +10,7 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
+import { Role } from '@xcash/shared-types';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { JwtAuthGuard, RolesGuard } from '../../common/guards/auth.guards';
@@ -37,6 +37,11 @@ export class ClassificationController {
     @Body() dto: CorrectClassificationDto,
   ) {
     return this.service.overrideClassification(user.tenantId!, transactionId, user.id, dto);
+  }
+
+  @Get('review/count')
+  getReviewCount(@CurrentUser() user: AuthenticatedUser) {
+    return this.service.getReviewCount(user.tenantId!);
   }
 
   @Get('review/queue')

@@ -55,6 +55,45 @@ export class OpenAiService {
     return response.data[0]?.embedding ?? null;
   }
 
+  async chatCopilot(
+    message: string,
+    history: Array<{ role: 'user' | 'assistant'; content: string }>,
+    financialContext: string,
+  ): Promise<string> {
+    if (!this.client) {
+      return 'AI Copilot chưa được cấu hình. Vui lòng liên hệ quản trị viên.';
+    }
+
+    const systemPrompt = `Bạn là AI Copilot tài chính của X-Cash AI, chuyên hỗ trợ kế toán SME Việt Nam.
+Bạn có khả năng phân tích dữ liệu giao dịch và định khoản theo chuẩn TT133.
+Luôn trả lời bằng tiếng Việt, ngắn gọn, có số liệu cụ thể khi cần.
+
+Dữ liệu tài chính hiện tại của doanh nghiệp:
+${financialContext}`;
+
+    const messages = [
+      { role: 'system' as const, content: systemPrompt },
+      ...history.map((h) => ({ role: h.role as 'user' | 'assistant', content: h.content })),
+      { role: 'user' as const, content: message },
+    ];
+
+    try {
+      const response = await this.client.chat.completions.create({
+        model: this.chatModel,
+        messages,
+        temperature: 0.7,
+        max_tokens: 500,
+      });
+      return response.choices[0]?.message?.content ?? 'Xin lỗi, tôi không thể trả lời lúc này.';
+    } catch (error) {
+      this.logger.error(
+        'Copilot chat failed',
+        error instanceof Error ? error.message : String(error),
+      );
+      return 'Xin lỗi, có lỗi xảy ra. Vui lòng thử lại.';
+    }
+  }
+
   async classifyTransaction(
     content: string,
     amount: number,

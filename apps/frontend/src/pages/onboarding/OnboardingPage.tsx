@@ -1,4 +1,4 @@
-import { Role } from '@klassi/shared-types';
+import { Role } from '@xcash/shared-types';
 import { CheckCircle2, Circle, Landmark, Loader2, LogOut } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -197,7 +197,7 @@ export default function OnboardingPage() {
               Liên kết tài khoản ngân hàng
             </CardTitle>
             <CardDescription>
-              Kết nối tài khoản ngân hàng qua Cas Link để Klassi AI tự động nhận giao dịch
+              Kết nối tài khoản ngân hàng qua Cas Link để X-Cash AI tự động nhận giao dịch
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">

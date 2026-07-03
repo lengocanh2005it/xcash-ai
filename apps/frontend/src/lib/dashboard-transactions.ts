@@ -1,4 +1,4 @@
-import { TransactionStatus } from '@klassi/shared-types';
+import { TransactionStatus } from '@xcash/shared-types';
 import type { TransactionSummary } from '@/types/transaction';
 
 export const TRANSACTION_STATUS_LABELS: Record<TransactionStatus, string> = {

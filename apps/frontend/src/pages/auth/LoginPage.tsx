@@ -30,7 +30,7 @@ export default function LoginPage() {
   };
 
   return (
-    <AuthLayout title="Đăng nhập" description="Đăng nhập để tiếp tục sử dụng Klassi AI">
+    <AuthLayout title="Đăng nhập" description="Đăng nhập để tiếp tục sử dụng X-Cash AI">
       <form className="space-y-4" onSubmit={handleSubmit}>
         <div className="space-y-2">
           <Label htmlFor="email">Email</Label>

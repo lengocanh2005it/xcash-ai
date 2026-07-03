@@ -1,4 +1,4 @@
-# 🎨 Klassi AI — UI Design Specification
+# 🎨 X-Cash AI — UI Design Specification
 
 > Tài liệu này mô tả chi tiết từng màn hình để AI generate code React (JSX + Tailwind CSS + ShadCN/UI + TanStack Query).
 
@@ -27,7 +27,7 @@ Toàn bộ app dùng layout 2 cột: **Sidebar cố định bên trái + Main co
 ┌─────────────────────────────────────────────────────┐
 │  Sidebar (w-64, fixed)  │  Main Content (flex-1)    │
 │                         │                            │
-│  Logo Klassi AI         │  Header (sticky top)      │
+│  Logo X-Cash AI         │  Header (sticky top)      │
 
 │                         │  ├── Page title            │
 │  Navigation:            │  └── Action buttons        │
@@ -708,7 +708,7 @@ Click vào row → Sheet từ phải với tabs:
 │                                                      │
 │              Chat Area (flex-1, overflow-y-auto)     │
 │                                                      │
-│  🤖 Xin chào! Tôi là AI Copilot của Klassi AI.       │
+│  🤖 Xin chào! Tôi là AI Copilot của X-Cash AI.       │
 │     Bạn có thể hỏi tôi về doanh thu, công nợ,       │
 │     hóa đơn hoặc khách hàng.                        │
 │                                                      │
@@ -825,7 +825,7 @@ Dùng tabs layout ngang:
   <CardHeader>
     <CardTitle>Tài khoản ngân hàng</CardTitle>
     <p className="text-sm text-muted-foreground">
-      Liên kết tài khoản ngân hàng để Klassi AI tự động nhận và phân loại giao dịch
+      Liên kết tài khoản ngân hàng để X-Cash AI tự động nhận và phân loại giao dịch
     </p>
   </CardHeader>
   <CardContent>
@@ -918,7 +918,7 @@ async function openCasLink() {
 
 ### Tab Billing
 
-> Hiển thị gói hiện tại + usage, cho phép nâng cấp qua PayOS. Lưu ý: đây là PayOS account của chính Klassi AI, dùng để thu phí dịch vụ từ doanh nghiệp — chỉ Admin xem/thao tác được (xem `rbac.md`).
+> Hiển thị gói hiện tại + usage, cho phép nâng cấp qua PayOS. Lưu ý: đây là PayOS account của chính X-Cash AI, dùng để thu phí dịch vụ từ doanh nghiệp — chỉ Admin xem/thao tác được (xem `rbac.md`).
 
 ```jsx
 <Card>
@@ -1106,7 +1106,7 @@ Partner Dashboard dùng layout **đơn giản hơn**, không có Sidebar 8 mục
 
 ```
 ┌─────────────────────────────────────────────────────┐
-│ Top Nav: Klassi AI — Partner Console      [Logout]  │
+│ Top Nav: X-Cash AI — Partner Console      [Logout]  │
 ├─────────────────────────────────────────────────────┤
 │ Stats Row (grid grid-cols-4 gap-4)                   │
 │ ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐│

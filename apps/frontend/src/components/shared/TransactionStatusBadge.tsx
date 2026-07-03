@@ -1,4 +1,4 @@
-import { TransactionStatus } from '@klassi/shared-types';
+import { TransactionStatus } from '@xcash/shared-types';
 import { Badge } from '@/components/ui/badge';
 import { TRANSACTION_STATUS_LABELS } from '@/lib/dashboard-transactions';
 import { cn } from '@/lib/utils';

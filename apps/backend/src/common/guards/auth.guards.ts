@@ -1,4 +1,3 @@
-import { Role } from '@klassi/shared-types';
 import {
   CanActivate,
   ExecutionContext,
@@ -8,6 +7,7 @@ import {
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { AuthGuard } from '@nestjs/passport';
+import { Role } from '@xcash/shared-types';
 import type { Request } from 'express';
 import { ROLES_KEY } from '../decorators/roles.decorator';
 import type { AuthenticatedUser } from '../types/authenticated-user.type';

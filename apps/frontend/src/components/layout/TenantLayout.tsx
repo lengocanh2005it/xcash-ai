@@ -1,6 +1,7 @@
 import { Menu } from 'lucide-react';
 import { useState } from 'react';
 import { Outlet } from 'react-router-dom';
+import { LogoMark } from '@/components/brand/Logo';
 import { ThemeToggle } from '@/components/shared/ThemeToggle';
 import { Button } from '@/components/ui/button';
 import { DesktopSidebar, MobileSidebar } from './Sidebar';
@@ -18,7 +19,7 @@ export function TenantLayout() {
       <MobileSidebar open={mobileNavOpen} onClose={() => setMobileNavOpen(false)} />
 
       <div className="flex min-w-0 flex-1 flex-col">
-        <div className="sticky top-0 z-30 flex items-center gap-3 border-b border-border bg-background px-4 py-3 lg:hidden">
+        <div className="sticky top-0 z-30 flex items-center gap-2 border-b border-border bg-background px-4 py-3 lg:hidden">
           <Button
             type="button"
             variant="outline"
@@ -28,7 +29,8 @@ export function TenantLayout() {
           >
             <Menu className="size-4" />
           </Button>
-          <p className="truncate font-semibold text-primary">Klassi AI</p>
+          <LogoMark size={28} className="rounded-lg" />
+          <p className="truncate font-semibold text-primary">X-Cash AI</p>
           <div className="ml-auto">
             <ThemeToggle />
           </div>

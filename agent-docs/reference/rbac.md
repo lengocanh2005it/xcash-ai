@@ -1,4 +1,4 @@
-# 🔐 Klassi AI — RBAC (Role-Based Access Control)
+# 🔐 X-Cash AI — RBAC (Role-Based Access Control)
 
 > Tài liệu này định nghĩa đầy đủ vai trò người dùng, quyền hạn theo từng tính năng, và cách implement trong NestJS. Dùng làm tham chiếu khi viết Guard/Decorator cho từng API endpoint.
 
@@ -20,7 +20,7 @@ Cas Partner                          Admin
 ─────────────                        ─────
 Nhìn TẤT CẢ tenant                   Chỉ nhìn tenant CỦA MÌNH
 Không thuộc doanh nghiệp nào         Thuộc về 1 doanh nghiệp cụ thể
-Xem doanh thu Klassi AI thu được      Không thấy dữ liệu của tenant khác
+Xem doanh thu X-Cash AI thu được      Không thấy dữ liệu của tenant khác
 Khóa/mở tài khoản doanh nghiệp       Không có quyền này
 KHÔNG thao tác nghiệp vụ             Thao tác đầy đủ trong tenant mình
 (không tạo hóa đơn, sửa khách hàng)
@@ -30,7 +30,7 @@ KHÔNG thao tác nghiệp vụ             Thao tác đầy đủ trong tenant m
 
 ### Nguyên tắc thiết kế
 
-- **Cas Partner** được tạo thủ công bởi đội ngũ Klassi AI (không tự đăng ký được qua form thông thường) — vì đây là tài khoản nội bộ đại diện cho đối tác Cas/CASSO.
+- **Cas Partner** được tạo thủ công bởi đội ngũ X-Cash AI (không tự đăng ký được qua form thông thường) — vì đây là tài khoản nội bộ đại diện cho đối tác Cas/CASSO.
 - **Admin** là vai trò duy nhất được tạo tự động khi đăng ký tenant mới (`POST /auth/register`) — không ai khác có thể tự phong mình làm Admin.
 - **Accountant** có quyền gần như Admin ở phần nghiệp vụ (giao dịch, hóa đơn, khách hàng) nhưng **không được** đổi cấu hình hệ thống (API key, threshold, webhook) hay quản lý nhân sự — tránh rủi ro vận hành do thao tác nhầm.
 - **Viewer** tuyệt đối read-only — phù hợp cho người chỉ cần theo dõi số liệu mà không cần (và không nên) thao tác vào hệ thống.
@@ -48,7 +48,7 @@ KHÔNG thao tác nghiệp vụ             Thao tác đầy đủ trong tenant m
 |---|---|
 | Xem danh sách toàn bộ doanh nghiệp (tenant) | Tên, ngày đăng ký, trạng thái (active/suspended), gói dịch vụ |
 | Xem tổng quan usage | Tổng số giao dịch xử lý, AI Matching calls, số lượng user mỗi tenant |
-| Xem doanh thu | Doanh thu Klassi AI thu từ từng tenant theo gói cước, tổng doanh thu toàn hệ thống |
+| Xem doanh thu | Doanh thu X-Cash AI thu từ từng tenant theo gói cước, tổng doanh thu toàn hệ thống |
 | Khóa / mở tài khoản doanh nghiệp | Tạm ngưng tenant vi phạm điều khoản hoặc quá hạn thanh toán |
 | Hỗ trợ kỹ thuật | Xem log lỗi, webhook delivery status của từng tenant để debug hộ khi doanh nghiệp báo lỗi |
 | Xem Audit Log toàn hệ thống | Khác với Audit Log của Admin (chỉ thấy tenant mình), Cas Partner thấy được audit log mọi tenant |
@@ -174,20 +174,20 @@ export class PartnerController {
 
 ---
 
-## 💰 Pricing Model — Klassi AI tính phí doanh nghiệp như thế nào
+## 💰 Pricing Model — X-Cash AI tính phí doanh nghiệp như thế nào
 
 ### Hai lớp chi phí cần phân biệt
 
 ```
-Lớp 1: Klassi AI trả phí cho Casso
+Lớp 1: X-Cash AI trả phí cho Casso
        (1 App, tính theo TỔNG giao dịch của TẤT CẢ tenant cộng lại)
                      │
                      ▼
-Lớp 2: Klassi AI thu phí TỪNG doanh nghiệp
+Lớp 2: X-Cash AI thu phí TỪNG doanh nghiệp
        (theo số giao dịch RIÊNG của doanh nghiệp đó/tháng)
 ```
 
-Doanh nghiệp khách hàng **không** trả tiền trực tiếp cho Casso — họ chỉ liên kết ngân hàng qua Cas Link và trả phí dịch vụ cho Klassi AI. Klassi AI là bên đứng giữa, gộp chi phí hạ tầng (trả cho Casso) vào giá bán cho khách hàng cuối.
+Doanh nghiệp khách hàng **không** trả tiền trực tiếp cho Casso — họ chỉ liên kết ngân hàng qua Cas Link và trả phí dịch vụ cho X-Cash AI. X-Cash AI là bên đứng giữa, gộp chi phí hạ tầng (trả cho Casso) vào giá bán cho khách hàng cuối.
 
 ### Bảng giá theo số giao dịch/tháng
 
@@ -202,9 +202,9 @@ Doanh nghiệp khách hàng **không** trả tiền trực tiếp cho Casso — 
 
 ### Cách đếm "giao dịch" để tính phí
 
-> **Định nghĩa nhất quán với Casso:** 1 giao dịch = 1 lần Cas Balance Hook bắn webhook về (1 lần biến động số dư), bất kể AI Matching kết quả là Auto Match, Human Review, hay Skip — vì Klassi AI vẫn phải trả phí cho Casso ngay khi nhận webhook đó, không phụ thuộc kết quả xử lý sau này.
+> **Định nghĩa nhất quán với Casso:** 1 giao dịch = 1 lần Cas Balance Hook bắn webhook về (1 lần biến động số dư), bất kể AI Matching kết quả là Auto Match, Human Review, hay Skip — vì X-Cash AI vẫn phải trả phí cho Casso ngay khi nhận webhook đó, không phụ thuộc kết quả xử lý sau này.
 
-**Vì sao tính ngay lúc nhận webhook, không phải lúc AI xử lý xong?** Vì chi phí Klassi AI trả cho Casso (lớp hạ tầng phía dưới) cũng tính theo số webhook nhận được, không phải theo việc AI ghép đúng hay sai. Dù giao dịch sau đó Auto Match, vào Human Review, hay bị Skip — cả 3 trường hợp đều đã tốn 1 lượt quota, vì backend đã phải nhận và xử lý webhook đó rồi.
+**Vì sao tính ngay lúc nhận webhook, không phải lúc AI xử lý xong?** Vì chi phí X-Cash AI trả cho Casso (lớp hạ tầng phía dưới) cũng tính theo số webhook nhận được, không phải theo việc AI ghép đúng hay sai. Dù giao dịch sau đó Auto Match, vào Human Review, hay bị Skip — cả 3 trường hợp đều đã tốn 1 lượt quota, vì backend đã phải nhận và xử lý webhook đó rồi.
 
 ```
 Cas Balance Hook gửi webhook về
@@ -316,11 +316,11 @@ async handleWebhook(payload: CasWebhookPayload) {
 
 - `current_cycle_start` / `current_cycle_end` xác định khung 30 ngày của subscription, `transaction_used_this_cycle` reset về 0 khi sang chu kỳ mới (chạy bằng BullMQ cron job hàng ngày kiểm tra tenant nào hết chu kỳ)
 - Doanh nghiệp có thể nâng cấp gói giữa chu kỳ — tính phí theo tỷ lệ ngày còn lại (proration), tương tự cách Casso xử lý khi đổi gói
-- **Cas Partner** (xem mục dưới) là người duy nhất có quyền xem được tổng doanh thu Klassi AI thu từ tất cả tenant, và doanh thu theo từng tenant cụ thể
+- **Cas Partner** (xem mục dưới) là người duy nhất có quyền xem được tổng doanh thu X-Cash AI thu từ tất cả tenant, và doanh thu theo từng tenant cụ thể
 
-### Nâng cấp gói qua PayOS — PayOS billing dành riêng cho Klassi AI
+### Nâng cấp gói qua PayOS — PayOS billing dành riêng cho X-Cash AI
 
-> **Phân biệt quan trọng:** Đây là **PayOS account của chính Klassi AI** (1 account duy nhất), khác hẳn với việc dùng PayOS để doanh nghiệp nhận tiền từ khách hàng cuối (đã quyết định bỏ, dùng QR ngân hàng công khai thay thế — xem README mục System Context). Ở đây, **Klassi AI là bên bán**, doanh nghiệp là bên mua gói dịch vụ.
+> **Phân biệt quan trọng:** Đây là **PayOS account của chính X-Cash AI** (1 account duy nhất), khác hẳn với việc dùng PayOS để doanh nghiệp nhận tiền từ khách hàng cuối (đã quyết định bỏ, dùng QR ngân hàng công khai thay thế — xem README mục System Context). Ở đây, **X-Cash AI là bên bán**, doanh nghiệp là bên mua gói dịch vụ.
 
 ```
 Admin vào Settings → Billing
@@ -332,11 +332,11 @@ Thấy gói hiện tại (vd: Free, 32/50 giao dịch đã dùng)
 Bấm "Nâng cấp lên Pro — 799.000đ/tháng"
         │
         ▼
-Klassi AI Backend gọi PayOS API tạo Payment Link
+X-Cash AI Backend gọi PayOS API tạo Payment Link
 body: {
   orderCode: "UPG-{tenant_id}-{timestamp}",
   amount: 799000,
-  description: "Klassi AI Pro - {tenant_id}",
+  description: "X-Cash AI Pro - {tenant_id}",
   returnUrl, cancelUrl
 }
         │
@@ -348,11 +348,11 @@ Admin quét QR, chuyển khoản
 (trong phạm vi dự án: mock callback qua Postman, xem README)
         │
         ▼
-PayOS gửi webhook callback về Klassi AI
+PayOS gửi webhook callback về X-Cash AI
 POST /api/v1/webhook/payos-billing
         │
         ▼
-Klassi AI verify, đọc orderCode → tách ra tenant_id
+X-Cash AI verify, đọc orderCode → tách ra tenant_id
         │
         ▼
 Update subscriptions: plan = 'pro', transaction_quota = 2000,
@@ -362,7 +362,7 @@ reset current_cycle_start/end
 Admin thấy gói đã đổi ngay trên UI (TanStack Query invalidate)
 ```
 
-**Vì sao `orderCode` chứa `tenant_id`:** Tương tự cách `grantId` định tuyến đúng tenant ở Cas Balance Hook, `orderCode` ở đây đóng vai trò định tuyến — vì PayOS callback chỉ trả về `orderCode` đã gửi đi, Klassi AI cần tự encode `tenant_id` vào đó để biết doanh nghiệp nào vừa thanh toán xong.
+**Vì sao `orderCode` chứa `tenant_id`:** Tương tự cách `grantId` định tuyến đúng tenant ở Cas Balance Hook, `orderCode` ở đây đóng vai trò định tuyến — vì PayOS callback chỉ trả về `orderCode` đã gửi đi, X-Cash AI cần tự encode `tenant_id` vào đó để biết doanh nghiệp nào vừa thanh toán xong.
 
 ### API liên quan đến Pricing & Billing
 
@@ -371,7 +371,7 @@ GET    /api/v1/billing/current-plan       # Gói hiện tại, đã dùng bao nh
 GET    /api/v1/billing/usage-history      # Lịch sử dùng theo tháng (cho Admin xem)
 POST   /api/v1/billing/upgrade            # Tạo PayOS Payment Link để nâng cấp gói
                                           # → gọi PayOS API, trả về QR + payment URL cho FE hiển thị
-GET    /api/v1/billing/invoices           # Lịch sử hóa đơn Klassi AI xuất cho tenant này
+GET    /api/v1/billing/invoices           # Lịch sử hóa đơn X-Cash AI xuất cho tenant này
 POST   /api/v1/webhook/payos-billing      # Nhận callback PayOS khi thanh toán nâng cấp thành công
                                           # (route riêng, KHÔNG dùng chung với webhook nghiệp vụ
                                           # vì đã bỏ PayOS cho nghiệp vụ — đây chỉ phục vụ billing)

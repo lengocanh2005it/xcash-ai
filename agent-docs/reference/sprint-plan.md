@@ -1,7 +1,7 @@
-# 📅 Klassi AI — Sprint Plan
+# 📅 X-Cash AI — Sprint Plan
 
 **Tổng thời gian:** ~4 sprints (mỗi sprint 2 tuần) còn lại sau pivot
-**Mục tiêu cuối:** Demo được hệ thống Klassi AI với kế toán SME: nhận GD → AI định khoản → kế toán confirm → export Excel
+**Mục tiêu cuối:** Demo được hệ thống X-Cash AI với kế toán SME: nhận GD → AI định khoản → kế toán confirm → export Excel
 
 ---
 
@@ -10,7 +10,7 @@
 | Sprint | Tuần | Mục tiêu | Demo được |
 |---|---|---|---|
 | Sprint 1 | 1–2 | Foundation (đã xong ✅) | Auth, Cas Link, Webhook, Transactions |
-| Sprint 2 | 3–6 | **Klassi AI Pivot** — refactor backend + UI mới | AI định khoản hoạt động, Review queue, Export Excel |
+| Sprint 2 | 3–6 | **X-Cash AI Pivot** — refactor backend + UI mới | AI định khoản hoạt động, Review queue, Export Excel |
 | Sprint 3 | 7–8 | Analytics, AI Copilot, Settings | Báo cáo đầy đủ, hỏi đáp AI |
 | Sprint 4 | 9–10 | Partner Dashboard + Polish + Deploy | System production-ready |
 
@@ -28,7 +28,7 @@ Tất cả đã hoàn thành:
 
 ---
 
-## 🔄 Sprint 2 — Klassi AI Pivot
+## 🔄 Sprint 2 — X-Cash AI Pivot
 
 **Tuần 3–4 (Anh — Backend)**
 

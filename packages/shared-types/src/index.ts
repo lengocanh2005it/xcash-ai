@@ -1,4 +1,4 @@
-// Shared enums & types between @klassi/backend and @klassi/frontend.
+// Shared enums & types between @xcash/backend and @xcash/frontend.
 
 export enum Role {
   CAS_PARTNER = 'cas_partner',

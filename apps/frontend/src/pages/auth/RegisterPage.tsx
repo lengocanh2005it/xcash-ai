@@ -31,7 +31,7 @@ export default function RegisterPage() {
   };
 
   return (
-    <AuthLayout title="Đăng ký" description="Tạo tài khoản doanh nghiệp mới trên Klassi AI">
+    <AuthLayout title="Đăng ký" description="Tạo tài khoản doanh nghiệp mới trên X-Cash AI">
       <form className="space-y-4" onSubmit={handleSubmit}>
         <div className="space-y-2">
           <Label htmlFor="businessName">Tên doanh nghiệp</Label>

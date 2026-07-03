@@ -2,15 +2,20 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" data-xcash-favicon />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Klassi AI</title>
+    <title>X-Cash AI</title>
     <script>
       (() => {
-        var stored = localStorage.getItem('klassi-theme');
+        var stored = localStorage.getItem('xcash-theme');
         var prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-        if (stored === 'dark' || (!stored && prefersDark)) {
+        var theme = stored === 'dark' || stored === 'light' ? stored : prefersDark ? 'dark' : 'light';
+        if (theme === 'dark') {
           document.documentElement.classList.add('dark');
+        }
+        var favicon = document.querySelector('link[data-xcash-favicon]');
+        if (favicon) {
+          favicon.href = theme === 'dark' ? '/favicon-dark.svg' : '/favicon.svg';
         }
       })();
     </script>

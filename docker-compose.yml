@@ -1,30 +1,30 @@
 services:
   postgres:
     image: pgvector/pgvector:pg16
-    container_name: klassi-postgres
+    container_name: xcash-postgres
     restart: unless-stopped
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-postgres}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-password}
-      POSTGRES_DB: ${POSTGRES_DB:-klassi_ai}
+      POSTGRES_DB: ${POSTGRES_DB:-x_cash_ai}
     ports:
       - '${POSTGRES_PORT:-5432}:5432'
     volumes:
-      - klassi_postgres_data:/var/lib/postgresql/data
+      - xcash_postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ['CMD-SHELL', 'pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-klassi_ai}']
+      test: ['CMD-SHELL', 'pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-x_cash_ai}']
       interval: 5s
       timeout: 5s
       retries: 10
 
   redis:
     image: redis:7-alpine
-    container_name: klassi-redis
+    container_name: xcash-redis
     restart: unless-stopped
     ports:
       - '${REDIS_PORT:-6379}:6379'
     volumes:
-      - klassi_redis_data:/data
+      - xcash_redis_data:/data
     healthcheck:
       test: ['CMD', 'redis-cli', 'ping']
       interval: 5s
@@ -35,14 +35,14 @@ services:
     build:
       context: .
       dockerfile: docker/backend.Dockerfile
-    container_name: klassi-backend
+    container_name: xcash-backend
     restart: unless-stopped
     ports:
       - '${PORT:-3000}:3000'
     environment:
       NODE_ENV: production
       PORT: 3000
-      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-password}@postgres:5432/${POSTGRES_DB:-klassi_ai}
+      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-password}@postgres:5432/${POSTGRES_DB:-x_cash_ai}
       REDIS_URL: redis://redis:6379
       JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET:-dev_access_secret_change_me}
       JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:-dev_refresh_secret_change_me}
@@ -67,7 +67,7 @@ services:
       context: .
       dockerfile: docker/frontend.Dockerfile
       target: development
-    container_name: klassi-frontend-dev
+    container_name: xcash-frontend-dev
     restart: unless-stopped
     ports:
       - '5173:5173'
@@ -85,7 +85,7 @@ services:
       target: production
       args:
         VITE_API_BASE_URL: ${VITE_API_BASE_URL:-http://localhost:3000/api/v1}
-    container_name: klassi-frontend
+    container_name: xcash-frontend
     restart: unless-stopped
     ports:
       - '8080:80'
@@ -95,5 +95,5 @@ services:
       - production
 
 volumes:
-  klassi_postgres_data:
-  klassi_redis_data:
+  xcash_postgres_data:
+  xcash_redis_data:

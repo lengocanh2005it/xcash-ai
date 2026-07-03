@@ -12,7 +12,7 @@
 
 ```bash
 git clone <repo>
-cd klassi-ai
+cd x-cash-ai
 pnpm install
 
 # Copy env theo từng app (KHÔNG commit file .env thật)
@@ -60,7 +60,7 @@ docker compose up -d
 docker compose --profile fullstack up -d --build
 
 # 2. Migrate database (nếu chạy backend ngoài Docker)
-pnpm --filter @klassi/backend exec prisma migrate deploy
+pnpm --filter @xcash/backend exec prisma migrate deploy
 
 # 3. Chạy apps local (không Docker cho BE/FE)
 pnpm dev                 # backend (port 3000) + frontend (port 5173)
@@ -150,10 +150,10 @@ Luồng đúng: chọn ngân hàng → **đăng nhập iBanking** trong popup (k
 
 | Vấn đề | Nguyên nhân thường gặp |
 |---|---|
-| `pnpm install` báo lỗi workspace | Kiểm tra `package.json` của package mới có `name` dạng `@klassi/<tên>` và nằm đúng dưới `apps/` hoặc `packages/` chưa |
+| `pnpm install` báo lỗi workspace | Kiểm tra `package.json` của package mới có `name` dạng `@xcash/<tên>` và nằm đúng dưới `apps/` hoặc `packages/` chưa |
 | Turbo báo "no script found" | Bình thường nếu package đó chưa cần script đó — không phải lỗi |
 | Webhook Cas không đến local | Chưa chạy ngrok, URL Cas Console chưa khớp tunnel mới, hoặc backend chưa listen port 3000 |
 | `grantToken` hết hạn khi test Cas Link | Token chỉ sống 30 phút, dùng 1 lần — tạo lại token mới, không cache/reuse |
-| Cas Link báo lỗi ở form xác thực STK/tên TK | Đang dùng nhầm scope `qrpay` — Klassi AI cần `identity,transaction`. Restart backend, bấm lại Liên kết ngân hàng |
+| Cas Link báo lỗi ở form xác thực STK/tên TK | Đang dùng nhầm scope `qrpay` — X-Cash AI cần `identity,transaction`. Restart backend, bấm lại Liên kết ngân hàng |
 | Callback `/onboarding/banking/callback` lỗi `Cas API error 400` sau khi Cas Link thành công | Thường do thiếu scope `identity` khi gọi `GET /identity`, hoặc `publicToken` đã dùng (bấm lại từ đầu, tạo grant mới). Restart backend sau khi đổi scope |
 | Dashboard hiện 0 giao dịch dù webhook OK | FE gọi `limit>100` → BE trả 400; Dashboard dùng `limit=100` |

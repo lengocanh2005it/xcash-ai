@@ -2,16 +2,16 @@
 
 ## Vì sao Turborepo + pnpm
 
-- **pnpm workspaces** quản lý dependency giữa các package nội bộ (`@klassi/backend`, `@klassi/frontend`, `@klassi/shared-types`) bằng symlink, không duplicate `node_modules`.
+- **pnpm workspaces** quản lý dependency giữa các package nội bộ (`@xcash/backend`, `@xcash/frontend`, `@xcash/shared-types`) bằng symlink, không duplicate `node_modules`.
 - **Turborepo** điều phối chạy task (`dev`, `build`, `lint`, `test`, `type-check`) song song trên nhiều package, cache kết quả task chưa đổi input để tránh build lại không cần thiết.
 - Repo hiện **chưa bật Remote Caching** (cần tài khoản Vercel) — chỉ dùng local cache. Có thể bật sau nếu cần cache dùng chung giữa máy dev / CI.
 
 ## Cây thư mục thực tế
 
 ```
-klassi-ai/
+x-cash-ai/
 ├── apps/
-│   ├── backend/                 # NestJS — @klassi/backend
+│   ├── backend/                 # NestJS — @xcash/backend
 │   │   ├── src/
 │   │   │   ├── main.ts
 │   │   │   ├── app.module.ts
@@ -22,7 +22,7 @@ klassi-ai/
 │   │   ├── tsconfig.json
 │   │   └── package.json
 │   │
-│   └── frontend/                # React + Vite — @klassi/frontend
+│   └── frontend/                # React + Vite — @xcash/frontend
 │       ├── src/
 │       │   ├── main.tsx
 │       │   ├── App.tsx
@@ -34,7 +34,7 @@ klassi-ai/
 │       └── package.json
 │
 ├── packages/
-│   └── shared-types/             # @klassi/shared-types — enum & type dùng chung BE/FE
+│   └── shared-types/             # @xcash/shared-types — enum & type dùng chung BE/FE
 │       ├── src/index.ts
 │       └── package.json
 │
@@ -56,7 +56,7 @@ packages:
   - "packages/*"
 ```
 
-Mọi thư mục mới muốn tham gia workspace (BE, FE, package dùng chung) phải nằm dưới `apps/` hoặc `packages/` và có `package.json` với field `name` dạng `@klassi/<tên>`.
+Mọi thư mục mới muốn tham gia workspace (BE, FE, package dùng chung) phải nằm dưới `apps/` hoặc `packages/` và có `package.json` với field `name` dạng `@xcash/<tên>`.
 
 ## `turbo.json` — task pipeline hiện tại
 
@@ -72,25 +72,25 @@ Mọi thư mục mới muốn tham gia workspace (BE, FE, package dùng chung) p
 }
 ```
 
-- `dependsOn: ["^build"]` nghĩa là: trước khi build/lint/test 1 package, Turborepo build trước các package nó phụ thuộc (vd: build `@klassi/backend` sẽ build `@klassi/shared-types` trước nếu backend import nó).
+- `dependsOn: ["^build"]` nghĩa là: trước khi build/lint/test 1 package, Turborepo build trước các package nó phụ thuộc (vd: build `@xcash/backend` sẽ build `@xcash/shared-types` trước nếu backend import nó).
 - `dev` không cache và chạy liên tục (`persistent: true`) — đúng bản chất dev server.
-- Nếu 1 package không có script tương ứng trong `package.json` (vd: `@klassi/shared-types` chưa có `dev`), Turborepo tự bỏ qua package đó cho task đó — không lỗi.
+- Nếu 1 package không có script tương ứng trong `package.json` (vd: `@xcash/shared-types` chưa có `dev`), Turborepo tự bỏ qua package đó cho task đó — không lỗi.
 
 ## Package hiện có
 
 | Package | Đường dẫn | Vai trò |
 |---|---|---|
-| `@klassi/backend` | `apps/backend` | NestJS API — xem [`02-backend-conventions.md`](./02-backend-conventions.md) |
-| `@klassi/frontend` | `apps/frontend` | React SPA (Vite) — xem [`03-frontend-conventions.md`](./03-frontend-conventions.md) |
-| `@klassi/shared-types` | `packages/shared-types` | Enum (`Role`, `TransactionStatus`, `ClassificationType`, `AccountType`...) + type response dùng chung |
+| `@xcash/backend` | `apps/backend` | NestJS API — xem [`02-backend-conventions.md`](./02-backend-conventions.md) |
+| `@xcash/frontend` | `apps/frontend` | React SPA (Vite) — xem [`03-frontend-conventions.md`](./03-frontend-conventions.md) |
+| `@xcash/shared-types` | `packages/shared-types` | Enum (`Role`, `TransactionStatus`, `ClassificationType`, `AccountType`...) + type response dùng chung |
 
 ## Lệnh chạy (từ thư mục root)
 
 ```bash
 pnpm install                              # cài toàn bộ, phải chạy lại mỗi khi thêm package mới hoặc đổi dependency
 pnpm dev                                  # turbo run dev — chạy BE + FE song song
-pnpm dev:backend                          # chỉ BE (--filter=@klassi/backend)
-pnpm dev:frontend                         # chỉ FE (--filter=@klassi/frontend)
+pnpm dev:backend                          # chỉ BE (--filter=@xcash/backend)
+pnpm dev:frontend                         # chỉ FE (--filter=@xcash/frontend)
 pnpm build                                # build toàn bộ theo đúng thứ tự phụ thuộc
 pnpm lint / pnpm test / pnpm type-check   # tương tự, chạy trên toàn bộ package có script tương ứng
 pnpm format                               # format toàn bộ bằng Biome (không lint, chỉ format)
@@ -110,9 +110,9 @@ Bỏ qua tạm (khẩn cấp): `git commit --no-verify` / `git push --no-verify`
 
 ```bash
 # Chạy 1 lệnh cho đúng 1 package cụ thể (không qua turbo):
-pnpm --filter @klassi/backend add <package>       # thêm dependency cho backend
-pnpm --filter @klassi/frontend add <package>       # thêm dependency cho frontend
-pnpm --filter @klassi/backend exec <command>       # chạy lệnh bất kỳ trong context backend
+pnpm --filter @xcash/backend add <package>       # thêm dependency cho backend
+pnpm --filter @xcash/frontend add <package>       # thêm dependency cho frontend
+pnpm --filter @xcash/backend exec <command>       # chạy lệnh bất kỳ trong context backend
 ```
 
 ## Lint & Format — Biome (không dùng ESLint/Prettier/oxlint)
@@ -127,11 +127,11 @@ Vì sao chọn Biome thay vì ESLint (NestJS mặc định) + oxlint (Vite mặc
 
 ## Cách package nội bộ import lẫn nhau
 
-`@klassi/backend` hoặc `@klassi/frontend` muốn dùng `@klassi/shared-types`:
+`@xcash/backend` hoặc `@xcash/frontend` muốn dùng `@xcash/shared-types`:
 
-1. Thêm vào `dependencies` trong `package.json` của app đó: `"@klassi/shared-types": "workspace:*"`
+1. Thêm vào `dependencies` trong `package.json` của app đó: `"@xcash/shared-types": "workspace:*"`
 2. Chạy `pnpm install` lại ở root để pnpm tạo symlink.
-3. Import bình thường: `import { Role, TransactionStatus } from '@klassi/shared-types'`
+3. Import bình thường: `import { Role, TransactionStatus } from '@xcash/shared-types'`
 
 `workspace:*` đảm bảo luôn resolve về version trong monorepo (không phải bản publish trên npm — package này không publish public).
 

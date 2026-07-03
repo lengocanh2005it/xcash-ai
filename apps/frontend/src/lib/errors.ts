@@ -1,4 +1,4 @@
-import type { ApiResponse } from '@klassi/shared-types';
+import type { ApiResponse } from '@xcash/shared-types';
 import axios from 'axios';
 
 export function getErrorMessage(

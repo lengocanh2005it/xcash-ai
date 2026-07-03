@@ -1,13 +1,16 @@
-# Klassi AI
+# X-Cash AI
 
 **Nền tảng AI định khoản tự động cho SME Việt Nam** — nhận giao dịch ngân hàng real-time qua Cas Balance Hook, dùng AI để gợi ý bút toán theo chuẩn kế toán **TT133**, kế toán xác nhận qua Human Review, tổng hợp báo cáo thu chi và export Excel cuối tháng.
 
 > Giảm thời gian nhập liệu thủ công, giảm sai sót định khoản, giúp doanh nghiệp nhỏ theo dõi thu chi mà không cần nhập từng giao dịch vào MISA/Excel.
 
+> **Trạng thái:** Đây là **POC/MVP** (đồ án thực tập) — chứng minh luồng tích hợp Cas + AI định khoản chạy được trên **sandbox/local**. **Chưa go-live production**, chưa phải sản phẩm thương mại chính thức của Casso.
+
 ---
 
 ## Mục lục
 
+- [Trạng thái dự án](#trạng-thái-dự-án)
 - [Bài toán & Giải pháp](#bài-toán--giải-pháp)
 - [Tính năng chính](#tính-năng-chính)
 - [Luồng hoạt động](#luồng-hoạt-động)
@@ -22,6 +25,29 @@
 - [Tài liệu chi tiết](#tài-liệu-chi-tiết)
 - [Roadmap](#roadmap)
 - [Team](#team)
+
+---
+
+## Trạng thái dự án
+
+| | |
+|---|---|
+| **Giai đoạn** | POC/MVP — đủ demo end-to-end, chưa vận hành thương mại |
+| **Môi trường** | Local + Cas **sandbox** (`sandbox.bankhub.dev`) |
+| **Quan hệ với Casso** | Ứng dụng mở rộng trên hạ tầng Cas (Cas Link + Balance Hook); **không** phải sản phẩm Casso chính thức |
+| **Mục tiêu MVP** | Chứng minh: nhận GD ngân hàng → AI gợi ý TK Nợ/Có TT133 → kế toán review → báo cáo |
+
+**Đã có trong MVP (demo được):**
+
+- Auth, onboarding Cas Link, webhook giao dịch, AI định khoản, Human Review
+- Danh mục TK TT133, báo cáo tháng, export Excel
+- Dashboard, multi-tenant, RBAC cơ bản
+
+**Chưa có (go-live / Sprint 3–4):**
+
+- Billing PayOS end-to-end (module + webhook + UI Settings)
+- AI Copilot, Partner Dashboard
+- Deploy production, tích hợp MISA/ERP, SLA vận hành
 
 ---
 
@@ -40,7 +66,7 @@ Kế toán SME mỗi ngày nhận hàng chục giao dịch từ ngân hàng (qua
 
 Hiện tại họ phải **tự đọc từng giao dịch → tự phân loại → tự gõ vào phần mềm kế toán hoặc Excel**. Tốn 30–60 phút mỗi ngày, dễ sai, khó tổng hợp báo cáo kịp thời.
 
-### Klassi AI làm gì
+### X-Cash AI làm gì
 
 ```
 Giao dịch ngân hàng (Cas webhook)
@@ -62,17 +88,20 @@ Báo cáo thu chi real-time + Export Excel cuối tháng
 
 ## Tính năng chính
 
-| Module | Mô tả |
-|--------|--------|
-| **Đăng ký / Đăng nhập** | Multi-tenant SaaS, JWT + refresh cookie, tự seed danh mục TK TT133 khi tạo tenant |
-| **Onboarding Cas Link** | Liên kết tài khoản ngân hàng thật qua Cas SDK (sandbox/production) |
-| **Webhook Cas Balance Hook** | Nhận giao dịch real-time, idempotency Redis, enqueue AI classification |
-| **AI Định khoản tự động** | OpenAI `gpt-4o-mini` + pgvector few-shot, gợi ý TK Nợ/Có theo TT133 |
-| **Human Review** | Hàng chờ giao dịch AI chưa đủ tự tin — kế toán confirm / correct / skip |
-| **Giao dịch** | Danh sách + chi tiết giao dịch kèm kết quả định khoản |
-| **Danh mục TK (TT133)** | ~60 tài khoản chuẩn, CRUD theo tenant |
-| **Báo cáo** | Tổng thu / tổng chi / lãi lỗ / tỷ lệ định khoản, chi tiết theo TK, export Excel |
-| **Dashboard** | Thống kê định khoản hôm nay, chờ AI, chờ review, biểu đồ doanh thu |
+| Module | Mô tả | MVP |
+|--------|--------|-----|
+| **Đăng ký / Đăng nhập** | Multi-tenant SaaS, JWT + refresh cookie, tự seed danh mục TK TT133 khi tạo tenant | ✅ |
+| **Onboarding Cas Link** | Liên kết tài khoản ngân hàng qua Cas SDK (sandbox) | ✅ |
+| **Webhook Cas Balance Hook** | Nhận giao dịch real-time, idempotency Redis, enqueue AI classification | ✅ |
+| **AI Định khoản tự động** | OpenAI `gpt-4o-mini` + pgvector few-shot, gợi ý TK Nợ/Có theo TT133 | ✅ |
+| **Human Review** | Hàng chờ giao dịch AI chưa đủ tự tin — kế toán confirm / correct / skip | ✅ |
+| **Giao dịch** | Danh sách + chi tiết giao dịch kèm kết quả định khoản | ✅ |
+| **Danh mục TK (TT133)** | ~60 tài khoản chuẩn, CRUD theo tenant | ✅ |
+| **Báo cáo** | Tổng thu / tổng chi / lãi lỗ / tỷ lệ định khoản, chi tiết theo TK, export Excel | ✅ |
+| **Dashboard** | Thống kê định khoản hôm nay, chờ AI, chờ review, biểu đồ doanh thu | ✅ |
+| **Billing PayOS** | Nâng cấp gói Free/Starter/Pro qua PayOS | 🔜 |
+| **AI Copilot / Settings** | Hỏi đáp tự nhiên, cài đặt tenant | 🔜 |
+| **Partner Dashboard** | Cas Partner quản lý tenant toàn hệ thống | 🔜 |
 
 ---
 
@@ -84,7 +113,7 @@ Báo cáo thu chi real-time + Export Excel cuối tháng
 1. Đăng ký & Đăng nhập     →  Tạo tenant + admin, seed TT133
 2. Onboarding (1 lần)      →  Liên kết ngân hàng qua Cas Link
 3. Sử dụng hàng ngày       →  Webhook → AI định khoản → Human Review → Báo cáo
-4. Nâng cấp gói (tương lai)→  Billing qua PayOS khi hết quota Free
+4. Nâng cấp gói (Sprint 3+) →  Billing qua PayOS khi hết quota Free
 ```
 
 ### Pipeline kỹ thuật
@@ -118,7 +147,7 @@ flowchart TD
 | **Frontend** | React, Vite, TypeScript, Tailwind v4, ShadCN/UI, TanStack Query, Recharts |
 | **Monorepo** | Turborepo + pnpm workspaces |
 | **Lint/Format** | Biome (thay ESLint + Prettier) |
-| **Shared types** | `@klassi/shared-types` — enum Role, TransactionStatus, AccountType... |
+| **Shared types** | `@xcash/shared-types` — enum Role, TransactionStatus, AccountType... |
 
 **Hạ tầng local:** Docker Compose chạy PostgreSQL (pgvector) + Redis. Chi tiết deploy: [`deploy/README.md`](./deploy/README.md).
 
@@ -127,7 +156,7 @@ flowchart TD
 ## Cấu trúc monorepo
 
 ```
-klassi-ai/
+x-cash-ai/
 ├── apps/
 │   ├── backend/          # NestJS API — auth, banking, AI, classification, report...
 │   └── frontend/         # React SPA — dashboard, giao dịch, review, báo cáo...
@@ -159,8 +188,8 @@ klassi-ai/
 ### Bước 1 — Clone & cài dependency
 
 ```bash
-git clone https://github.com/lengocanh2005it/klassi-ai.git
-cd klassi-ai
+git clone https://github.com/lengocanh2005it/x-cash-ai.git
+cd x-cash-ai
 pnpm install
 ```
 
@@ -184,7 +213,7 @@ cp apps/frontend/.env.example apps/frontend/.env
 
 ```bash
 docker compose up -d
-pnpm --filter @klassi/backend exec prisma migrate deploy
+pnpm --filter @xcash/backend exec prisma migrate deploy
 ```
 
 ### Bước 4 — Chạy ứng dụng
@@ -199,7 +228,7 @@ pnpm dev
 ### (Tùy chọn) Seed dữ liệu demo
 
 ```bash
-pnpm --filter @klassi/backend prisma:seed:demo
+pnpm --filter @xcash/backend prisma:seed:demo
 ```
 
 ### Test webhook Cas ở local
@@ -286,7 +315,7 @@ Prefix: `/api/v1`
 | `GET` | `/reports/summary` | Tổng hợp tháng |
 | `GET` | `/reports/export` | Export Excel `.xlsx` |
 
-> **Lưu ý:** Có 2 webhook khác nhau — `POST /webhook/cas` (giao dịch ngân hàng, routing qua `grantId`) và `POST /webhook/payos-billing` (billing, routing qua `orderCode`).
+> **Lưu ý:** Có 2 webhook khác nhau — `POST /webhook/cas` (giao dịch ngân hàng, **đã có**) và `POST /webhook/payos-billing` (billing PayOS, **chưa implement**).
 
 Swagger UI: `http://localhost:3000/api/docs`
 
@@ -296,7 +325,7 @@ Swagger UI: `http://localhost:3000/api/docs`
 
 ### Chuẩn kế toán TT133
 
-Klassi AI dùng **Thông tư 133/2016/TT-BTC** — bộ tài khoản phù hợp SME (~60 TK), seed sẵn khi đăng ký.
+X-Cash AI dùng **Thông tư 133/2016/TT-BTC** — bộ tài khoản phù hợp SME (~60 TK), seed sẵn khi đăng ký.
 
 | Mã TK | Tên | Ví dụ |
 |-------|-----|-------|
@@ -336,8 +365,8 @@ pnpm verify           # lint + type-check + test + build (chạy trước khi me
 Migrate database:
 
 ```bash
-pnpm --filter @klassi/backend exec prisma migrate deploy
-pnpm --filter @klassi/backend prisma:generate
+pnpm --filter @xcash/backend exec prisma migrate deploy
+pnpm --filter @xcash/backend prisma:generate
 ```
 
 ---
@@ -363,9 +392,11 @@ pnpm --filter @klassi/backend prisma:generate
 | Sprint | Trạng thái | Nội dung |
 |--------|------------|----------|
 | Sprint 1 | ✅ Xong | Auth, Cas Link, Webhook, Transactions |
-| Sprint 2 | ✅ Xong | Pivot Klassi AI — AI định khoản TT133, Human Review, Báo cáo, Export Excel |
-| Sprint 3 | 🔜 Tiếp theo | AI Copilot, Settings, Analytics nâng cao |
-| Sprint 4 | 📋 Kế hoạch | Partner Dashboard, Polish, Deploy production |
+| Sprint 2 | ✅ Xong | Pivot X-Cash AI — AI định khoản TT133, Human Review, Báo cáo, Export Excel |
+| Sprint 3 | 🔜 Tiếp theo | AI Copilot, Settings + Billing PayOS, Analytics nâng cao |
+| Sprint 4 | 📋 Kế hoạch | Partner Dashboard, Polish, Deploy production (go-live) |
+
+Sau Sprint 2, repo ở mức **POC/MVP demo được** — đủ báo cáo thực tập / pitch ý tưởng, chưa sẵn sàng vận hành thương mại.
 
 ---
 
@@ -380,4 +411,4 @@ pnpm --filter @klassi/backend prisma:generate
 
 ## License
 
-Private — UNLICENSED. Dự án học tập / nội bộ team.
+Private — UNLICENSED. Dự án học tập / thực tập (POC/MVP), không phải sản phẩm thương mại go-live.

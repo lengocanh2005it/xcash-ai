@@ -1,4 +1,4 @@
-# Klassi AI
+# X-Cash AI
 
 **AI-powered Automatic Transaction Classification & Accounting for SMEs**
 
@@ -30,7 +30,7 @@ Kế toán SME mỗi ngày nhận hàng chục giao dịch từ Casso:
 
 Hiện tại họ phải **tự đọc từng giao dịch → tự phân loại → tự gõ vào MISA/Excel**. Tốn 30–60 phút mỗi ngày, dễ sai.
 
-**Klassi AI làm được gì:**
+**X-Cash AI làm được gì:**
 
 ```
 Giao dịch → AI đọc nội dung → gợi ý định khoản TT133
@@ -51,9 +51,9 @@ Export Excel cuối tháng — không cần nhập tay
 
 **SME Việt Nam** — quán cà phê, shop bán lẻ, công ty dịch vụ 5–50 người — bất kỳ doanh nghiệp nào có tài khoản ngân hàng và cần theo dõi thu chi.
 
-**Tại sao mọi SME đều cần (khác Klassi chỉ nhắm B2B):**
+**Tại sao mọi SME đều cần (khác sản phẩm B2B đối soát hóa đơn chỉ nhắm doanh nghiệp có hóa đơn):**
 
-| | Klassi AI |
+| | X-Cash AI |
 |---|---|
 | Target | Mọi SME có giao dịch ngân hàng |
 | Bài toán | Phân loại chi phí/doanh thu tự động |
@@ -122,7 +122,7 @@ Monorepo : Turborepo + pnpm workspaces
 
 ### Chuẩn TT133
 
-Klassi AI dùng **Thông tư 133/2016/TT-BTC** (kế toán doanh nghiệp nhỏ và vừa) — ít tài khoản hơn TT200, phù hợp SME:
+X-Cash AI dùng **Thông tư 133/2016/TT-BTC** (kế toán doanh nghiệp nhỏ và vừa) — ít tài khoản hơn TT200, phù hợp SME:
 
 | Tài khoản | Tên | Ví dụ giao dịch |
 |---|---|---|
@@ -179,7 +179,7 @@ Auto      Human Review
 
 ---
 
-## 🗄 Database Schema (Klassi AI)
+## 🗄 Database Schema (X-Cash AI)
 
 ### Các bảng kế thừa từ Sprint 1 (giữ nguyên)
 
@@ -226,7 +226,7 @@ transaction_classifications          ← kết quả AI phân loại từng giao
 - `chart_of_accounts` được **seed sẵn TT133** khi tenant mới đăng ký (khoảng 60-70 tài khoản cơ bản)
 - Tenant có thể thêm/sửa tài khoản con (sub-account) theo nhu cầu
 
-### Bảng đã bỏ (so với Klassi)
+### Bảng đã bỏ (so với PayPilot)
 
 - ~~`invoices`~~ — không còn quản lý hóa đơn
 - ~~`customers`~~ — không còn quản lý khách hàng
@@ -234,7 +234,7 @@ transaction_classifications          ← kết quả AI phân loại từng giao
 
 ---
 
-## 🌐 API Endpoints (Klassi AI)
+## 🌐 API Endpoints (X-Cash AI)
 
 ### Kế thừa (không đổi)
 
@@ -289,7 +289,7 @@ GET   /api/v1/reports/export            # Export Excel báo cáo thu chi
       ?from_date=&to_date=
 ```
 
-### Đã bỏ (so với Klassi)
+### Đã bỏ (so với PayPilot)
 
 - ~~`/invoices/*`~~ — không quản lý hóa đơn
 - ~~`/customers/*`~~ — không quản lý khách hàng
@@ -299,14 +299,14 @@ GET   /api/v1/reports/export            # Export Excel báo cáo thu chi
 
 ## 🔒 Security & Infrastructure (kế thừa)
 
-Toàn bộ cơ chế security giữ nguyên từ Klassi:
+Toàn bộ cơ chế security giữ nguyên từ Sprint 1:
 - JWT Access Token (15 phút) + Refresh Token HttpOnly Cookie (Redis-backed)
 - RBAC: `cas_partner` / `admin` / `accountant` / `viewer`
 - Webhook Cas: HMAC-SHA256 verify + Redis idempotency (TTL 24h)
 - Multi-tenant: mọi query scope theo `tenant_id`
 - Cas Link: 1 URL webhook dùng chung, phân biệt tenant qua `grantId`
 
-**Threshold mặc định:** 85% (thấp hơn Klassi 95% vì phân loại kế toán có nhiều trường hợp biên hơn)
+**Threshold mặc định:** 85% (thấp hơn ngưỡng đối soát hóa đơn cũ 95% vì phân loại kế toán có nhiều trường hợp biên hơn)
 
 ---
 
@@ -396,4 +396,4 @@ AI Classification Pipeline
 - **AI Copilot** — hỏi đáp tài chính bằng ngôn ngữ tự nhiên ("Tháng này tôi chi nhiều nhất vào đâu?")
 - **Predictive Cash Flow** — dự báo khi đã có đủ lịch sử 6+ tháng
 - **Mobile App** — kế toán review và approve trên điện thoại
-- **Partner Dashboard** — Cas/CASSO xem toàn bộ tenant đang dùng Klassi
+- **Partner Dashboard** — Cas/CASSO xem toàn bộ tenant đang dùng X-Cash

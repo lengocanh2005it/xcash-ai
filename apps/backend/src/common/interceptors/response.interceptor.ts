@@ -1,4 +1,3 @@
-import type { ApiResponse } from '@klassi/shared-types';
 import {
   CallHandler,
   ExecutionContext,
@@ -6,6 +5,7 @@ import {
   NestInterceptor,
   StreamableFile,
 } from '@nestjs/common';
+import type { ApiResponse } from '@xcash/shared-types';
 import type { Request } from 'express';
 import { map, Observable } from 'rxjs';
 

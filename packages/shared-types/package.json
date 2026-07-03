@@ -1,5 +1,5 @@
 {
-  "name": "@klassi/shared-types",
+  "name": "@xcash/shared-types",
   "version": "0.0.1",
   "private": true,
   "main": "./dist/index.js",

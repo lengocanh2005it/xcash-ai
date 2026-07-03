@@ -1,9 +1,9 @@
 ---
 name: new-page
-description: Scaffold một page/màn hình React mới trong apps/frontend/src/pages/ đúng chuẩn Klassi AI (route, layout đúng, TanStack Query hook, RBAC ẩn/hiện UI, loading/empty/error state). Dùng khi cần thêm màn hình mới hoặc khi user gõ "/new-page <tên>".
+description: Scaffold một page/màn hình React mới trong apps/frontend/src/pages/ đúng chuẩn X-Cash AI (route, layout đúng, TanStack Query hook, RBAC ẩn/hiện UI, loading/empty/error state). Dùng khi cần thêm màn hình mới hoặc khi user gõ "/new-page <tên>".
 ---
 
-# New Page — Scaffold màn hình React chuẩn Klassi AI
+# New Page — Scaffold màn hình React chuẩn X-Cash AI
 
 ## Trước khi chạy
 
@@ -52,7 +52,7 @@ Cho page tên `<page>` (kebab-case, vd `invoices`, `human-review`):
 
 ## Sau khi scaffold xong
 
-- Chạy `pnpm --filter @klassi/frontend type-check` và `pnpm --filter @klassi/frontend lint`.
+- Chạy `pnpm --filter @xcash/frontend type-check` và `pnpm --filter @xcash/frontend lint`.
 - Nếu page gọi API chưa tồn tại ở backend, note rõ cho user — không tự bịa response shape, tra `agent-docs/reference/business-overview.md` mục API Design để lấy đúng path + query param.
 - Nếu cần type mới dùng chung với backend, thêm vào `packages/shared-types/src/index.ts` trước khi dùng trong page.
 

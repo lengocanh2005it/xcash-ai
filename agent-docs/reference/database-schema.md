@@ -1,6 +1,6 @@
-# 🗄 Klassi AI — Database Schema
+# 🗄 X-Cash AI — Database Schema
 
-> Tài liệu này định nghĩa toàn bộ schema database cho Klassi AI. Dùng file này làm nguồn tham chiếu chính khi viết Prisma schema thật. Schema Klassi AI kế thừa các bảng nền tảng từ Sprint 1 và thay thế các bảng Klassi (invoices, customers, invoice_matches) bằng các bảng mới phù hợp với nghiệp vụ định khoản tự động.
+> Tài liệu này định nghĩa toàn bộ schema database cho X-Cash AI. Dùng file này làm nguồn tham chiếu chính khi viết Prisma schema thật. Schema X-Cash AI kế thừa các bảng nền tảng từ Sprint 1 và thay thế các bảng PayPilot cũ (invoices, customers, invoice_matches) bằng các bảng mới phù hợp với nghiệp vụ định khoản tự động.
 
 ---
 
@@ -68,7 +68,7 @@ tenants
 └── updated_at
 ```
 
-> **Đổi từ Klassi:** `matching_threshold` (95) → `classification_threshold` (85)
+> **Đổi từ PayPilot:** `matching_threshold` (95) → `classification_threshold` (85)
 
 ---
 

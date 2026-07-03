@@ -1,9 +1,9 @@
 ---
 name: add-endpoint
-description: Checklist đầy đủ khi thêm 1 API endpoint mới vào backend Klassi AI — tra RBAC matrix, gắn @Roles đúng, tenant scoping, cập nhật rbac.md, viết test liên quan. Dùng khi thêm route mới vào controller có sẵn hoặc khi user gõ "/add-endpoint".
+description: Checklist đầy đủ khi thêm 1 API endpoint mới vào backend X-Cash AI — tra RBAC matrix, gắn @Roles đúng, tenant scoping, cập nhật rbac.md, viết test liên quan. Dùng khi thêm route mới vào controller có sẵn hoặc khi user gõ "/add-endpoint".
 ---
 
-# Add Endpoint — Checklist thêm API endpoint chuẩn Klassi AI
+# Add Endpoint — Checklist thêm API endpoint chuẩn X-Cash AI
 
 Dùng skill này khi thêm 1 route mới vào controller **đã tồn tại** (nếu cần cả module mới, dùng skill `new-module` trước, rồi áp checklist này cho từng route bên trong).
 
@@ -49,7 +49,7 @@ Trường hợp đặc biệt cần nhớ:
 
 ## Bước 5 — Response format
 
-Trả data thô, để `ResponseInterceptor` toàn cục bọc thành `{ success, data, meta, error }` (type `ApiResponse<T>` từ `@klassi/shared-types`) — không tự bọc tay trong từng handler.
+Trả data thô, để `ResponseInterceptor` toàn cục bọc thành `{ success, data, meta, error }` (type `ApiResponse<T>` từ `@xcash/shared-types`) — không tự bọc tay trong từng handler.
 
 ## Bước 6 — Cập nhật tài liệu
 
@@ -59,7 +59,7 @@ Sau khi code xong, thêm 1 dòng vào bảng ma trận phân quyền trong `agen
 
 - Viết test case: đúng role thao tác thành công, sai role trả `403 Forbidden` (đối chiếu edge case "Accountant cố gọi API chỉ dành cho Admin" trong `reference/rbac.md`).
 - Nếu endpoint đụng vào webhook/quota/idempotency, viết integration test riêng — 3 nhánh này bắt buộc test tách biệt theo `agent-docs/02-backend-conventions.md`.
-- Chạy `pnpm --filter @klassi/backend test` trước khi coi là xong.
+- Chạy `pnpm --filter @xcash/backend test` trước khi coi là xong.
 
 ## Checklist tóm tắt (đối chiếu trước khi merge)
 

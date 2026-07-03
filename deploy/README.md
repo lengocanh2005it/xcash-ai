@@ -1,4 +1,4 @@
-# Deploy Klassi AI lên VPS
+# Deploy X-Cash AI lên VPS
 
 ## Yêu cầu
 
@@ -10,8 +10,8 @@
 ## Cài đặt lần đầu
 
 ```bash
-git clone https://github.com/lengocanh2005it/klassi-ai.git
-cd klassi-ai
+git clone https://github.com/lengocanh2005it/x-cash-ai.git
+cd x-cash-ai
 cp .env.example .env
 # Chỉnh .env: JWT secrets, CAS keys, DATABASE_URL...
 docker compose --profile production up -d --build
@@ -20,8 +20,8 @@ docker compose --profile production up -d --build
 ## Nginx
 
 ```bash
-sudo cp deploy/nginx/klassi.conf /etc/nginx/sites-available/klassi
-sudo ln -s /etc/nginx/sites-available/klassi /etc/nginx/sites-enabled/
+sudo cp deploy/nginx/xcash.conf /etc/nginx/sites-available/xcash
+sudo ln -s /etc/nginx/sites-available/xcash /etc/nginx/sites-enabled/
 sudo nginx -t && sudo systemctl reload nginx
 ```
 
@@ -34,4 +34,4 @@ Workflow `deploy.yml` dùng SSH để pull + `docker compose up` trên VPS.
 | `DEPLOY_HOST` | IP hoặc hostname VPS |
 | `DEPLOY_USER` | SSH user (vd `ubuntu`) |
 | `DEPLOY_SSH_KEY` | Private key SSH |
-| `DEPLOY_PATH` | Đường dẫn repo trên VPS (vd `/home/ubuntu/klassi-ai`) |
+| `DEPLOY_PATH` | Đường dẫn repo trên VPS (vd `/home/ubuntu/x-cash-ai`) |

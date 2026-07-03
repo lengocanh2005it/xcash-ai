@@ -1,9 +1,9 @@
 import { randomUUID } from 'node:crypto';
-import { Role } from '@klassi/shared-types';
 import { ConflictException, Injectable, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import { Role as PrismaRole } from '@prisma/client';
+import { Role } from '@xcash/shared-types';
 import * as bcrypt from 'bcryptjs';
 import type { AuthenticatedUser, AuthJwtPayload } from '../../common/types/authenticated-user.type';
 import { PrismaService } from '../../prisma/prisma.service';

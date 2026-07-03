@@ -9,7 +9,7 @@ export class HealthController {
   check() {
     return {
       status: 'ok',
-      service: 'klassi-backend',
+      service: 'xcash-backend',
       timestamp: new Date().toISOString(),
     };
   }

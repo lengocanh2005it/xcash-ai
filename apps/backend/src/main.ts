@@ -22,7 +22,7 @@ async function bootstrap() {
   );
 
   const swaggerConfig = new DocumentBuilder()
-    .setTitle('Klassi AI API')
+    .setTitle('X-Cash AI API')
     .setDescription('AI-powered Automatic Transaction Classification for SMEs (TT133)')
     .setVersion('1.0')
     .addBearerAuth()

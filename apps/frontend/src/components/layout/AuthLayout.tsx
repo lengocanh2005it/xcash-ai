@@ -1,5 +1,5 @@
-import { Activity } from 'lucide-react';
 import type { ReactNode } from 'react';
+import { LogoMark } from '@/components/brand/Logo';
 import { ThemeToggle } from '@/components/shared/ThemeToggle';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 
@@ -23,9 +23,7 @@ export function AuthLayout({
         <Card className="w-full border-border/80 shadow-lg shadow-primary/5">
           <CardHeader>
             <div className="mb-2 flex items-center gap-3">
-              <div className="flex size-10 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-sm">
-                <Activity className="size-5" />
-              </div>
+              <LogoMark size={40} className="rounded-xl shadow-sm" />
               <div>
                 <CardTitle className="text-xl text-foreground">{title}</CardTitle>
               </div>

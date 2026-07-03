@@ -3,6 +3,7 @@ import { Brain, Download, Scale, TrendingDown, TrendingUp } from 'lucide-react';
 import { useState } from 'react';
 import { toast } from 'sonner';
 import { DashboardStatCard } from '@/components/dashboard/DashboardStatCard';
+import { Header } from '@/components/layout/Header';
 import { EmptyState } from '@/components/shared/EmptyState';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -89,151 +90,154 @@ export default function ReportsPage() {
   };
 
   return (
-    <div className="space-y-6 p-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold">Báo cáo định khoản</h1>
-          <p className="text-sm text-muted-foreground">Tổng hợp thu chi theo tài khoản TT133</p>
-        </div>
-        <div className="flex items-center gap-3">
-          <select
-            className="rounded-md border bg-background px-3 py-2 text-sm"
-            value={month}
-            onChange={(e) => setMonth(Number(e.target.value))}
-          >
-            {MONTHS.map((m) => {
-              const val = MONTHS.indexOf(m) + 1;
-              return (
-                <option key={m} value={val}>
-                  {m}
+    <>
+      <Header
+        title="Báo cáo định khoản"
+        description="Tổng hợp thu chi theo tài khoản TT133"
+        actions={
+          <div className="flex items-center gap-3">
+            <select
+              className="rounded-md border bg-background px-3 py-2 text-sm"
+              value={month}
+              onChange={(e) => setMonth(Number(e.target.value))}
+            >
+              {MONTHS.map((m) => {
+                const val = MONTHS.indexOf(m) + 1;
+                return (
+                  <option key={m} value={val}>
+                    {m}
+                  </option>
+                );
+              })}
+            </select>
+            <select
+              className="rounded-md border bg-background px-3 py-2 text-sm"
+              value={year}
+              onChange={(e) => setYear(Number(e.target.value))}
+            >
+              {[2024, 2025, 2026].map((y) => (
+                <option key={y} value={y}>
+                  {y}
                 </option>
-              );
-            })}
-          </select>
-          <select
-            className="rounded-md border bg-background px-3 py-2 text-sm"
-            value={year}
-            onChange={(e) => setYear(Number(e.target.value))}
-          >
-            {[2024, 2025, 2026].map((y) => (
-              <option key={y} value={y}>
-                {y}
-              </option>
-            ))}
-          </select>
-          <Button onClick={handleExport} disabled={isLoading}>
-            <Download className="mr-2 size-4" />
-            Xuất Excel
-          </Button>
-        </div>
-      </div>
-
-      {isLoading ? (
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          {(['revenue', 'expense', 'net', 'accuracy'] as const).map((k) => (
-            <Skeleton key={k} className="h-[120px] w-full rounded-xl" />
-          ))}
-        </div>
-      ) : data ? (
-        <>
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            <DashboardStatCard
-              label="Tổng thu"
-              value={<span className="text-green-600">{formatVND(data.summary.totalRevenue)}</span>}
-              icon={TrendingUp}
-              footer={
-                <p className="text-xs text-muted-foreground">
-                  Tổng phát sinh Có trên TK doanh thu (5xx) đã định khoản
-                </p>
-              }
-            />
-            <DashboardStatCard
-              label="Tổng chi"
-              value={<span className="text-red-600">{formatVND(data.summary.totalExpense)}</span>}
-              icon={TrendingDown}
-              footer={
-                <p className="text-xs text-muted-foreground">
-                  Tổng phát sinh Nợ trên TK chi phí (6xx) đã định khoản
-                </p>
-              }
-            />
-            <DashboardStatCard
-              label="Lãi/Lỗ"
-              value={
-                <span className={data.summary.net >= 0 ? 'text-green-600' : 'text-red-600'}>
-                  {formatVND(data.summary.net)}
-                </span>
-              }
-              icon={Scale}
-              footer={
-                <p className="text-xs text-muted-foreground">
-                  Chênh lệch thu − chi trong tháng đã chọn
-                </p>
-              }
-            />
-            <DashboardStatCard
-              label="Độ chính xác AI"
-              value={`${data.stats.aiAccuracy}%`}
-              icon={Brain}
-              footer={
-                <p className="text-xs text-muted-foreground">
-                  {data.stats.classifiedCount}/{data.stats.totalCount} giao dịch đã hoàn tất định
-                  khoản
-                </p>
-              }
-            />
+              ))}
+            </select>
+            <Button onClick={handleExport} disabled={isLoading}>
+              <Download className="mr-2 size-4" />
+              Xuất Excel
+            </Button>
           </div>
+        }
+      />
+      <div className="space-y-6 p-4 sm:p-6">
+        {isLoading ? (
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            {(['revenue', 'expense', 'net', 'accuracy'] as const).map((k) => (
+              <Skeleton key={k} className="h-[120px] w-full rounded-xl" />
+            ))}
+          </div>
+        ) : data ? (
+          <>
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+              <DashboardStatCard
+                label="Tổng thu"
+                value={
+                  <span className="text-green-600">{formatVND(data.summary.totalRevenue)}</span>
+                }
+                icon={TrendingUp}
+                footer={
+                  <p className="text-xs text-muted-foreground">
+                    Tổng phát sinh Có trên TK doanh thu (5xx) đã định khoản
+                  </p>
+                }
+              />
+              <DashboardStatCard
+                label="Tổng chi"
+                value={<span className="text-red-600">{formatVND(data.summary.totalExpense)}</span>}
+                icon={TrendingDown}
+                footer={
+                  <p className="text-xs text-muted-foreground">
+                    Tổng phát sinh Nợ trên TK chi phí (6xx) đã định khoản
+                  </p>
+                }
+              />
+              <DashboardStatCard
+                label="Lãi/Lỗ"
+                value={
+                  <span className={data.summary.net >= 0 ? 'text-green-600' : 'text-red-600'}>
+                    {formatVND(data.summary.net)}
+                  </span>
+                }
+                icon={Scale}
+                footer={
+                  <p className="text-xs text-muted-foreground">
+                    Chênh lệch thu − chi trong tháng đã chọn
+                  </p>
+                }
+              />
+              <DashboardStatCard
+                label="Độ chính xác AI"
+                value={`${data.stats.aiAccuracy}%`}
+                icon={Brain}
+                footer={
+                  <p className="text-xs text-muted-foreground">
+                    {data.stats.classifiedCount}/{data.stats.totalCount} giao dịch đã hoàn tất định
+                    khoản
+                  </p>
+                }
+              />
+            </div>
 
-          <Card>
-            <CardHeader>
-              <CardTitle>Chi tiết theo tài khoản</CardTitle>
-            </CardHeader>
-            <CardContent>
-              {!data.byAccount.length ? (
-                <EmptyState
-                  title="Chưa có dữ liệu"
-                  description="Chưa có giao dịch nào được định khoản trong tháng này"
-                />
-              ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="border-b text-left text-muted-foreground">
-                        <th className="pb-3 pr-4 font-medium">Mã TK</th>
-                        <th className="pb-3 pr-4 font-medium">Tên tài khoản</th>
-                        <th className="pb-3 pr-4 font-medium">Phát sinh Nợ</th>
-                        <th className="pb-3 pr-4 font-medium">Phát sinh Có</th>
-                        <th className="pb-3 pr-4 font-medium">Số dư</th>
-                        <th className="pb-3 font-medium">Số GD</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y">
-                      {data.byAccount.map((a) => (
-                        <tr key={a.accountCode} className="hover:bg-muted/30">
-                          <td className="py-3 pr-4 font-mono font-medium">{a.accountCode}</td>
-                          <td className="py-3 pr-4">{a.accountName}</td>
-                          <td className="py-3 pr-4 font-mono text-red-600">
-                            {formatVND(a.totalDebit)}
-                          </td>
-                          <td className="py-3 pr-4 font-mono text-green-600">
-                            {formatVND(a.totalCredit)}
-                          </td>
-                          <td
-                            className={`py-3 pr-4 font-mono font-medium ${a.net >= 0 ? 'text-green-600' : 'text-red-600'}`}
-                          >
-                            {formatVND(a.net)}
-                          </td>
-                          <td className="py-3 text-muted-foreground">{a.transactionCount}</td>
+            <Card>
+              <CardHeader>
+                <CardTitle>Chi tiết theo tài khoản</CardTitle>
+              </CardHeader>
+              <CardContent>
+                {!data.byAccount.length ? (
+                  <EmptyState
+                    title="Chưa có dữ liệu"
+                    description="Chưa có giao dịch nào được định khoản trong tháng này"
+                  />
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b text-left text-muted-foreground">
+                          <th className="pb-3 pr-4 font-medium">Mã TK</th>
+                          <th className="pb-3 pr-4 font-medium">Tên tài khoản</th>
+                          <th className="pb-3 pr-4 font-medium">Phát sinh Nợ</th>
+                          <th className="pb-3 pr-4 font-medium">Phát sinh Có</th>
+                          <th className="pb-3 pr-4 font-medium">Số dư</th>
+                          <th className="pb-3 font-medium">Số GD</th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </>
-      ) : null}
-    </div>
+                      </thead>
+                      <tbody className="divide-y">
+                        {data.byAccount.map((a) => (
+                          <tr key={a.accountCode} className="hover:bg-muted/30">
+                            <td className="py-3 pr-4 font-mono font-medium">{a.accountCode}</td>
+                            <td className="py-3 pr-4">{a.accountName}</td>
+                            <td className="py-3 pr-4 font-mono text-red-600">
+                              {formatVND(a.totalDebit)}
+                            </td>
+                            <td className="py-3 pr-4 font-mono text-green-600">
+                              {formatVND(a.totalCredit)}
+                            </td>
+                            <td
+                              className={`py-3 pr-4 font-mono font-medium ${a.net >= 0 ? 'text-green-600' : 'text-red-600'}`}
+                            >
+                              {formatVND(a.net)}
+                            </td>
+                            <td className="py-3 text-muted-foreground">{a.transactionCount}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </>
+        ) : null}
+      </div>
+    </>
   );
 }

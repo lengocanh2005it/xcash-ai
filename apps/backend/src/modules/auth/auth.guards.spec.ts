@@ -1,6 +1,6 @@
-import { Role } from '@klassi/shared-types';
 import { Reflector } from '@nestjs/core';
 import { Test, TestingModule } from '@nestjs/testing';
+import { Role } from '@xcash/shared-types';
 import { RolesGuard } from '../../common/guards/auth.guards';
 import type { AuthenticatedUser } from '../../common/types/authenticated-user.type';
 

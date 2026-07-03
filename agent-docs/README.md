@@ -1,6 +1,6 @@
 # Agent Docs — Mục lục
 
-Tài liệu này dành cho AI coding agent (Claude Code) và developer làm việc trên monorepo Klassi AI. Đọc theo thứ tự dưới đây tùy việc bạn đang làm.
+Tài liệu này dành cho AI coding agent (Claude Code) và developer làm việc trên monorepo X-Cash AI. Đọc theo thứ tự dưới đây tùy việc bạn đang làm.
 
 ## Bắt đầu từ đâu
 
@@ -31,7 +31,7 @@ agent-docs/
 ├── 03-frontend-conventions.md     ← quy ước code React (component, hook, API client)
 ├── 04-environment-setup.md        ← setup local dev (Docker, DB, env vars, Cas sandbox)
 └── reference/                     ← tài liệu nghiệp vụ GỐC — nguồn sự thật, không tự diễn giải khác đi
-    ├── business-overview.md       ← tổng quan Klassi AI, bài toán, tech stack, AI pipeline, API design
+    ├── business-overview.md       ← tổng quan X-Cash AI, bài toán, tech stack, AI pipeline, API design
     ├── rbac.md                    ← 4 role, ma trận phân quyền, pricing model, Cas Partner
     ├── database-schema.md         ← schema đầy đủ (chart_of_accounts, transaction_classifications...)
     ├── user-journey.md            ← hành trình người dùng thực tế

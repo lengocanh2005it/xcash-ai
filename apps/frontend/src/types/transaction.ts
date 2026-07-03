@@ -1,4 +1,4 @@
-import type { TransactionStatus } from '@klassi/shared-types';
+import type { TransactionStatus } from '@xcash/shared-types';
 
 export interface TransactionClassificationSummary {
   debitAccount: string;

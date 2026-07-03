@@ -1,6 +1,6 @@
-import type { ApiResponse } from '@klassi/shared-types';
-import { Role } from '@klassi/shared-types';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import type { ApiResponse } from '@xcash/shared-types';
+import { Role } from '@xcash/shared-types';
 import axios from 'axios';
 import {
   createContext,

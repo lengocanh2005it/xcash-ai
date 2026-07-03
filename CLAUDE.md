@@ -1,6 +1,6 @@
-# Klassi AI — Agent Entry Point
+# X-Cash AI — Agent Entry Point
 
-Klassi AI là nền tảng AI-powered Automatic Transaction Classification (Định khoản tự động) cho SME Việt Nam: nhận giao dịch ngân hàng real-time qua **Cas Balance Hook**, dùng AI (OpenAI gpt-4o-mini + pgvector) để tự động phân loại giao dịch theo chuẩn kế toán TT133, kế toán xác nhận qua Human Review, export báo cáo Excel cuối tháng.
+X-Cash AI là nền tảng AI-powered Automatic Transaction Classification (Định khoản tự động) cho SME Việt Nam: nhận giao dịch ngân hàng real-time qua **Cas Balance Hook**, dùng AI (OpenAI gpt-4o-mini + pgvector) để tự động phân loại giao dịch theo chuẩn kế toán TT133, kế toán xác nhận qua Human Review, export báo cáo Excel cuối tháng.
 
 Đây là **Turborepo monorepo** (pnpm workspaces) gồm backend NestJS + frontend React, chia sẻ types qua package nội bộ.
 

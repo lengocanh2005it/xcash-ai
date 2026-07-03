@@ -1,4 +1,4 @@
-import type { ApiResponse } from '@klassi/shared-types';
+import type { ApiResponse } from '@xcash/shared-types';
 import axios, { type AxiosError, type InternalAxiosRequestConfig } from 'axios';
 import type { AuthenticatedUser } from '@/types/auth';
 

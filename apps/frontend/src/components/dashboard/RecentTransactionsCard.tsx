@@ -1,4 +1,4 @@
-import { TransactionStatus } from '@klassi/shared-types';
+import { TransactionStatus } from '@xcash/shared-types';
 import { ArrowRight } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { TransactionStatusBadge } from '@/components/shared/TransactionStatusBadge';

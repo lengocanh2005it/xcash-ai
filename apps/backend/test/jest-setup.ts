@@ -1,4 +1,4 @@
-jest.mock('@klassi/shared-types', () => ({
+jest.mock('@xcash/shared-types', () => ({
   Role: {
     CAS_PARTNER: 'cas_partner',
     ADMIN: 'admin',

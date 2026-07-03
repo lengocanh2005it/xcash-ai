@@ -5,17 +5,17 @@ import {
   Bot,
   ClipboardCheck,
   LayoutDashboard,
+  LineChart,
   LogOut,
   PanelLeft,
   PanelLeftClose,
   Receipt,
   Settings,
-  Sparkles,
   X,
 } from 'lucide-react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
-import { Badge } from '@/components/ui/badge';
+import { Logo } from '@/components/brand/Logo';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/hooks/useAuth';
 import { cn } from '@/lib/utils';
@@ -32,17 +32,17 @@ export const navItems: NavItem[] = [
   { to: '/transactions', label: 'Giao dịch', icon: Receipt },
   { to: '/review', label: 'Human Review', icon: ClipboardCheck },
   { to: '/reports', label: 'Báo cáo', icon: BarChart3 },
+  { to: '/analytics', label: 'Phân tích', icon: LineChart },
   { to: '/accounts', label: 'Danh mục TK', icon: BookOpen },
-  { to: '/copilot', label: 'AI Copilot', icon: Bot, disabled: true },
-  { to: '/settings', label: 'Cài đặt', icon: Settings, disabled: true },
+  { to: '/copilot', label: 'AI Copilot', icon: Bot },
+  { to: '/settings', label: 'Cài đặt', icon: Settings },
 ];
 
-const primaryNavItems = navItems.filter((item) => !item.disabled);
-const comingSoonNavItems = navItems.filter((item) => item.disabled);
+const primaryNavItems = navItems;
 
 function getInitials(name?: string | null) {
   if (!name?.trim()) {
-    return 'KL';
+    return 'U';
   }
 
   return name
@@ -131,15 +131,7 @@ export function SidebarContent({
           )}
         >
           <div className={cn('flex min-w-0 items-center gap-3', collapsed && 'flex-col')}>
-            <div className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-primary text-sm font-semibold text-primary-foreground shadow-sm">
-              {collapsed ? 'K' : 'KL'}
-            </div>
-            {!collapsed ? (
-              <div className="min-w-0">
-                <p className="truncate text-sm font-semibold text-foreground">Klassi AI</p>
-                <p className="truncate text-xs text-muted-foreground">Định khoản tự động</p>
-              </div>
-            ) : null}
+            <Logo collapsed={collapsed} markSize={36} />
           </div>
 
           <div className="flex shrink-0 items-center gap-1">
@@ -186,35 +178,6 @@ export function SidebarContent({
             <NavItemLink key={item.to} item={item} collapsed={collapsed} onNavigate={onNavigate} />
           ))}
         </div>
-
-        {!collapsed && comingSoonNavItems.length > 0 ? (
-          <div className="space-y-1">
-            <div className="flex items-center gap-2 px-3 pb-1">
-              <p className="text-[11px] font-medium tracking-wide text-muted-foreground uppercase">
-                Sắp ra mắt
-              </p>
-              <Sparkles className="size-3 text-muted-foreground" />
-            </div>
-            {comingSoonNavItems.map((item) => {
-              const Icon = item.icon;
-              return (
-                <div
-                  key={item.to}
-                  className="flex items-center justify-between gap-2 rounded-lg px-3 py-2 text-sm text-muted-foreground/80"
-                  title="Tính năng sẽ có ở Sprint sau"
-                >
-                  <div className="flex min-w-0 items-center gap-3">
-                    <Icon className="size-4 shrink-0 opacity-60" />
-                    <span className="truncate">{item.label}</span>
-                  </div>
-                  <Badge variant="secondary" className="shrink-0 px-1.5 py-0 text-[10px]">
-                    Soon
-                  </Badge>
-                </div>
-              );
-            })}
-          </div>
-        ) : null}
       </nav>
 
       <div className={cn('border-t border-sidebar-border/80 p-3', collapsed && 'px-2')}>

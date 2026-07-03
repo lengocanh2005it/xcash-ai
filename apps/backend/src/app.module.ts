@@ -8,12 +8,15 @@ import configuration from './config/configuration';
 import { AiModule } from './modules/ai/ai.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { BankingModule } from './modules/banking/banking.module';
+import { BillingModule } from './modules/billing/billing.module';
 import { CasModule } from './modules/cas/cas.module';
 import { ChartOfAccountsModule } from './modules/chart-of-accounts/chart-of-accounts.module';
 import { ClassificationModule } from './modules/classification/classification.module';
 import { HealthModule } from './modules/health/health.module';
 import { OnboardingModule } from './modules/onboarding/onboarding.module';
 import { ReportModule } from './modules/report/report.module';
+import { SettingsModule } from './modules/settings/settings.module';
+import { TeamModule } from './modules/team/team.module';
 import { TransactionModule } from './modules/transaction/transaction.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { QueueModule } from './queue/queue.module';
@@ -39,6 +42,9 @@ import { RedisModule } from './redis/redis.module';
     ClassificationModule,
     ReportModule,
     TransactionModule,
+    SettingsModule,
+    TeamModule,
+    BillingModule,
   ],
   providers: [
     {

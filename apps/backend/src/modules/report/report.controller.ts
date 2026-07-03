@@ -42,6 +42,25 @@ export class ReportController {
     return this.service.getByAccount(user.tenantId!, fromDate, toDate);
   }
 
+  @Get('comparison')
+  getComparison(
+    @CurrentUser() user: AuthenticatedUser,
+    @Query('year', new DefaultValuePipe(new Date().getFullYear()), ParseIntPipe) year: number,
+    @Query('month', new DefaultValuePipe(new Date().getMonth() + 1), ParseIntPipe) month: number,
+  ) {
+    return this.service.getComparison(user.tenantId!, year, month);
+  }
+
+  @Get('top-accounts')
+  getTopAccounts(
+    @CurrentUser() user: AuthenticatedUser,
+    @Query('year', new DefaultValuePipe(new Date().getFullYear()), ParseIntPipe) year: number,
+    @Query('month', new DefaultValuePipe(new Date().getMonth() + 1), ParseIntPipe) month: number,
+    @Query('limit', new DefaultValuePipe(5), ParseIntPipe) limit: number,
+  ) {
+    return this.service.getTopAccounts(user.tenantId!, year, month, limit);
+  }
+
   @Get('export')
   async exportExcel(
     @CurrentUser() user: AuthenticatedUser,

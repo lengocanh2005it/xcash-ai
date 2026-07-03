@@ -4,6 +4,8 @@ import type { SubscriptionPlan } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { PayosService } from './payos.service';
 
+const OVERAGE_PLANS = ['starter', 'pro'] as const;
+
 @Injectable()
 export class BillingService {
   constructor(
@@ -104,7 +106,8 @@ export class BillingService {
     const link = await this.payosService.createPaymentLink({
       orderCode,
       amount,
-      description: `X-Cash AI nang cap ${targetPlan}`,
+      // PayOS giới hạn description tối đa 25 ký tự
+      description: `Nang cap goi ${targetPlan}`.slice(0, 25),
       returnUrl: `${frontendUrl}/settings?tab=billing&status=success`,
       cancelUrl: `${frontendUrl}/settings?tab=billing&status=cancel`,
     });
@@ -119,17 +122,54 @@ export class BillingService {
   }
 
   async confirmPayment(orderCode: string) {
-    const order = await this.prisma.paymentOrder.findUnique({ where: { orderCode } });
+    // biome-ignore lint/suspicious/noExplicitAny: orderType field added after Prisma client was generated
+    const order = (await (this.prisma.paymentOrder.findUnique as any)({
+      where: { orderCode },
+    })) as {
+      id: string;
+      tenantId: string;
+      orderCode: string;
+      orderType: string;
+      targetPlan: SubscriptionPlan;
+      amount: { toNumber: () => number } | number;
+      status: string;
+      paidAt: Date | null;
+    };
     if (!order) throw new NotFoundException('Không tìm thấy đơn thanh toán');
 
-    // Idempotency — đã xử lý rồi thì bỏ qua
     if (order.status === 'paid') return { success: true, alreadyPaid: true };
 
-    const { tenantId, targetPlan } = order;
-    const pricing = await this.getPlanPricingOrThrow(targetPlan);
-    const amount = Number(order.amount);
-    const quota = pricing.transactionQuota;
     const now = new Date();
+    const { tenantId, targetPlan, orderType } = order;
+    const amount =
+      typeof order.amount === 'number'
+        ? order.amount
+        : (order.amount as { toNumber: () => number }).toNumber();
+
+    // Đơn thanh toán phí vượt quota — chỉ ghi nhận, không đổi gói
+    if (orderType === 'overage') {
+      await this.prisma.$transaction([
+        this.prisma.paymentOrder.update({
+          where: { orderCode },
+          data: { status: 'paid', paidAt: now },
+        }),
+        this.prisma.auditLog.create({
+          data: {
+            tenantId,
+            entityType: 'payment_order',
+            entityId: orderCode,
+            action: 'overage_paid',
+            actor: 'system',
+            afterState: { orderCode, amount, plan: targetPlan },
+          },
+        }),
+      ]);
+      return { success: true, alreadyPaid: false };
+    }
+
+    // Đơn nâng cấp gói — tạo subscription mới
+    const pricing = await this.getPlanPricingOrThrow(targetPlan);
+    const quota = pricing.transactionQuota;
     const cycleEnd = new Date(now.getFullYear(), now.getMonth() + 1, now.getDate());
 
     await this.prisma.$transaction([
@@ -167,5 +207,100 @@ export class BillingService {
     ]);
 
     return { success: true, alreadyPaid: false };
+  }
+
+  async getOverageOrders(tenantId: string) {
+    // biome-ignore lint/suspicious/noExplicitAny: orderType field added after Prisma client was generated
+    const orders = (await (this.prisma.paymentOrder.findMany as any)({
+      where: { tenantId, orderType: 'overage', status: 'pending' },
+      orderBy: { createdAt: 'desc' },
+      take: 1,
+    })) as Array<{ orderCode: string; amount: { toNumber: () => number }; createdAt: Date }>;
+
+    return orders.map((o) => ({
+      orderCode: o.orderCode,
+      amount: o.amount.toNumber(),
+      createdAt: o.createdAt,
+    }));
+  }
+
+  async createOverageOrder(tenantId: string) {
+    const sub = await this.prisma.subscription.findFirst({
+      where: { tenantId, status: 'active' },
+      orderBy: { startedAt: 'desc' },
+    });
+    if (!sub) throw new NotFoundException('Không tìm thấy subscription active');
+
+    if (!(OVERAGE_PLANS as readonly string[]).includes(sub.plan)) {
+      throw new BadRequestException('Gói hiện tại không áp dụng phí vượt quota');
+    }
+
+    const pricing = await this.getPlanPricingOrThrow(sub.plan);
+    if (!pricing.overagePricePerTransaction) {
+      throw new BadRequestException('Gói này không có cấu hình phí vượt quota');
+    }
+
+    const overageCount = await this.prisma.usageLog.count({
+      where: {
+        tenantId,
+        metric: 'overage_transaction',
+        recordedAt: { gte: sub.currentCycleStart ?? new Date(0) },
+      },
+    });
+
+    if (overageCount === 0)
+      throw new BadRequestException('Không có giao dịch vượt quota trong chu kỳ này');
+
+    // Idempotency: trả lại đơn đang pending nếu đã có
+    // biome-ignore lint/suspicious/noExplicitAny: orderType field added after Prisma client was generated
+    const existing = (await (this.prisma.paymentOrder.findFirst as any)({
+      where: { tenantId, orderType: 'overage', status: 'pending' },
+    })) as { orderCode: string; amount: { toNumber: () => number } } | null;
+
+    if (existing) {
+      return {
+        orderCode: existing.orderCode,
+        amount: existing.amount.toNumber(),
+        overageCount,
+        isExisting: true,
+        checkoutUrl: null,
+        qrCode: null,
+        isMock: false,
+      };
+    }
+
+    const amount = overageCount * Number(pricing.overagePricePerTransaction);
+    const orderCode = Number(String(Date.now()).slice(-9));
+    const frontendUrl = this.config.get<string>('FRONTEND_URL') ?? 'http://localhost:5173';
+
+    // biome-ignore lint/suspicious/noExplicitAny: orderType field added after Prisma client was generated
+    await (this.prisma.paymentOrder.create as any)({
+      data: {
+        tenantId,
+        orderCode: String(orderCode),
+        orderType: 'overage',
+        targetPlan: sub.plan,
+        amount,
+        status: 'pending',
+      },
+    });
+
+    const link = await this.payosService.createPaymentLink({
+      orderCode,
+      amount,
+      description: `Phi vuot quota ${sub.plan}`.slice(0, 25),
+      returnUrl: `${frontendUrl}/settings?tab=billing&status=success`,
+      cancelUrl: `${frontendUrl}/settings?tab=billing&status=cancel`,
+    });
+
+    return {
+      orderCode: String(orderCode),
+      amount,
+      overageCount,
+      isExisting: false,
+      checkoutUrl: link.checkoutUrl,
+      qrCode: link.qrCode,
+      isMock: link.isMock,
+    };
   }
 }

@@ -18,6 +18,12 @@ export class BillingController {
     private readonly config: ConfigService,
   ) {}
 
+  @Get('plans')
+  @Roles(Role.ADMIN, Role.ACCOUNTANT)
+  listPlans() {
+    return this.service.listPlans();
+  }
+
   @Get('current-plan')
   @Roles(Role.ADMIN, Role.ACCOUNTANT)
   getCurrentPlan(@CurrentUser() user: AuthenticatedUser) {
@@ -42,7 +48,31 @@ export class BillingController {
     if (this.config.get<string>('NODE_ENV') === 'production') {
       return { success: false, message: 'Không khả dụng trong môi trường production' };
     }
-    // Verify orderCode thuộc về tenant hiện tại sẽ được check trong service (tìm theo PK)
+    void user;
+    return this.service.confirmPayment(orderCode);
+  }
+
+  @Get('overage-orders')
+  @Roles(Role.ADMIN)
+  getOverageOrders(@CurrentUser() user: AuthenticatedUser) {
+    return this.service.getOverageOrders(user.tenantId!);
+  }
+
+  @Post('overage-order')
+  @Roles(Role.ADMIN)
+  createOverageOrder(@CurrentUser() user: AuthenticatedUser) {
+    return this.service.createOverageOrder(user.tenantId!);
+  }
+
+  @Post('overage-order/:orderCode/mock-confirm')
+  @Roles(Role.ADMIN)
+  mockConfirmOverage(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('orderCode') orderCode: string,
+  ) {
+    if (this.config.get<string>('NODE_ENV') === 'production') {
+      return { success: false, message: 'Không khả dụng trong môi trường production' };
+    }
     void user;
     return this.service.confirmPayment(orderCode);
   }

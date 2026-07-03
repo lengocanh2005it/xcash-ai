@@ -64,6 +64,7 @@ enum PaymentOrderStatus {
 model Tenant {
   id                       String   @id @default(uuid())
   businessName             String   @map("business_name")
+  ownerName                String?  @map("owner_name")
   classificationThreshold  Int      @default(85) @map("classification_threshold")
   createdAt                DateTime @default(now()) @map("created_at")
   updatedAt                DateTime @updatedAt @map("updated_at")
@@ -215,6 +216,7 @@ model PaymentOrder {
   id         String             @id @default(uuid())
   tenantId   String             @map("tenant_id")
   orderCode  String             @unique @map("order_code")
+  orderType  String             @default("upgrade") @map("order_type")
   targetPlan SubscriptionPlan   @map("target_plan")
   amount     Decimal            @db.Decimal(18, 2)
   status     PaymentOrderStatus @default(pending)

@@ -182,7 +182,9 @@ export class BankingService {
         },
       });
 
-      if (isOverQuota && subscription.plan !== SubscriptionPlan.free) {
+      // Chỉ log overage cho Starter/Pro — Free bị chặn ở trên, Enterprise không tính phí vượt
+      const OVERAGE_PLANS = [SubscriptionPlan.starter, SubscriptionPlan.pro] as const;
+      if (isOverQuota && (OVERAGE_PLANS as readonly string[]).includes(subscription.plan)) {
         await tx.usageLog.create({
           data: {
             tenantId: grant.tenantId,

@@ -1,5 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { SubscriptionPlan } from '@xcash/shared-types';
 import {
+  AlertTriangle,
   BellRing,
   Building2,
   CreditCard,
@@ -11,6 +13,7 @@ import {
 } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import { useEffect, useRef, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import { Header } from '@/components/layout/Header';
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog';
@@ -42,6 +45,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { api } from '@/lib/api';
 import { formatDateVN } from '@/lib/dashboard-transactions';
 import { formatVND } from '@/lib/format-vnd';
+import { hasPlanAccess, PLAN_LABEL } from '@/lib/plan';
 import { cn } from '@/lib/utils';
 
 // ─── Tab Threshold ────────────────────────────────────────────────
@@ -103,6 +107,9 @@ function ThresholdTab() {
 // ─── Tab Notifications ────────────────────────────────────────────
 function NotificationsTab() {
   const qc = useQueryClient();
+  const { user } = useAuth();
+  const canEmail = hasPlanAccess(user?.plan, SubscriptionPlan.STARTER);
+  const canSlack = hasPlanAccess(user?.plan, SubscriptionPlan.PRO);
   const { data, isLoading } = useQuery({
     queryKey: ['settings', 'notifications'],
     queryFn: () =>
@@ -158,15 +165,23 @@ function NotificationsTab() {
         <div className="space-y-4">
           <div className="flex items-center justify-between">
             <div>
-              <p className="font-medium text-sm">Email</p>
+              <p className="flex items-center gap-1.5 font-medium text-sm">
+                Email
+                {!canEmail && (
+                  <span className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
+                    <Lock className="size-2.5" /> Gói {PLAN_LABEL[SubscriptionPlan.STARTER]}+
+                  </span>
+                )}
+              </p>
               <p className="text-xs text-muted-foreground">Nhận thông báo qua email</p>
             </div>
             <Switch
               checked={form.emailEnabled}
+              disabled={!canEmail}
               onCheckedChange={(v) => setForm((f) => ({ ...f, emailEnabled: v }))}
             />
           </div>
-          {form.emailEnabled && (
+          {canEmail && form.emailEnabled && (
             <Input
               placeholder="email@company.com"
               value={form.email}
@@ -180,15 +195,23 @@ function NotificationsTab() {
         <div className="space-y-4">
           <div className="flex items-center justify-between">
             <div>
-              <p className="font-medium text-sm">Slack</p>
+              <p className="flex items-center gap-1.5 font-medium text-sm">
+                Slack
+                {!canSlack && (
+                  <span className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
+                    <Lock className="size-2.5" /> Gói {PLAN_LABEL[SubscriptionPlan.PRO]}+
+                  </span>
+                )}
+              </p>
               <p className="text-xs text-muted-foreground">Webhook URL</p>
             </div>
             <Switch
               checked={form.slackEnabled}
+              disabled={!canSlack}
               onCheckedChange={(v) => setForm((f) => ({ ...f, slackEnabled: v }))}
             />
           </div>
-          {form.slackEnabled && (
+          {canSlack && form.slackEnabled && (
             <Input
               placeholder="https://hooks.slack.com/..."
               value={form.slackWebhookUrl}
@@ -403,19 +426,52 @@ interface UpgradeResult {
   isMock: boolean;
 }
 
-const PLAN_LABEL: Record<string, string> = {
-  free: 'Free',
-  starter: 'Starter',
-  pro: 'Pro',
-  enterprise: 'Enterprise',
-};
+interface OverageOrder {
+  orderCode: string;
+  amount: number;
+  createdAt: string;
+}
+
+interface OveragePaymentResult {
+  orderCode: string;
+  amount: number;
+  overageCount: number;
+  checkoutUrl: string | null;
+  qrCode: string | null;
+  isMock: boolean;
+  isExisting: boolean;
+}
 
 const PLAN_FEATURES: Record<string, string[]> = {
-  free: ['50 giao dịch/tháng', 'AI định khoản tự động', 'Export Excel'],
-  starter: ['500 giao dịch/tháng', 'AI Copilot', 'Analytics', 'Email thông báo'],
-  pro: ['2.000 giao dịch/tháng', 'RAG Knowledge Base', 'Slack/Discord', 'Phí vượt theo gói'],
-  enterprise: ['Không giới hạn GD', 'SLA cam kết', 'Partner support riêng', 'Custom Integration'],
+  free: [
+    'Liên kết ngân hàng Cas Link',
+    'AI định khoản tự động TT133',
+    'Dashboard & Human Review',
+    'Danh mục tài khoản TT133',
+  ],
+  starter: ['AI Copilot hỏi đáp tài chính', 'Phân tích thu/chi nâng cao', 'Thông báo qua Email'],
+  pro: ['Báo cáo & xuất Excel', 'Thông báo qua Slack', 'Vượt quota (tính phí theo gói)'],
+  enterprise: ['Hỗ trợ ưu tiên từ đối tác Cas', 'Đồng hành triển khai doanh nghiệp'],
 };
+
+const PLAN_ORDER = ['free', 'starter', 'pro', 'enterprise'];
+
+interface PlanFeatureLine {
+  text: string;
+  inherited?: boolean;
+}
+
+/** Lợi ích hiển thị: dòng "Mọi tính năng gói trước" + tính năng mới của gói này. */
+function getPlanFeatureLines(plan: string): PlanFeatureLine[] {
+  const index = PLAN_ORDER.indexOf(plan);
+  const own = (PLAN_FEATURES[plan] ?? []).map((text) => ({ text }));
+  if (index <= 0) return own;
+  const prev = PLAN_ORDER[index - 1];
+  return [
+    { text: `Mọi tính năng gói ${PLAN_LABEL[prev as SubscriptionPlan] ?? prev}`, inherited: true },
+    ...own,
+  ];
+}
 
 interface BillingPlan {
   plan: string;
@@ -439,10 +495,24 @@ function formatPlanQuotaSubtitle(plan: BillingPlan): string {
 
 function BillingTab() {
   const qc = useQueryClient();
+  const { refreshSession } = useAuth();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [upgradeOpen, setUpgradeOpen] = useState(false);
   const [paymentOpen, setPaymentOpen] = useState(false);
   const [upgradeResult, setUpgradeResult] = useState<UpgradeResult | null>(null);
   const [selectedPlan, setSelectedPlan] = useState<string | null>(null);
+  const [overagePaymentOpen, setOveragePaymentOpen] = useState(false);
+  const [overageResult, setOverageResult] = useState<OveragePaymentResult | null>(null);
+
+  // Mở sẵn dialog chọn gói khi được điều hướng từ nút "Nâng cấp gói dịch vụ" (?upgrade=1)
+  useEffect(() => {
+    if (searchParams.get('upgrade') === '1') {
+      setUpgradeOpen(true);
+      const next = new URLSearchParams(searchParams);
+      next.delete('upgrade');
+      setSearchParams(next, { replace: true });
+    }
+  }, [searchParams, setSearchParams]);
 
   const { data, isLoading } = useQuery({
     queryKey: ['billing', 'current-plan'],
@@ -457,6 +527,36 @@ function BillingTab() {
     enabled: upgradeOpen,
   });
 
+  const { data: overageOrders } = useQuery({
+    queryKey: ['billing', 'overage-orders'],
+    queryFn: () =>
+      api.get<{ data: OverageOrder[] }>('/billing/overage-orders').then((r) => r.data.data),
+    refetchInterval: overagePaymentOpen ? 5_000 : 30_000,
+  });
+
+  const pendingOverage = overageOrders?.[0] ?? null;
+
+  const overageOrderMutation = useMutation({
+    mutationFn: () =>
+      api.post<{ data: OveragePaymentResult }>('/billing/overage-order').then((r) => r.data.data),
+    onSuccess: (result) => {
+      setOverageResult(result);
+      setOveragePaymentOpen(true);
+    },
+    onError: () => toast.error('Không thể tạo đơn thanh toán phí vượt quota'),
+  });
+
+  const mockConfirmOverageMutation = useMutation({
+    mutationFn: (orderCode: string) => api.post(`/billing/overage-order/${orderCode}/mock-confirm`),
+    onSuccess: () => {
+      setOveragePaymentOpen(false);
+      setOverageResult(null);
+      qc.invalidateQueries({ queryKey: ['billing', 'overage-orders'] });
+      toast.success('Demo: Đã thanh toán phí vượt quota!');
+    },
+    onError: () => toast.error('Không thể xác nhận mock'),
+  });
+
   // Tự đóng dialog khi plan đã đổi thành targetPlan
   const prevPlanRef = useRef<string | undefined>(undefined);
   useEffect(() => {
@@ -466,11 +566,14 @@ function BillingTab() {
       setPaymentOpen(false);
       setUpgradeResult(null);
       setSelectedPlan(null);
-      toast.success(`Nâng cấp lên gói ${PLAN_LABEL[data.plan] ?? data.plan} thành công!`);
+      toast.success(
+        `Nâng cấp lên gói ${PLAN_LABEL[data.plan as SubscriptionPlan] ?? data.plan} thành công!`,
+      );
       qc.invalidateQueries({ queryKey: ['billing', 'current-plan'] });
+      void refreshSession();
     }
     prevPlanRef.current = data.plan;
-  }, [data, paymentOpen, upgradeResult, qc]);
+  }, [data, paymentOpen, upgradeResult, qc, refreshSession]);
 
   useEffect(() => {
     if (data && !paymentOpen) prevPlanRef.current = data.plan;
@@ -498,6 +601,7 @@ function BillingTab() {
       setUpgradeResult(null);
       setSelectedPlan(null);
       toast.success('Demo: Thanh toán thành công!');
+      void refreshSession();
     },
     onError: () => toast.error('Không thể xác nhận mock'),
   });
@@ -519,11 +623,16 @@ function BillingTab() {
               <CardTitle className="text-base">Gói dịch vụ</CardTitle>
               <CardDescription>Gói hiện tại và usage của doanh nghiệp</CardDescription>
             </div>
-            {data && (
-              <Button size="sm" onClick={() => setUpgradeOpen(true)}>
-                Nâng cấp gói
-              </Button>
-            )}
+            {data &&
+              (data.plan === PLAN_ORDER[PLAN_ORDER.length - 1] ? (
+                <Button size="sm" variant="outline" disabled>
+                  Đã dùng gói cao nhất
+                </Button>
+              ) : (
+                <Button size="sm" onClick={() => setUpgradeOpen(true)}>
+                  Nâng cấp gói
+                </Button>
+              ))}
           </div>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -535,7 +644,7 @@ function BillingTab() {
                     variant={data.plan === 'free' ? 'secondary' : 'default'}
                     className="uppercase"
                   >
-                    {PLAN_LABEL[data.plan] ?? data.plan}
+                    {PLAN_LABEL[data.plan as SubscriptionPlan] ?? data.plan}
                   </Badge>
                   <span className="text-sm text-muted-foreground">
                     {data.pricePerMonth > 0 ? `${formatVND(data.pricePerMonth)}/tháng` : 'Miễn phí'}
@@ -565,6 +674,32 @@ function BillingTab() {
           )}
         </CardContent>
       </Card>
+
+      {/* Banner phí vượt quota */}
+      {pendingOverage && (
+        <div className="flex items-start gap-3 rounded-lg border border-orange-200 bg-orange-50 p-4 dark:border-orange-800 dark:bg-orange-950">
+          <AlertTriangle className="mt-0.5 size-4 shrink-0 text-orange-500" />
+          <div className="flex-1 space-y-1">
+            <p className="text-sm font-medium text-orange-800 dark:text-orange-200">
+              Có phí vượt quota chưa thanh toán
+            </p>
+            <p className="text-xs text-orange-700 dark:text-orange-300">
+              Số tiền cần thanh toán:{' '}
+              <span className="font-semibold">{formatVND(pendingOverage.amount)}</span>. Vui lòng
+              thanh toán để tránh gián đoạn dịch vụ.
+            </p>
+          </div>
+          <Button
+            size="sm"
+            variant="outline"
+            className="shrink-0 border-orange-300 text-orange-700 hover:bg-orange-100 dark:border-orange-700 dark:text-orange-300"
+            disabled={overageOrderMutation.isPending}
+            onClick={() => overageOrderMutation.mutate()}
+          >
+            Thanh toán ngay
+          </Button>
+        </div>
+      )}
 
       {/* Dialog chọn gói */}
       <Dialog open={upgradeOpen} onOpenChange={setUpgradeOpen}>
@@ -604,7 +739,9 @@ function BillingTab() {
                       )}
                     >
                       <div className="mb-2 flex items-center justify-between">
-                        <span className="font-semibold">{PLAN_LABEL[plan] ?? plan}</span>
+                        <span className="font-semibold">
+                          {PLAN_LABEL[plan as SubscriptionPlan] ?? plan}
+                        </span>
                         {isCurrent && (
                           <Badge variant="secondary" className="text-[10px]">
                             Hiện tại
@@ -625,12 +762,15 @@ function BillingTab() {
                         {formatPlanQuotaSubtitle(planItem)}
                       </p>
                       <ul className="space-y-1">
-                        {(PLAN_FEATURES[plan] ?? []).map((f) => (
+                        {getPlanFeatureLines(plan).map((f) => (
                           <li
-                            key={f}
-                            className="flex items-center gap-1.5 text-xs text-muted-foreground"
+                            key={f.text}
+                            className={cn(
+                              'flex items-center gap-1.5 text-xs',
+                              f.inherited ? 'font-medium text-foreground' : 'text-muted-foreground',
+                            )}
                           >
-                            <span className="text-primary">✓</span> {f}
+                            <span className="text-primary">✓</span> {f.text}
                           </li>
                         ))}
                       </ul>
@@ -653,17 +793,12 @@ function BillingTab() {
       </Dialog>
 
       {/* Dialog thanh toán */}
-      <Dialog
-        open={paymentOpen}
-        onOpenChange={(open) => {
-          if (!open) {
-            setPaymentOpen(false);
-            setUpgradeResult(null);
-            setSelectedPlan(null);
-          }
-        }}
-      >
-        <DialogContent className="max-w-sm">
+      <Dialog open={paymentOpen} onOpenChange={setPaymentOpen}>
+        <DialogContent
+          className="max-w-sm"
+          onInteractOutside={(e) => e.preventDefault()}
+          onEscapeKeyDown={(e) => e.preventDefault()}
+        >
           <DialogHeader>
             <DialogTitle>Thanh toán nâng cấp gói</DialogTitle>
           </DialogHeader>
@@ -707,6 +842,72 @@ function BillingTab() {
                   onClick={() => mockConfirmMutation.mutate(upgradeResult.orderCode)}
                 >
                   {mockConfirmMutation.isPending
+                    ? 'Đang xử lý...'
+                    : '🧪 Demo: Giả lập thanh toán thành công'}
+                </Button>
+              )}
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog thanh toán phí vượt quota */}
+      <Dialog open={overagePaymentOpen} onOpenChange={setOveragePaymentOpen}>
+        <DialogContent
+          className="max-w-sm"
+          onInteractOutside={(e) => e.preventDefault()}
+          onEscapeKeyDown={(e) => e.preventDefault()}
+        >
+          <DialogHeader>
+            <DialogTitle>Thanh toán phí vượt quota</DialogTitle>
+          </DialogHeader>
+          {overageResult && (
+            <div className="space-y-4 text-center">
+              <p className="text-sm text-muted-foreground">
+                Số giao dịch vượt:{' '}
+                <span className="font-semibold text-foreground">
+                  {overageResult.overageCount} GD
+                </span>
+              </p>
+              <p className="text-sm text-muted-foreground">
+                Số tiền:{' '}
+                <span className="font-semibold text-foreground">
+                  {formatVND(overageResult.amount)}
+                </span>
+              </p>
+
+              {overageResult.qrCode ? (
+                <div className="mx-auto w-fit rounded-lg border p-3">
+                  <QRCodeSVG value={overageResult.qrCode} size={176} />
+                </div>
+              ) : (
+                <div className="flex h-36 items-center justify-center rounded-lg border bg-muted text-xs text-muted-foreground">
+                  {overageResult.isMock ? 'QR mock — chưa có PayOS key thật' : 'Đang tải QR...'}
+                </div>
+              )}
+
+              {overageResult.checkoutUrl && (
+                <Button
+                  variant="outline"
+                  className="w-full"
+                  onClick={() => window.open(overageResult.checkoutUrl!, '_blank')}
+                >
+                  Mở trang thanh toán PayOS
+                </Button>
+              )}
+
+              <p className="text-xs text-muted-foreground">
+                Hệ thống tự cập nhật sau khi thanh toán xong.
+              </p>
+
+              {isDev && (
+                <Button
+                  variant="secondary"
+                  className="w-full"
+                  disabled={mockConfirmOverageMutation.isPending}
+                  onClick={() => mockConfirmOverageMutation.mutate(overageResult.orderCode)}
+                >
+                  {mockConfirmOverageMutation.isPending
                     ? 'Đang xử lý...'
                     : '🧪 Demo: Giả lập thanh toán thành công'}
                 </Button>
@@ -794,7 +995,9 @@ function BankingTab() {
 // ─── Main ─────────────────────────────────────────────────────────
 export default function SettingsPage() {
   const { user } = useAuth();
+  const [searchParams, setSearchParams] = useSearchParams();
   const isAdmin = user?.role === 'admin';
+  const activeTab = searchParams.get('tab') ?? 'banking';
 
   const tabs = [
     { value: 'banking', label: 'Ngân hàng', icon: Building2, component: <BankingTab /> },
@@ -820,7 +1023,10 @@ export default function SettingsPage() {
     <>
       <Header title="Cài đặt" description="Quản lý tài khoản và cấu hình hệ thống" />
       <div className="flex flex-col gap-6 p-4 sm:p-6">
-        <Tabs defaultValue="banking">
+        <Tabs
+          value={activeTab}
+          onValueChange={(value) => setSearchParams({ tab: value }, { replace: true })}
+        >
           <TabsList className="w-full justify-start gap-1 overflow-x-auto">
             {tabs.map((tab) => {
               const Icon = tab.icon;

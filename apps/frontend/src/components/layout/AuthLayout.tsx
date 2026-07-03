@@ -1,4 +1,4 @@
-import { Activity } from 'lucide-react';
+import { Brain } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { ThemeToggle } from '@/components/shared/ThemeToggle';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -24,7 +24,7 @@ export function AuthLayout({
           <CardHeader>
             <div className="mb-2 flex items-center gap-3">
               <div className="flex size-10 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-sm">
-                <Activity className="size-5" />
+                <Brain className="size-5" />
               </div>
               <div>
                 <CardTitle className="text-xl text-foreground">{title}</CardTitle>

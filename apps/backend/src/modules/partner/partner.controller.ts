@@ -21,6 +21,11 @@ export class PartnerController {
     return this.service.getStats();
   }
 
+  @Get('tenants/:id')
+  getTenantDetail(@Param('id') id: string) {
+    return this.service.getTenantDetail(id);
+  }
+
   @Get('revenue-trend')
   getRevenueTrend() {
     return this.service.getRevenueTrend();

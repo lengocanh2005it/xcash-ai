@@ -37,6 +37,62 @@ export class PartnerService {
     });
   }
 
+  async getTenantDetail(tenantId: string) {
+    const tenant = await this.prisma.tenant.findUnique({
+      where: { id: tenantId },
+      include: {
+        subscriptions: { orderBy: { startedAt: 'desc' }, take: 1 },
+        users: {
+          select: { id: true, name: true, email: true, role: true, createdAt: true },
+          orderBy: { createdAt: 'asc' },
+        },
+      },
+    });
+    if (!tenant) throw new NotFoundException('Không tìm thấy doanh nghiệp');
+
+    const monthStart = this.getMonthStart();
+    const [transactionsThisMonth, totalTransactions, classifications] = await Promise.all([
+      this.prisma.transaction.count({
+        where: { tenantId, createdAt: { gte: monthStart } },
+      }),
+      this.prisma.transaction.count({ where: { tenantId } }),
+      this.prisma.transactionClassification.findMany({
+        where: { tenantId, createdAt: { gte: monthStart } },
+        select: { classificationType: true },
+      }),
+    ]);
+
+    const autoClassified = classifications.filter((c) => c.classificationType === 'auto').length;
+    const aiAccuracy =
+      classifications.length > 0 ? Math.round((autoClassified / classifications.length) * 100) : 0;
+
+    const subscription = tenant.subscriptions[0];
+
+    return {
+      id: tenant.id,
+      businessName: tenant.businessName,
+      createdAt: tenant.createdAt,
+      classificationThreshold: tenant.classificationThreshold,
+      plan: subscription?.plan ?? null,
+      status: subscription?.status ?? 'active',
+      pricePerMonth: subscription ? Number(subscription.pricePerMonth) : 0,
+      transactionQuota: subscription?.transactionQuota ?? 0,
+      transactionUsedThisCycle: subscription?.transactionUsedThisCycle ?? 0,
+      currentCycleStart: subscription?.currentCycleStart ?? null,
+      currentCycleEnd: subscription?.currentCycleEnd ?? null,
+      transactionsThisMonth,
+      totalTransactions,
+      aiAccuracy,
+      members: tenant.users.map((u) => ({
+        id: u.id,
+        name: u.name,
+        email: u.email,
+        role: u.role,
+        createdAt: u.createdAt,
+      })),
+    };
+  }
+
   async suspendTenant(tenantId: string) {
     const subscription = await this.getLatestSubscription(tenantId);
     if (subscription.status === 'suspended') {

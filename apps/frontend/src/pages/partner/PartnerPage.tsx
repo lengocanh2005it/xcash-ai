@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Building2, LogOut, Pencil, Percent, Search, ShieldCheck, Wallet } from 'lucide-react';
+import { Building2, Eye, LogOut, Pencil, Percent, Search, ShieldCheck, Wallet } from 'lucide-react';
 import { type ElementType, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -73,11 +73,44 @@ interface PartnerTenant {
   revenuePerMonth: number;
 }
 
+interface TenantMember {
+  id: string;
+  name: string;
+  email: string;
+  role: string;
+  createdAt: string;
+}
+
+interface TenantDetail {
+  id: string;
+  businessName: string;
+  createdAt: string;
+  classificationThreshold: number;
+  plan: string | null;
+  status: string;
+  pricePerMonth: number;
+  transactionQuota: number;
+  transactionUsedThisCycle: number;
+  currentCycleStart: string | null;
+  currentCycleEnd: string | null;
+  transactionsThisMonth: number;
+  totalTransactions: number;
+  aiAccuracy: number;
+  members: TenantMember[];
+}
+
 const PLAN_LABELS: Record<string, string> = {
   free: 'Free',
   starter: 'Starter',
   pro: 'Pro',
   enterprise: 'Enterprise',
+};
+
+const ROLE_LABELS: Record<string, string> = {
+  admin: 'Admin',
+  accountant: 'Kế toán',
+  viewer: 'Người xem',
+  cas_partner: 'Cas Partner',
 };
 
 function StatCard({
@@ -120,6 +153,7 @@ export default function PartnerPage() {
     tenant: PartnerTenant;
   } | null>(null);
   const [pricingConfirmOpen, setPricingConfirmOpen] = useState(false);
+  const [viewingTenantId, setViewingTenantId] = useState<string | null>(null);
 
   const { data: stats, isLoading: loadingStats } = useQuery({
     queryKey: ['partner', 'stats'],
@@ -141,6 +175,15 @@ export default function PartnerPage() {
     queryKey: ['partner', 'plan-pricing'],
     queryFn: () =>
       api.get<{ data: PlanPricing[] }>('/partner/plan-pricing').then((r) => r.data.data),
+  });
+
+  const { data: tenantDetail, isLoading: loadingDetail } = useQuery({
+    queryKey: ['partner', 'tenant-detail', viewingTenantId],
+    queryFn: () =>
+      api
+        .get<{ data: TenantDetail }>(`/partner/tenants/${viewingTenantId}`)
+        .then((r) => r.data.data),
+    enabled: viewingTenantId !== null,
   });
 
   const invalidate = () => {
@@ -479,25 +522,35 @@ export default function PartnerPage() {
                         <td className="py-2 pr-4">{t.transactionsThisMonth}</td>
                         <td className="py-2 pr-4">{formatVND(t.revenuePerMonth)}</td>
                         <td className="py-2">
-                          {t.status === 'suspended' ? (
+                          <div className="flex items-center gap-2">
                             <Button
                               size="sm"
-                              variant="outline"
-                              disabled={activateMutation.isPending}
-                              onClick={() => setTenantAction({ type: 'activate', tenant: t })}
+                              variant="ghost"
+                              onClick={() => setViewingTenantId(t.id)}
                             >
-                              Mở khóa
+                              <Eye className="size-4" />
+                              Chi tiết
                             </Button>
-                          ) : (
-                            <Button
-                              size="sm"
-                              variant="destructive"
-                              disabled={suspendMutation.isPending}
-                              onClick={() => setTenantAction({ type: 'suspend', tenant: t })}
-                            >
-                              Khóa
-                            </Button>
-                          )}
+                            {t.status === 'suspended' ? (
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                disabled={activateMutation.isPending}
+                                onClick={() => setTenantAction({ type: 'activate', tenant: t })}
+                              >
+                                Mở khóa
+                              </Button>
+                            ) : (
+                              <Button
+                                size="sm"
+                                variant="destructive"
+                                disabled={suspendMutation.isPending}
+                                onClick={() => setTenantAction({ type: 'suspend', tenant: t })}
+                              >
+                                Khóa
+                              </Button>
+                            )}
+                          </div>
                         </td>
                       </tr>
                     ))}
@@ -563,6 +616,99 @@ export default function PartnerPage() {
               Lưu
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={viewingTenantId !== null}
+        onOpenChange={(open) => !open && setViewingTenantId(null)}
+      >
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>{tenantDetail?.businessName ?? 'Chi tiết doanh nghiệp'}</DialogTitle>
+          </DialogHeader>
+          {loadingDetail || !tenantDetail ? (
+            <div className="space-y-2">
+              <Skeleton className="h-4 w-full" />
+              <Skeleton className="h-4 w-full" />
+              <Skeleton className="h-4 w-2/3" />
+            </div>
+          ) : (
+            <div className="space-y-4 text-sm">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <p className="text-xs text-muted-foreground">Gói</p>
+                  <p className="font-medium">
+                    {tenantDetail.plan
+                      ? (PLAN_LABELS[tenantDetail.plan] ?? tenantDetail.plan)
+                      : '—'}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground">Trạng thái</p>
+                  {tenantDetail.status === 'suspended' ? (
+                    <Badge className="bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400">
+                      Đã khóa
+                    </Badge>
+                  ) : (
+                    <Badge className="bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400">
+                      Hoạt động
+                    </Badge>
+                  )}
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground">Giá/tháng</p>
+                  <p className="font-medium">{formatVND(tenantDetail.pricePerMonth)}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground">Ngưỡng tự động định khoản</p>
+                  <p className="font-medium">{tenantDetail.classificationThreshold}%</p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground">Quota GD/chu kỳ</p>
+                  <p className="font-medium">
+                    {tenantDetail.transactionUsedThisCycle} / {tenantDetail.transactionQuota}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground">GD tháng này / tổng</p>
+                  <p className="font-medium">
+                    {tenantDetail.transactionsThisMonth} / {tenantDetail.totalTransactions}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground">Độ chính xác AI (tháng này)</p>
+                  <p className="font-medium">{tenantDetail.aiAccuracy}%</p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground">Ngày tạo</p>
+                  <p className="font-medium">
+                    {new Date(tenantDetail.createdAt).toLocaleDateString('vi-VN')}
+                  </p>
+                </div>
+              </div>
+
+              <div>
+                <p className="mb-2 text-xs font-medium text-muted-foreground">
+                  Thành viên ({tenantDetail.members.length})
+                </p>
+                <div className="max-h-48 space-y-2 overflow-y-auto">
+                  {tenantDetail.members.map((m) => (
+                    <div
+                      key={m.id}
+                      className="flex items-center justify-between rounded-md border px-3 py-2"
+                    >
+                      <div>
+                        <p className="font-medium">{m.name}</p>
+                        <p className="text-xs text-muted-foreground">{m.email}</p>
+                      </div>
+                      <Badge variant="secondary">{ROLE_LABELS[m.role] ?? m.role}</Badge>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
         </DialogContent>
       </Dialog>
 

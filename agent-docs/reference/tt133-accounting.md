@@ -1,99 +1,279 @@
-# TT133 — Giải thích cho Developer
+# Giải thích nghiệp vụ — TT133, định khoản, Nợ/Có
 
-> Tài liệu này giải thích Thông tư 133 theo góc nhìn kỹ thuật: đủ để hiểu tại sao code làm vậy, không cần học kế toán.
-
----
-
-## TT133 là gì — 1 câu
-
-**Thông tư 133/2016/TT-BTC** = bộ quy tắc do Bộ Tài chính VN ban hành, quy định cách SME ghi chép mọi giao dịch tài chính theo chuẩn kép (double-entry): mỗi giao dịch bắt buộc phải ghi đúng 2 tài khoản — 1 bên Nợ, 1 bên Có.
+> Tài liệu giải thích **dễ hiểu** các khái niệm kế toán trong X-Cash AI — dành cho product, QA, dev mới, và bất kỳ ai đọc UI mà thấy “khó hiểu”.  
+> Phần cuối file giữ mục **tham chiếu kỹ thuật** (file code, luồng hệ thống).
 
 ---
 
-## Kế toán kép (double-entry) là gì
+## 1. X-Cash AI làm gì? (một câu)
 
-Mọi giao dịch tiền đều có 2 mặt. Ví dụ:
+Nhận **giao dịch ngân hàng thô** từ Cas → **AI gợi ý ghi sổ kế toán** (TK Nợ / TK Có theo TT133) → kế toán xác nhận nếu cần → **báo cáo thu/chi** tự tổng hợp.
 
-| Sự kiện | Bên Nợ (tăng/giảm) | Bên Có (tăng/giảm) |
+Đây là đặc trưng **fintech + kế toán tự động**: không chỉ biết “tiền vào/ra bao nhiêu”, mà còn biết “khoản đó **là gì** trong sổ sách”.
+
+| Lớp | Ví dụ | Ai xử lý |
 |---|---|---|
-| Khách chuyển tiền vào NH | `112` Tiền gửi NH **tăng** | `131` Phải thu KH **giảm** |
-| Mua văn phòng phẩm bằng tiền NH | `642` Chi phí QL **tăng** | `112` Tiền gửi NH **giảm** |
-| Trả lương nhân viên | `334` Phải trả NV **giảm** | `112` Tiền gửi NH **giảm** |
-| Nhận doanh thu dịch vụ | `112` Tiền gửi NH **tăng** | `511` Doanh thu **tăng** |
-
-Luật: **Tổng Nợ = Tổng Có** — nếu lệch là sai.
-
-TT133 quy định: loại nghiệp vụ nào thì được dùng cặp TK nào. Không được tự ý ghép tùy tiện.
+| Dòng tiền | +5.000.000đ, nội dung "TT TIEN HANG" | Ngân hàng / Cas |
+| Ý nghĩa kế toán | Nợ 112 / Có 511 (doanh thu) | AI + kế toán |
+| Báo cáo | Tổng thu, tổng chi, lãi/lỗ tháng | X-Cash AI |
 
 ---
 
-## Hệ thống tài khoản TT133 — các nhóm chính
+## 2. Định khoản là gì?
 
-TT133 có ~60–70 tài khoản, chia theo nhóm đầu số:
+**Định khoản** = gắn **một giao dịch ngân hàng** vào **đúng cặp tài khoản kế toán** (ghi Nợ tài khoản nào, Có tài khoản nào, bao nhiêu tiền).
+
+Ngân hàng chỉ cho bạn:
+- Số tiền (+ hoặc −)
+- Nội dung chuyển khoản (vd: `CHI PHI QUANG CAO FACEBOOK T7`)
+
+Đó **chưa phải** sổ kế toán. Kế toán (hoặc AI) phải trả lời: *đây là doanh thu, chi phí, trả nợ, thu nợ khách…?*
+
+**Ví dụ — khách chuyển 5.000.000đ thanh toán hàng:**
+
+```
+Nợ  112  (Tiền gửi ngân hàng)      5.000.000
+Có  511  (Doanh thu bán hàng)      5.000.000
+```
+
+**Ví dụ — chi 2.800.000đ quảng cáo Facebook:**
+
+```
+Nợ  641  (Chi phí bán hàng)        2.800.000
+Có  112  (Tiền gửi ngân hàng)      2.800.000
+```
+
+Hai dòng trên = **một bút toán định khoản**. Trên UI, cột **TK Nợ/Có** hiển thị dạng `641/112` hoặc `112/511`.
+
+---
+
+## 3. Thông tư 133 (TT133) là gì? Liên quan định khoản thế nào?
+
+**Thông tư 133/2016/TT-BTC** = bộ quy tắc kế toán cho **doanh nghiệp nhỏ và vừa (SME)** ở Việt Nam.
+
+TT133 quy định:
+- **Danh mục tài khoản** dùng chung (~60–70 mã: 112, 511, 641…)
+- Mỗi mã **nghĩa là gì**
+- Ghi Nợ/Có thế nào cho đúng chuẩn **kế toán kép** (double-entry)
+
+| Khái niệm | Vai trò |
+|---|---|
+| **TT133** | Bộ quy tắc + “từ điển” mã tài khoản |
+| **Định khoản** | Áp quy tắc đó cho **từng giao dịch** cụ thể |
+
+Trong app: màn **Danh mục TK** = bộ tài khoản TT133 (seed sẵn khi tenant đăng ký). AI và kế toán chỉ được chọn mã trong danh mục này (hoặc TK tự thêm).
+
+> **TT133 vs TT200:** TT200 dành cho DN lớn, nhiều TK hơn. X-Cash AI **chỉ hỗ trợ TT133** (SME).
+
+---
+
+## 4. Nợ / Có — bản chất (tránh hiểu nhầm tiếng Việt)
+
+⚠️ **Hay nhầm:** “Nợ” = nợ nần, “Có” = có tiền. **Trong kế toán không phải vậy.**
+
+**Bản chất:** Mỗi giao dịch tiền luôn ảnh hưởng **ít nhất 2 tài khoản**. Kế toán ghi **hai bên** của một bút toán:
+- **Nợ** (Debit) — một bên
+- **Có** (Credit) — bên kia
+
+**Luật vàng:** Tổng Nợ = Tổng Có (luôn cân).
+
+### Quy tắc nhớ nhanh (đủ dùng với X-Cash)
+
+| Loại tài khoản | Khi **tăng** | Khi **giảm** |
+|---|---|---|
+| **Tài sản** (112 tiền NH, 131 phải thu…) | Ghi **Nợ** | Ghi **Có** |
+| **Doanh thu** (511…) | Ghi **Có** | Ghi **Nợ** |
+| **Chi phí** (641, 627…) | Ghi **Nợ** | Ghi **Có** |
+
+### Cùng tài khoản 112, hai chiều khác nhau
+
+- Tiền **vào** NH → thường **Nợ 112** (tài sản tăng)
+- Tiền **ra** NH → thường **Có 112** (tài sản giảm)
+
+Không phải “tiền vào = Có, tiền ra = Nợ” theo nghĩa đời thường — phụ thuộc **bên còn lại** của bút toán.
+
+---
+
+## 5. Vòng đời trạng thái giao dịch
+
+```
+Cas gửi webhook
+       │
+       ▼
+  [Chờ xử lý]  pending — AI chưa chạy / đang chạy trong hàng đợi
+       │
+       ▼
+  AI định khoản (OpenAI + few-shot pgvector)
+       │
+       ├── confidence ≥ ngưỡng (mặc định 85%) ──► [Đã định khoản]  classified
+       │
+       └── confidence < ngưỡng ──► [Cần review]  review
+                │
+                ├── Kế toán Xác nhận ──► classified
+                ├── Kế toán Sửa TK Nợ/Có ──► classified
+                └── Kế toán Bỏ qua ──► skipped
+```
+
+| Trạng thái (UI) | Ý nghĩa | Có TK Nợ/Có? | Vào báo cáo thu/chi? |
+|---|---|:---:|:---:|
+| **Chờ xử lý** | Mới nhận, chưa định khoản xong | — | Không |
+| **Cần review** | AI đã gợi ý nhưng chưa đủ tin | Có (gợi ý) | Chưa |
+| **Đã định khoản** | Bút toán chính thức | Có | **Có** |
+| **Bỏ qua** | Kế toán chủ động không ghi sổ | — | Không |
+
+**Ghi chú kỹ thuật:** Giao dịch seed demo ở trạng thái `pending` không đi qua webhook → cần bấm **“Cho AI định khoản lại”** (enqueue job `ai-classify`) hoặc định khoản thủ công.
+
+---
+
+## 6. Human Review — Xác nhận / Sửa / Bỏ qua ảnh hưởng gì?
+
+| Hành động | Trạng thái sau | Ảnh hưởng số liệu |
+|---|---|---|
+| **Xác nhận** | `classified` | Giữ TK Nợ/Có AI gợi ý → **tính vào** thu/chi/báo cáo |
+| **Sửa** | `classified` | Dùng TK mới → có thể **đổi** doanh thu ↔ chi phí (vd sửa từ 131 sang 511) |
+| **Bỏ qua** | `skipped` | **Không** tính vào báo cáo |
+
+**Cập nhật UI liên quan:**
+- Badge đỏ **Human Review** trên sidebar (`/review/count`) giảm ngay sau xử lý.
+- **Dashboard DN:** doanh thu hôm nay chỉ cộng GD `classified` có số tiền dương.
+- **Báo cáo / Analytics / AI Copilot:** chỉ lấy `status = classified`.
+
+**Không ảnh hưởng:** MRR, tiền PayOS gói dịch vụ (màn Partner) — đó là billing subscription, tách hẳn với định khoản giao dịch ngân hàng.
+
+---
+
+## 7. Trang “Báo cáo định khoản” (`/reports`) giải thích
+
+**Mục đích:** Tổng hợp **thu / chi / lãi lỗ** trong tháng đã chọn, theo tài khoản TT133 — chỉ từ giao dịch **đã định khoản**.
+
+### 4 card tổng
+
+| Card | Cách tính (backend `report.service`) |
+|---|---|
+| **Tổng thu** | Tổng phát sinh **Có** trên TK loại `revenue` (5xx, vd 511) |
+| **Tổng chi** | Tổng phát sinh **Nợ** trên TK loại `expense` (6xx, vd 641, 627) |
+| **Lãi/Lỗ** | Tổng thu − Tổng chi |
+| **Độ chính xác AI** | `classifiedCount / totalCount` giao dịch trong tháng (vd 6/8 = 75%) |
+
+### Bảng “Chi tiết theo tài khoản”
+
+Mỗi dòng = một mã TK (112, 511, 641…):
+- **Phát sinh Nợ / Có** — tổng tiền qua TK đó trong tháng
+- **Số dư** — chênh lệch theo quy tắc kế toán
+- **Số GD** — số giao dịch đã định khoản có chạm TK đó
+
+### Xuất Excel
+
+- Yêu cầu gói **Pro+** (`PlanGuard` / `hasPlanAccess(..., PRO)`).
+- Gói thấp hơn: nút disabled + tooltip hướng nâng cấp.
+
+---
+
+## 8. Dashboard doanh nghiệp vs Báo cáo — khác gì?
+
+| | Dashboard (`/dashboard`) | Báo cáo (`/reports`) |
+|---|---|---|
+| **Nguồn** | Danh sách GD gần đây (client tính nhanh) | Backend aggregate theo TK |
+| **“Doanh thu hôm nay”** | Cộng số tiền **dương** của GD `classified` trong ngày | Không có card này |
+| **Chuẩn kế toán** | Gần “tiền vào đã định khoản” | Đúng TT133 (5xx / 6xx) |
+
+Dashboard tiện xem nhanh; **Báo cáo** là số liệu kế toán chính thức hơn cho cuối tháng.
+
+---
+
+## 9. Partner Dashboard — MRR vs tiền thực thu (PayOS)
+
+*Phần này chỉ trên giao diện **Cas Partner**, không liên quan định khoản giao dịch NH của tenant.*
+
+| Chỉ số | Nghĩa | Nguồn |
+|---|---|---|
+| **MRR (doanh thu định kỳ)** | “Nếu giữ nguyên gói hiện tại, tháng sau thu bao nhiêu?” — **dự kiến** | Tổng `pricePerMonth` subscription DN đang `active` |
+| **Thực thu (PayOS)** | Tiền **đã vào** từ đơn nâng cấp/gia hạn gói | `payment_orders` status `paid` |
+
+Hai số **có thể lệch** (DN chưa thanh toán tháng này, nâng cấp giữa tháng, DN bị khóa…).
+
+---
+
+## 10. Hệ thống tài khoản TT133 — các nhóm chính
 
 | Nhóm | Loại | Ví dụ |
 |---|---|---|
 | `1xx` | Tài sản ngắn hạn | `111` Tiền mặt, `112` Tiền gửi NH, `131` Phải thu KH |
-| `2xx` | Tài sản dài hạn | `211` TSCĐ hữu hình, `242` Chi phí trả trước |
+| `2xx` | Tài sản dài hạn | `211` TSCĐ, `242` Chi phí trả trước |
 | `3xx` | Nợ phải trả | `331` Phải trả NCC, `334` Phải trả NV, `333` Thuế |
 | `4xx` | Vốn chủ sở hữu | `411` Vốn đầu tư, `421` LNST chưa phân phối |
 | `5xx` | Doanh thu | `511` Doanh thu bán hàng/dịch vụ |
 | `6xx` | Chi phí | `632` Giá vốn, `641` Chi phí bán hàng, `642` Chi phí QL DN |
 | `7xx` | Thu nhập khác | `711` Thu nhập khác |
-| `8xx` | Chi phí khác / thuế | `811` Chi phí khác, `821` Chi phí thuế TNDN |
-| `9xx` | Tài khoản xác định kết quả | `911` Xác định kết quả kinh doanh |
+| `8xx` | Chi phí khác / thuế | `811`, `821` |
+| `9xx` | Xác định KQKD | `911` |
 
-> **TT133 vs TT200:** TT200 dành cho DN lớn, có thêm nhiều TK trung gian hơn (~100+ TK). X-Cash AI chỉ hỗ trợ TT133 (SME).
+Seed đầy đủ: `apps/backend/src/modules/chart-of-accounts/tt133-seed.ts`
 
 ---
 
-## Luồng trong X-Cash AI
+## 11. Luồng kỹ thuật trong X-Cash AI
 
 ```
 Giao dịch NH (webhook Cas)
         ↓
-  AI đọc mô tả GD
-  ("Chuyen tien thu phi dich vu thang 7")
+  Lưu transaction (status: pending)
+        ↓
+  BullMQ job "ai-classify"
         ↓
   OpenAI gpt-4o-mini + few-shot (pgvector)
-  → trả về: { debitAccount: "112", creditAccount: "511", confidence: 0.92 }
+  → { debitAccount, creditAccount, confidence }
         ↓
-  confidence ≥ 85%?
-  ├── Có → auto-classify, status = "classified"
-  └── Không → Human Review queue, status = "review"
+  confidence ≥ threshold (mặc định 85%)?
+  ├── Có → status = classified
+  └── Không → status = review  →  Human Review queue
         ↓
-  Kế toán xem lại (nếu cần), xác nhận hoặc sửa TK Nợ/Có
+  Kế toán confirm / correct / skip
+        ↓
+  Báo cáo, Copilot, Analytics (chỉ classified)
 ```
 
 ---
 
-## File quan trọng trong code
+## 12. File code quan trọng
 
 | File | Vai trò |
 |---|---|
-| `apps/backend/src/modules/chart-of-accounts/tt133-seed.ts` | ~60 tài khoản TT133, seed vào DB khi tenant đăng ký |
-| `apps/backend/src/modules/ai/classification.service.ts` | Gọi OpenAI, build prompt kèm danh mục TK + few-shot examples |
-| `apps/backend/src/modules/ai/embedding.service.ts` | pgvector: tìm 5 GD phân loại đúng gần nhất của tenant để làm few-shot |
-| `apps/backend/src/modules/classification/classification.service.ts` | Human Review: confirm / correct (sửa TK) / skip |
-| `apps/backend/prisma/schema.prisma` | `chart_of_accounts` table + `transaction_classifications` table |
+| `apps/backend/src/modules/chart-of-accounts/tt133-seed.ts` | ~60 TK TT133, seed khi tenant đăng ký |
+| `apps/backend/src/modules/ai/classification.service.ts` | Gọi OpenAI, rule-based fallback, ghi `transaction_classifications` |
+| `apps/backend/src/modules/ai/embedding.service.ts` | pgvector few-shot (lưu ý: `id`/`tenant_id` là `text`, không cast `::uuid` trong raw SQL) |
+| `apps/backend/src/modules/classification/classification.service.ts` | Human Review: confirm / correct / skip |
+| `apps/backend/src/modules/report/report.service.ts` | Tổng thu/chi theo `accountType` + chỉ `classified` |
+| `apps/frontend/src/pages/reports/ReportsPage.tsx` | UI Báo cáo định khoản |
+| `apps/frontend/src/pages/review/ReviewPage.tsx` | UI Human Review |
 
 ---
 
-## Những gì dev KHÔNG cần lo
+## 13. Câu hỏi thường gặp
 
-- Tại sao TK này ghi Nợ chứ không ghi Có → đó là nghiệp vụ kế toán, AI + kế toán xử lý
-- Định nghĩa chính xác từng TK → xem `tt133-seed.ts` hoặc hỏi kế toán
-- Số dư đầu kỳ / cuối kỳ / bảng cân đối → X-Cash AI không làm phần này (chỉ phân loại GD real-time)
+**Q: AI sai thì sao?**  
+A: Confidence < ngưỡng → Human Review. Kế toán sửa → lưu DB → embedding làm few-shot cho lần sau (theo tenant).
+
+**Q: Tenant có thể thêm TK tùy chỉnh không?**  
+A: Có — `POST /accounts`. TK tự thêm vẫn dùng được khi định khoản.
+
+**Q: Tại sao báo cáo chỉ 6/8 giao dịch?**  
+A: 2 giao dịch còn lại đang `pending`, `review`, hoặc `skipped` — chưa hoặc không được tính vào báo cáo.
+
+**Q: “Cho AI định khoản lại” làm gì?**  
+A: `POST /transactions/:id/reclassify` — enqueue lại job AI cho GD `pending`. Cần Redis + worker chạy. UI sheet tự poll mỗi 2.5s đến khi xong.
+
+**Q: Dev có cần học kế toán không?**  
+A: Không cần thiết — hiểu file này + `tt133-seed.ts` là đủ để code đúng luồng. Chi tiết nghiệp vụ từng TK hỏi kế toán / product owner.
+
+**Q: X-Cash có làm bảng cân đối kế toán đầy đủ không?**  
+A: Không — focus **phân loại GD real-time + báo cáo thu/chi theo tháng + export Excel**, không thay MISA/FAST.
 
 ---
 
-## Câu hỏi thường gặp
+## 14. Tài liệu liên quan
 
-**Q: AI sai thì sao?**
-A: Confidence < 85% → vào Human Review. Kế toán sửa TK Nợ/Có → kết quả đúng được lưu vào DB → làm few-shot cho lần sau (AI tự học theo tenant).
-
-**Q: Tenant có thể thêm TK tùy chỉnh không?**
-A: Có — `POST /accounts` cho phép thêm TK ngoài seed mặc định. TK tự thêm vẫn dùng được trong phân loại.
-
-**Q: TT133 có bị thay thế không?**
-A: Hiện vẫn hiệu lực cho SME. DN lớn dùng TT200. X-Cash AI chỉ target SME nên chỉ cần TT133.
+- [`business-overview.md`](./business-overview.md) — tổng quan sản phẩm, AI pipeline, webhook
+- [`user-journey.md`](./user-journey.md) — hành trình onboarding → review → báo cáo
+- [`database-schema.md`](./database-schema.md) — bảng `transactions`, `transaction_classifications`, `chart_of_accounts`
+- [`rbac.md`](./rbac.md) — ai được confirm review, ai được export Excel

@@ -1,8 +1,10 @@
-import { useQuery } from '@tanstack/react-query';
-import { Sparkles } from 'lucide-react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { Loader2, Sparkles } from 'lucide-react';
+import { toast } from 'sonner';
 import { ConfidenceBadge } from '@/components/shared/ConfidenceBadge';
 import { SignedTransactionAmount } from '@/components/shared/SignedTransactionAmount';
 import { TransactionStatusBadge } from '@/components/shared/TransactionStatusBadge';
+import { Button } from '@/components/ui/button';
 import {
   Sheet,
   SheetContent,
@@ -11,7 +13,7 @@ import {
   SheetTitle,
 } from '@/components/ui/sheet';
 import { Skeleton } from '@/components/ui/skeleton';
-import { getApiData } from '@/lib/api';
+import { getApiData, postApiData } from '@/lib/api';
 import { formatTransactionDateTime } from '@/lib/dashboard-transactions';
 import type { TransactionDetail, TransactionSummary } from '@/types/transaction';
 
@@ -27,15 +29,32 @@ export function TransactionDetailSheet({
   onOpenChange,
 }: TransactionDetailSheetProps) {
   const transactionId = transaction?.id;
+  const queryClient = useQueryClient();
 
   const { data: detail, isLoading } = useQuery({
     queryKey: ['transactions', transactionId, 'detail'],
     queryFn: () => getApiData<TransactionDetail>(`/transactions/${transactionId}`),
     enabled: open && Boolean(transactionId),
+    // AI định khoản bất đồng bộ qua hàng đợi → poll khi còn 'pending' để tự cập nhật UI.
+    refetchInterval: (query) => (query.state.data?.status === 'pending' ? 2500 : false),
   });
 
   const displayTxn = detail ?? transaction;
   const classification = detail?.classification ?? transaction?.classification;
+  const isPending = displayTxn?.status === 'pending';
+
+  const reclassifyMutation = useMutation({
+    mutationFn: () => postApiData(`/transactions/${transactionId}/reclassify`),
+    onSuccess: () => {
+      toast.success('Đã gửi yêu cầu — AI sẽ định khoản trong giây lát');
+      queryClient.invalidateQueries({ queryKey: ['transactions', transactionId, 'detail'] });
+      queryClient.invalidateQueries({ queryKey: ['transactions'] });
+    },
+    onError: () => toast.error('Không thể gửi yêu cầu định khoản lại'),
+  });
+
+  // Đang chờ AI: vừa gửi yêu cầu (hoặc đang gửi) và giao dịch vẫn còn pending.
+  const waitingForAi = (reclassifyMutation.isPending || reclassifyMutation.isSuccess) && isPending;
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -86,9 +105,36 @@ export function TransactionDetailSheet({
               </div>
 
               {!classification ? (
-                <p className="text-sm text-muted-foreground">
-                  Chưa có định khoản. AI sẽ xử lý giao dịch này sớm.
-                </p>
+                <div className="space-y-3">
+                  {isPending && waitingForAi ? (
+                    <p className="flex items-center gap-2 text-sm text-muted-foreground">
+                      <Loader2 className="size-4 animate-spin" />
+                      AI đang định khoản, vui lòng đợi trong giây lát…
+                    </p>
+                  ) : (
+                    <>
+                      <p className="text-sm text-muted-foreground">
+                        {isPending
+                          ? 'Giao dịch đang chờ AI định khoản. Bấm nút bên dưới để yêu cầu AI xử lý ngay.'
+                          : 'Chưa có định khoản cho giao dịch này.'}
+                      </p>
+                      {isPending ? (
+                        <Button
+                          size="sm"
+                          onClick={() => reclassifyMutation.mutate()}
+                          disabled={reclassifyMutation.isPending}
+                        >
+                          {reclassifyMutation.isPending ? (
+                            <Loader2 className="size-4 animate-spin" />
+                          ) : (
+                            <Sparkles className="size-4" />
+                          )}
+                          Cho AI định khoản lại
+                        </Button>
+                      ) : null}
+                    </>
+                  )}
+                </div>
               ) : (
                 <div className="rounded-lg border p-4 space-y-3">
                   <div className="grid grid-cols-2 gap-4">

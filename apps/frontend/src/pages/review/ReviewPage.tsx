@@ -20,6 +20,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { api } from '@/lib/api';
+import { formatDateVN } from '@/lib/dashboard-transactions';
 
 interface ClassificationItem {
   id: string;
@@ -66,7 +67,7 @@ function formatAmount(amount: string | number) {
 }
 
 function formatDate(dateStr: string) {
-  return new Date(dateStr).toLocaleDateString('vi-VN');
+  return formatDateVN(dateStr);
 }
 
 const SWIPE_THRESHOLD = 80;
@@ -164,6 +165,7 @@ export default function ReviewPage() {
   const queryClient = useQueryClient();
   const [page] = useState(1);
   const [correctDialog, setCorrectDialog] = useState<ClassificationItem | null>(null);
+  const [confirmTarget, setConfirmTarget] = useState<ClassificationItem | null>(null);
   const [skipTarget, setSkipTarget] = useState<ClassificationItem | null>(null);
   const [debitAccount, setDebitAccount] = useState('');
   const [creditAccount, setCreditAccount] = useState('');
@@ -173,12 +175,16 @@ export default function ReviewPage() {
     queryFn: () => fetchReviewQueue(page),
   });
 
-  const invalidate = () => queryClient.invalidateQueries({ queryKey: ['review-queue'] });
+  const invalidate = () => {
+    queryClient.invalidateQueries({ queryKey: ['review-queue'] });
+    queryClient.invalidateQueries({ queryKey: ['review', 'count'] });
+  };
 
   const confirmMutation = useMutation({
     mutationFn: confirmReview,
     onSuccess: () => {
       toast.success('Đã xác nhận định khoản');
+      setConfirmTarget(null);
       invalidate();
     },
     onError: () => toast.error('Không thể xác nhận'),
@@ -243,7 +249,7 @@ export default function ReviewPage() {
                     <SwipeableReviewCard
                       key={item.id}
                       item={item}
-                      onConfirm={() => confirmMutation.mutate(item.id)}
+                      onConfirm={() => setConfirmTarget(item)}
                       onSkip={() => setSkipTarget(item)}
                       onCorrect={() => openCorrect(item)}
                       disabled={confirmMutation.isPending || skipMutation.isPending}
@@ -289,7 +295,7 @@ export default function ReviewPage() {
                                 size="icon-sm"
                                 variant="ghost"
                                 title="Xác nhận"
-                                onClick={() => confirmMutation.mutate(item.id)}
+                                onClick={() => setConfirmTarget(item)}
                                 disabled={confirmMutation.isPending}
                               >
                                 <CheckCircle className="size-4 text-green-600" />
@@ -376,6 +382,22 @@ export default function ReviewPage() {
             </DialogFooter>
           </DialogContent>
         </Dialog>
+
+        <ConfirmDialog
+          open={confirmTarget !== null}
+          onOpenChange={(open) => !open && setConfirmTarget(null)}
+          title="Xác nhận định khoản này?"
+          description={
+            confirmTarget
+              ? `Định khoản ${confirmTarget.debitAccount}/${confirmTarget.creditAccount} cho giao dịch "${confirmTarget.transaction.content ?? 'Không có nội dung'}" sẽ được ghi nhận.`
+              : ''
+          }
+          confirmLabel="Xác nhận"
+          loading={confirmMutation.isPending}
+          onConfirm={() => {
+            if (confirmTarget) confirmMutation.mutate(confirmTarget.id);
+          }}
+        />
 
         <ConfirmDialog
           open={skipTarget !== null}

@@ -371,6 +371,7 @@ Admin thấy gói đã đổi ngay trên UI (TanStack Query invalidate)
 ### API liên quan đến Pricing & Billing
 
 ```
+GET    /api/v1/billing/plans              # Danh sách gói + giá/quota hiện tại (đọc từ plan_pricing)
 GET    /api/v1/billing/current-plan       # Gói hiện tại, đã dùng bao nhiêu/quota
 GET    /api/v1/billing/usage-history      # Lịch sử dùng theo tháng (cho Admin xem)
 POST   /api/v1/billing/upgrade            # Tạo PayOS Payment Link để nâng cấp gói
@@ -403,6 +404,7 @@ GET    /api/v1/partner/revenue/:tenantId  # Doanh thu của 1 tenant cụ thể
 | | Xác nhận định khoản AI gợi ý | ✅ | ✅ | ❌ |
 | | Sửa định khoản (chọn TK Nợ/Có khác) | ✅ | ✅ | ❌ |
 | | Skip giao dịch | ✅ | ✅ | ❌ |
+| | Yêu cầu AI định khoản lại (giao dịch pending) | ✅ | ✅ | ❌ |
 | **Định khoản** | Xem định khoản giao dịch | ✅ | ✅ | ✅ |
 | | Ghi đè định khoản thủ công | ✅ | ✅ | ❌ |
 | **Danh mục TK (TT133)** | Xem danh mục tài khoản | ✅ | ✅ | ✅ |

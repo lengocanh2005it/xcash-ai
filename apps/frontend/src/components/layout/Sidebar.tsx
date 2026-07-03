@@ -1,3 +1,4 @@
+import { SubscriptionPlan } from '@xcash/shared-types';
 import type { LucideIcon } from 'lucide-react';
 import {
   BarChart3,
@@ -6,6 +7,7 @@ import {
   ClipboardCheck,
   LayoutDashboard,
   LineChart,
+  Lock,
   LogOut,
   PanelLeft,
   PanelLeftClose,
@@ -20,6 +22,7 @@ import { Logo } from '@/components/brand/Logo';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/hooks/useAuth';
 import { useReviewCount } from '@/hooks/useReviewCount';
+import { hasPlanAccess } from '@/lib/plan';
 import { cn } from '@/lib/utils';
 
 interface NavItem {
@@ -27,6 +30,8 @@ interface NavItem {
   label: string;
   icon: LucideIcon;
   disabled?: boolean;
+  /** Gói tối thiểu để dùng — hiện icon khóa nếu chưa đủ. */
+  minPlan?: SubscriptionPlan;
 }
 
 export const navItems: NavItem[] = [
@@ -34,9 +39,9 @@ export const navItems: NavItem[] = [
   { to: '/transactions', label: 'Giao dịch', icon: Receipt },
   { to: '/review', label: 'Human Review', icon: ClipboardCheck },
   { to: '/reports', label: 'Báo cáo', icon: BarChart3 },
-  { to: '/analytics', label: 'Phân tích', icon: LineChart },
+  { to: '/analytics', label: 'Phân tích', icon: LineChart, minPlan: SubscriptionPlan.STARTER },
   { to: '/accounts', label: 'Danh mục TK', icon: BookOpen },
-  { to: '/copilot', label: 'AI Copilot', icon: Bot },
+  { to: '/copilot', label: 'AI Copilot', icon: Bot, minPlan: SubscriptionPlan.STARTER },
   { to: '/settings', label: 'Cài đặt', icon: Settings },
 ];
 
@@ -69,11 +74,13 @@ function NavItemLink({
   collapsed,
   onNavigate,
   badgeCount,
+  locked,
 }: {
   item: NavItem;
   collapsed: boolean;
   onNavigate?: () => void;
   badgeCount?: number;
+  locked?: boolean;
 }) {
   const Icon = item.icon;
 
@@ -103,6 +110,13 @@ function NavItemLink({
         >
           {badgeCount > 99 ? '99+' : badgeCount}
         </span>
+      ) : locked ? (
+        <Lock
+          className={cn(
+            'size-3.5 text-muted-foreground',
+            collapsed ? 'absolute top-1 right-1' : 'ml-auto',
+          )}
+        />
       ) : null}
     </NavLink>
   );
@@ -209,6 +223,7 @@ export function SidebarContent({
               collapsed={collapsed}
               onNavigate={onNavigate}
               badgeCount={item.to === '/review' ? reviewCount : undefined}
+              locked={item.minPlan ? !hasPlanAccess(user?.plan, item.minPlan) : false}
             />
           ))}
         </div>

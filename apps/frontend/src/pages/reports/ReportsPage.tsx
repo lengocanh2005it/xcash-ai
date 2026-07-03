@@ -1,4 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
+import { SubscriptionPlan } from '@xcash/shared-types';
 import { Brain, Download, Scale, TrendingDown, TrendingUp } from 'lucide-react';
 import { useState } from 'react';
 import { toast } from 'sonner';
@@ -8,8 +9,11 @@ import { EmptyState } from '@/components/shared/EmptyState';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { useAuth } from '@/hooks/useAuth';
 import { api } from '@/lib/api';
 import { formatVND } from '@/lib/format-vnd';
+import { hasPlanAccess, PLAN_LABEL } from '@/lib/plan';
 
 interface SummaryData {
   period: { year: number; month: number };
@@ -48,6 +52,9 @@ const MONTHS = [
 
 export default function ReportsPage() {
   const now = new Date();
+  const { user } = useAuth();
+  const canExport = hasPlanAccess(user?.plan, SubscriptionPlan.PRO);
+  const requiredPlanLabel = PLAN_LABEL[SubscriptionPlan.PRO];
   const [year, setYear] = useState(now.getFullYear());
   const [month, setMonth] = useState(now.getMonth() + 1);
 
@@ -118,10 +125,27 @@ export default function ReportsPage() {
                 </option>
               ))}
             </select>
-            <Button onClick={handleExport} disabled={isLoading}>
-              <Download className="mr-2 size-4" />
-              Xuất Excel
-            </Button>
+            {canExport ? (
+              <Button onClick={handleExport} disabled={isLoading}>
+                <Download className="mr-2 size-4" />
+                Xuất Excel
+              </Button>
+            ) : (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  {/* Nút disabled không phát sự kiện hover → bọc span làm trigger tooltip. */}
+                  <span className="inline-flex cursor-not-allowed">
+                    <Button disabled className="pointer-events-none">
+                      <Download className="mr-2 size-4" />
+                      Xuất Excel
+                    </Button>
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent>
+                  Nâng cấp lên gói {requiredPlanLabel} để mở khóa tính năng Xuất Excel
+                </TooltipContent>
+              </Tooltip>
+            )}
           </div>
         }
       />

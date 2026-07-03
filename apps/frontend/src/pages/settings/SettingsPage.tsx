@@ -41,6 +41,7 @@ import { Separator } from '@/components/ui/separator';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Switch } from '@/components/ui/switch';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useAuth } from '@/hooks/useAuth';
 import { api } from '@/lib/api';
 import { formatDateVN } from '@/lib/dashboard-transactions';
@@ -110,6 +111,8 @@ function NotificationsTab() {
   const { user } = useAuth();
   const canEmail = hasPlanAccess(user?.plan, SubscriptionPlan.STARTER);
   const canSlack = hasPlanAccess(user?.plan, SubscriptionPlan.PRO);
+  // Cả 2 kênh đều bị khoá → không có gì để cấu hình → khoá luôn nút lưu.
+  const allLocked = !canEmail && !canSlack;
   const { data, isLoading } = useQuery({
     queryKey: ['settings', 'notifications'],
     queryFn: () =>
@@ -220,9 +223,25 @@ function NotificationsTab() {
           )}
         </div>
 
-        <Button onClick={() => save()} disabled={isPending}>
-          Lưu cấu hình
-        </Button>
+        {allLocked ? (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              {/* Nút disabled không phát sự kiện hover → bọc span làm trigger tooltip. */}
+              <span className="inline-flex cursor-not-allowed">
+                <Button disabled className="pointer-events-none">
+                  Lưu cấu hình
+                </Button>
+              </span>
+            </TooltipTrigger>
+            <TooltipContent>
+              Nâng cấp lên gói {PLAN_LABEL[SubscriptionPlan.STARTER]} trở lên để bật thông báo
+            </TooltipContent>
+          </Tooltip>
+        ) : (
+          <Button onClick={() => save()} disabled={isPending}>
+            Lưu cấu hình
+          </Button>
+        )}
       </CardContent>
     </Card>
   );

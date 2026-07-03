@@ -4,6 +4,13 @@
  *
  * Chạy:
  *   pnpm --filter @xcash/backend run prisma:seed:partners
+ *
+ * Nguyên tắc "các con số phải khớp":
+ * - Giá gói / quota lấy từ 1 nguồn duy nhất (PLAN_PRICE / PLAN_QUOTA), khớp bảng `plan_pricing`.
+ * - subscription.pricePerMonth = PLAN_PRICE[plan]; payment_order.amount = PLAN_PRICE[plan của kỳ đó].
+ * - Mọi DN đang hoạt động & trả phí đều có 1 payment ở tháng hiện tại → "thực thu tháng này" == MRR.
+ * - Giao dịch "thu" (tiền vào, +) luôn ghi Có TK doanh thu (511); "chi" (tiền ra, −) luôn ghi Nợ TK
+ *   chi phí (6xx) → doanh thu/chi phí trong báo cáo == tổng tiền vào/ra của các GD đã định khoản.
  */
 
 import {
@@ -22,34 +29,51 @@ const prisma = new PrismaClient();
 const EMAIL_SUFFIX = '@xcash-demo.vn';
 const PASSWORD = 'Demo@12345';
 
-const COMMON_ACCOUNT_PAIRS: Array<{ debit: string; credit: string; type: 'revenue' | 'expense' }> =
-  [
-    { debit: '112', credit: '511', type: 'revenue' },
-    { debit: '111', credit: '511', type: 'revenue' },
-    { debit: '112', credit: '131', type: 'revenue' },
-    { debit: '334', credit: '112', type: 'expense' },
-    { debit: '642', credit: '112', type: 'expense' },
-    { debit: '627', credit: '112', type: 'expense' },
-    { debit: '641', credit: '112', type: 'expense' },
-    { debit: '635', credit: '112', type: 'expense' },
-    { debit: '333', credit: '112', type: 'expense' },
-    { debit: '152', credit: '112', type: 'expense' },
-  ];
+const PARTNER_EMAIL = 'partner@xcash.ai';
+const PARTNER_PASSWORD = 'Partner@123';
+const PARTNER_NAME = 'Cas Partner Admin';
+
+// Nguồn sự thật duy nhất về giá & quota — PHẢI khớp migration `add_plan_pricing`.
+const PLAN_PRICE: Record<SubscriptionPlan, number> = {
+  free: 0,
+  starter: 299_000,
+  pro: 799_000,
+  enterprise: 2_500_000,
+};
+const PLAN_QUOTA: Record<SubscriptionPlan, number> = {
+  free: 50,
+  starter: 500,
+  pro: 2_000,
+  enterprise: 999_999,
+};
+
+// GD "thu" (tiền vào, +): luôn ghi Có TK doanh thu 511 → tính vào doanh thu.
+const REVENUE_PAIRS: Array<{ debit: string; credit: string }> = [
+  { debit: '112', credit: '511' },
+  { debit: '111', credit: '511' },
+];
+// GD "chi" (tiền ra, −): luôn ghi Nợ TK chi phí 6xx → tính vào chi phí.
+const EXPENSE_PAIRS: Array<{ debit: string; credit: string }> = [
+  { debit: '642', credit: '112' },
+  { debit: '627', credit: '112' },
+  { debit: '641', credit: '112' },
+  { debit: '635', credit: '112' },
+  { debit: '632', credit: '112' },
+];
 
 const CONTENT_SAMPLES = {
   revenue: [
     'CK TIEN HANG THANG',
     'THANH TOAN DON HANG',
     'THU PHI DICH VU',
-    'KHACH HANG TT CONG NO',
+    'KHACH HANG TT DON HANG',
     'DOANH THU BAN LE',
   ],
   expense: [
     'TRA LUONG NHAN VIEN',
     'THANH TOAN HOA DON DIEN NUOC',
-    'MUA VAT TU VAN PHONG',
     'CHI PHI VAN CHUYEN',
-    'NOP THUE GTGT',
+    'CHI PHI MARKETING QUANG CAO',
     'TRA LAI VAY NGAN HANG',
     'THUE MAT BANG KINH DOANH',
   ],
@@ -70,31 +94,34 @@ const BANKS = [
 interface PaymentHistoryEntry {
   monthsAgo: number;
   plan: SubscriptionPlan;
-  amount: number;
 }
 
 interface TenantSeedConfig {
   businessName: string;
+  ownerName: string;
   slug: string;
   plan: SubscriptionPlan;
   status: SubscriptionStatus;
-  pricePerMonth: number;
-  transactionQuota: number;
   monthlyTxCount: number;
   aiAccuracyTarget: number; // 0-100, % giao dịch auto-classify với confidence cao
   reviewPct: number; // % rơi vào review queue
   skippedPct: number;
+  /**
+   * Lịch sử thanh toán theo tháng. Quy ước:
+   * - DN đang hoạt động & trả phí PHẢI có entry monthsAgo=0 với plan = plan hiện tại.
+   * - DN bị khóa dừng thanh toán trước tháng hiện tại (không có monthsAgo=0).
+   * - Gói Free không có payment.
+   */
   paymentHistory: PaymentHistoryEntry[];
 }
 
 const TENANTS: TenantSeedConfig[] = [
   {
     businessName: 'Cửa hàng Tiện Lợi Mini Mart',
+    ownerName: 'Trần Thị Mai',
     slug: 'minimart',
     plan: 'free',
     status: 'active',
-    pricePerMonth: 0,
-    transactionQuota: 50,
     monthlyTxCount: 32,
     aiAccuracyTarget: 90,
     reviewPct: 8,
@@ -103,11 +130,10 @@ const TENANTS: TenantSeedConfig[] = [
   },
   {
     businessName: 'Studio Ảnh Cưới Hạnh Phúc',
+    ownerName: 'Nguyễn Hoàng Phúc',
     slug: 'hanhphuc-studio',
     plan: 'free',
     status: 'active',
-    pricePerMonth: 0,
-    transactionQuota: 50,
     monthlyTxCount: 12,
     aiAccuracyTarget: 82,
     reviewPct: 15,
@@ -116,150 +142,151 @@ const TENANTS: TenantSeedConfig[] = [
   },
   {
     businessName: 'Phòng khám Nha khoa Sài Gòn',
+    ownerName: 'Lê Quang Đạt',
     slug: 'nhakhoa-saigon',
     plan: 'starter',
     status: 'active',
-    pricePerMonth: 299_000,
-    transactionQuota: 500,
     monthlyTxCount: 410,
     aiAccuracyTarget: 88,
     reviewPct: 10,
     skippedPct: 2,
     paymentHistory: [
-      { monthsAgo: 5, plan: 'starter', amount: 299_000 },
-      { monthsAgo: 4, plan: 'starter', amount: 299_000 },
-      { monthsAgo: 3, plan: 'starter', amount: 299_000 },
-      { monthsAgo: 2, plan: 'starter', amount: 299_000 },
-      { monthsAgo: 1, plan: 'starter', amount: 299_000 },
-      { monthsAgo: 0, plan: 'starter', amount: 299_000 },
+      { monthsAgo: 5, plan: 'starter' },
+      { monthsAgo: 4, plan: 'starter' },
+      { monthsAgo: 3, plan: 'starter' },
+      { monthsAgo: 2, plan: 'starter' },
+      { monthsAgo: 1, plan: 'starter' },
+      { monthsAgo: 0, plan: 'starter' },
     ],
   },
   {
     businessName: 'Xưởng May Đồng Tâm',
+    ownerName: 'Phạm Văn Tâm',
     slug: 'may-dongtam',
     plan: 'starter',
     status: 'suspended',
-    pricePerMonth: 299_000,
-    transactionQuota: 500,
     monthlyTxCount: 180,
     aiAccuracyTarget: 70,
     reviewPct: 22,
     skippedPct: 8,
+    // Bị khóa: dừng thanh toán 2 tháng trước, không có payment tháng này.
     paymentHistory: [
-      { monthsAgo: 5, plan: 'starter', amount: 299_000 },
-      { monthsAgo: 4, plan: 'starter', amount: 299_000 },
-      { monthsAgo: 3, plan: 'starter', amount: 299_000 },
+      { monthsAgo: 5, plan: 'starter' },
+      { monthsAgo: 4, plan: 'starter' },
+      { monthsAgo: 3, plan: 'starter' },
+      { monthsAgo: 2, plan: 'starter' },
     ],
   },
   {
     businessName: 'Công ty Xây dựng Đại Phát',
+    ownerName: 'Vũ Đại Phát',
     slug: 'daiphat-xd',
     plan: 'starter',
     status: 'active',
-    pricePerMonth: 299_000,
-    transactionQuota: 500,
     monthlyTxCount: 340,
     aiAccuracyTarget: 84,
     reviewPct: 12,
     skippedPct: 3,
     paymentHistory: [
-      { monthsAgo: 3, plan: 'starter', amount: 299_000 },
-      { monthsAgo: 2, plan: 'starter', amount: 299_000 },
-      { monthsAgo: 1, plan: 'starter', amount: 299_000 },
+      { monthsAgo: 4, plan: 'starter' },
+      { monthsAgo: 3, plan: 'starter' },
+      { monthsAgo: 2, plan: 'starter' },
+      { monthsAgo: 1, plan: 'starter' },
+      { monthsAgo: 0, plan: 'starter' },
     ],
   },
   {
     businessName: 'Quán Cà phê Highlands Nhượng Quyền',
+    ownerName: 'Đặng Minh Khoa',
     slug: 'highlands-nq',
     plan: 'pro',
     status: 'active',
-    pricePerMonth: 799_000,
-    transactionQuota: 2000,
     monthlyTxCount: 1750,
     aiAccuracyTarget: 93,
     reviewPct: 6,
     skippedPct: 1,
+    // Nâng cấp Starter → Pro cách đây 3 tháng.
     paymentHistory: [
-      { monthsAgo: 5, plan: 'starter', amount: 299_000 },
-      { monthsAgo: 4, plan: 'starter', amount: 299_000 },
-      { monthsAgo: 3, plan: 'pro', amount: 799_000 },
-      { monthsAgo: 2, plan: 'pro', amount: 799_000 },
-      { monthsAgo: 1, plan: 'pro', amount: 799_000 },
-      { monthsAgo: 0, plan: 'pro', amount: 799_000 },
+      { monthsAgo: 5, plan: 'starter' },
+      { monthsAgo: 4, plan: 'starter' },
+      { monthsAgo: 3, plan: 'pro' },
+      { monthsAgo: 2, plan: 'pro' },
+      { monthsAgo: 1, plan: 'pro' },
+      { monthsAgo: 0, plan: 'pro' },
     ],
   },
   {
     businessName: 'Công ty TNHH Vận tải Phương Nam',
+    ownerName: 'Bùi Thanh Phương',
     slug: 'phuongnam-vt',
     plan: 'pro',
     status: 'active',
-    pricePerMonth: 799_000,
-    transactionQuota: 2000,
-    monthlyTxCount: 2150,
+    monthlyTxCount: 1850,
     aiAccuracyTarget: 91,
     reviewPct: 7,
     skippedPct: 2,
     paymentHistory: [
-      { monthsAgo: 5, plan: 'pro', amount: 799_000 },
-      { monthsAgo: 4, plan: 'pro', amount: 799_000 },
-      { monthsAgo: 3, plan: 'pro', amount: 799_000 },
-      { monthsAgo: 2, plan: 'pro', amount: 799_000 },
-      { monthsAgo: 1, plan: 'pro', amount: 799_000 },
+      { monthsAgo: 5, plan: 'pro' },
+      { monthsAgo: 4, plan: 'pro' },
+      { monthsAgo: 3, plan: 'pro' },
+      { monthsAgo: 2, plan: 'pro' },
+      { monthsAgo: 1, plan: 'pro' },
+      { monthsAgo: 0, plan: 'pro' },
     ],
   },
   {
     businessName: 'Trường Mầm non Ánh Dương',
+    ownerName: 'Hoàng Thị Ánh',
     slug: 'anhduong-mn',
     plan: 'pro',
     status: 'suspended',
-    pricePerMonth: 799_000,
-    transactionQuota: 2000,
     monthlyTxCount: 520,
     aiAccuracyTarget: 65,
     reviewPct: 25,
     skippedPct: 10,
+    // Bị khóa: dừng thanh toán trước tháng này.
     paymentHistory: [
-      { monthsAgo: 4, plan: 'pro', amount: 799_000 },
-      { monthsAgo: 3, plan: 'pro', amount: 799_000 },
+      { monthsAgo: 4, plan: 'pro' },
+      { monthsAgo: 3, plan: 'pro' },
     ],
   },
   {
     businessName: 'Chuỗi Nhà thuốc Long Châu Mini',
+    ownerName: 'Ngô Long Châu',
     slug: 'longchau-mini',
     plan: 'enterprise',
     status: 'active',
-    pricePerMonth: 2_500_000,
-    transactionQuota: 999_999,
     monthlyTxCount: 4800,
     aiAccuracyTarget: 95,
     reviewPct: 4,
     skippedPct: 1,
+    // Nâng cấp Pro → Enterprise cách đây 3 tháng.
     paymentHistory: [
-      { monthsAgo: 5, plan: 'pro', amount: 799_000 },
-      { monthsAgo: 4, plan: 'pro', amount: 799_000 },
-      { monthsAgo: 3, plan: 'enterprise', amount: 2_500_000 },
-      { monthsAgo: 2, plan: 'enterprise', amount: 2_500_000 },
-      { monthsAgo: 1, plan: 'enterprise', amount: 2_500_000 },
+      { monthsAgo: 5, plan: 'pro' },
+      { monthsAgo: 4, plan: 'pro' },
+      { monthsAgo: 3, plan: 'enterprise' },
+      { monthsAgo: 2, plan: 'enterprise' },
+      { monthsAgo: 1, plan: 'enterprise' },
+      { monthsAgo: 0, plan: 'enterprise' },
     ],
   },
   {
     businessName: 'Công ty CP Bán lẻ Sài Gòn Xanh',
+    ownerName: 'Trương Gia Bảo',
     slug: 'saigonxanh',
     plan: 'enterprise',
     status: 'active',
-    pricePerMonth: 2_500_000,
-    transactionQuota: 999_999,
     monthlyTxCount: 3600,
     aiAccuracyTarget: 89,
     reviewPct: 9,
     skippedPct: 2,
     paymentHistory: [
-      { monthsAgo: 5, plan: 'enterprise', amount: 2_500_000 },
-      { monthsAgo: 4, plan: 'enterprise', amount: 2_500_000 },
-      { monthsAgo: 3, plan: 'enterprise', amount: 2_500_000 },
-      { monthsAgo: 2, plan: 'enterprise', amount: 2_500_000 },
-      { monthsAgo: 1, plan: 'enterprise', amount: 2_500_000 },
-      { monthsAgo: 0, plan: 'enterprise', amount: 2_500_000 },
+      { monthsAgo: 5, plan: 'enterprise' },
+      { monthsAgo: 4, plan: 'enterprise' },
+      { monthsAgo: 3, plan: 'enterprise' },
+      { monthsAgo: 2, plan: 'enterprise' },
+      { monthsAgo: 1, plan: 'enterprise' },
+      { monthsAgo: 0, plan: 'enterprise' },
     ],
   },
 ];
@@ -309,6 +336,9 @@ async function seedTenant(config: TenantSeedConfig): Promise<void> {
   const email = `admin.${config.slug}${EMAIL_SUFFIX}`;
   const existingUser = await prisma.user.findUnique({ where: { email } });
 
+  const pricePerMonth = PLAN_PRICE[config.plan];
+  const transactionQuota = PLAN_QUOTA[config.plan];
+
   let tenantId: string;
   let adminUserId: string;
 
@@ -324,12 +354,12 @@ async function seedTenant(config: TenantSeedConfig): Promise<void> {
   } else {
     const passwordHash = await bcrypt.hash(PASSWORD, 12);
     const tenant = await prisma.tenant.create({
-      data: { businessName: config.businessName },
+      data: { businessName: config.businessName, ownerName: config.ownerName },
     });
     const adminUser = await prisma.user.create({
       data: {
         tenantId: tenant.id,
-        name: config.businessName,
+        name: config.ownerName,
         email,
         passwordHash,
         role: 'admin',
@@ -350,9 +380,9 @@ async function seedTenant(config: TenantSeedConfig): Promise<void> {
     data: {
       tenantId,
       plan: config.plan,
-      pricePerMonth: config.pricePerMonth,
-      transactionQuota: config.transactionQuota,
-      transactionUsedThisCycle: Math.min(config.monthlyTxCount, config.transactionQuota),
+      pricePerMonth,
+      transactionQuota,
+      transactionUsedThisCycle: Math.min(config.monthlyTxCount, transactionQuota),
       status: config.status,
       currentCycleEnd: cycleEnd,
     },
@@ -374,15 +404,16 @@ async function seedTenant(config: TenantSeedConfig): Promise<void> {
   }
 
   for (const p of config.paymentHistory) {
+    const paidDate = dateMonthsAgo(p.monthsAgo, randomInt(1, 27));
     await prisma.paymentOrder.create({
       data: {
         tenantId,
         orderCode: `SEED-${config.slug}-${p.monthsAgo}`,
         targetPlan: p.plan,
-        amount: p.amount,
+        amount: PLAN_PRICE[p.plan],
         status: 'paid',
-        paidAt: dateMonthsAgo(p.monthsAgo, randomInt(1, 27)),
-        createdAt: dateMonthsAgo(p.monthsAgo, randomInt(1, 27)),
+        paidAt: paidDate,
+        createdAt: paidDate,
       },
     });
   }
@@ -391,12 +422,11 @@ async function seedTenant(config: TenantSeedConfig): Promise<void> {
     const roll = Math.random() * 100;
     const isReview = roll < config.reviewPct;
     const isSkipped = !isReview && roll < config.reviewPct + config.skippedPct;
-    const isRevenue = Math.random() < 0.35;
-    const pair = pick(
-      COMMON_ACCOUNT_PAIRS.filter((p) => p.type === (isRevenue ? 'revenue' : 'expense')),
-    );
+    const isRevenue = Math.random() < 0.45;
+    const pair = isRevenue ? pick(REVENUE_PAIRS) : pick(EXPENSE_PAIRS);
     const content = pick(isRevenue ? CONTENT_SAMPLES.revenue : CONTENT_SAMPLES.expense);
-    const amount = isRevenue ? randomInt(500_000, 25_000_000) : -randomInt(100_000, 20_000_000);
+    // Tiền vào (+) cho doanh thu; tiền ra (−) cho chi phí — dấu khớp với loại TK.
+    const amount = isRevenue ? randomInt(1_000_000, 20_000_000) : -randomInt(200_000, 12_000_000);
     const txDate = randomDayThisMonth();
 
     let status: TransactionStatus;
@@ -462,6 +492,31 @@ async function seedTenant(config: TenantSeedConfig): Promise<void> {
   );
 }
 
+async function ensureCasPartnerAccount(): Promise<void> {
+  const email = PARTNER_EMAIL.toLowerCase();
+  const passwordHash = await bcrypt.hash(PARTNER_PASSWORD, 12);
+
+  const existing = await prisma.user.findUnique({ where: { email } });
+  if (existing) {
+    await prisma.user.update({
+      where: { email },
+      data: { name: PARTNER_NAME, passwordHash, role: 'cas_partner', tenantId: null },
+    });
+    console.log(`↺ Tài khoản Cas Partner đã tồn tại, cập nhật lại: ${email}`);
+  } else {
+    await prisma.user.create({
+      data: {
+        name: PARTNER_NAME,
+        email,
+        passwordHash,
+        role: 'cas_partner',
+        tenantId: null,
+      },
+    });
+    console.log(`✚ Đã tạo tài khoản Cas Partner demo: ${email}`);
+  }
+}
+
 async function main(): Promise<void> {
   console.log(`🌱 Seeding ${TENANTS.length} doanh nghiệp demo cho Partner Dashboard...\n`);
 
@@ -469,6 +524,28 @@ async function main(): Promise<void> {
     await seedTenant(config);
   }
 
+  await ensureCasPartnerAccount();
+
+  // Kiểm chứng "các con số phải khớp": MRR (giá gói DN đang hoạt động) == thực thu tháng hiện tại.
+  const activeMrr = TENANTS.filter((t) => t.status === 'active').reduce(
+    (sum, t) => sum + PLAN_PRICE[t.plan],
+    0,
+  );
+  const paidThisMonth = TENANTS.reduce(
+    (sum, t) =>
+      sum +
+      t.paymentHistory.filter((p) => p.monthsAgo === 0).reduce((s, p) => s + PLAN_PRICE[p.plan], 0),
+    0,
+  );
+  console.log(`\n📊 MRR (DN đang hoạt động): ${activeMrr.toLocaleString('vi-VN')}đ/tháng`);
+  console.log(`📊 Thực thu tháng này: ${paidThisMonth.toLocaleString('vi-VN')}đ`);
+  console.log(
+    activeMrr === paidThisMonth
+      ? '✅ MRR khớp thực thu tháng hiện tại.'
+      : '⚠️  MRR KHÔNG khớp thực thu — kiểm tra lại paymentHistory monthsAgo=0.',
+  );
+
+  console.log(`\n🔑 Tài khoản Cas Partner: ${PARTNER_EMAIL} / ${PARTNER_PASSWORD}`);
   console.log('\n🎉 Xong — đăng nhập bằng tài khoản Cas Partner để xem Partner Dashboard.');
 }
 

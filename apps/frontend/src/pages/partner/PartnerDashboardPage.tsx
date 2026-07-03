@@ -1,31 +1,23 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Building2, Eye, Percent, Search, ShieldCheck, Wallet } from 'lucide-react';
+import { useQuery } from '@tanstack/react-query';
+import { Building2, Percent, ShieldCheck, Wallet } from 'lucide-react';
 import { type ElementType, useMemo, useState } from 'react';
 import {
+  Bar,
+  BarChart,
   CartesianGrid,
+  Cell,
   Line,
   LineChart,
+  Pie,
+  PieChart,
   ResponsiveContainer,
   Tooltip,
   XAxis,
   YAxis,
 } from 'recharts';
-import { toast } from 'sonner';
-import { ConfirmDialog } from '@/components/shared/ConfirmDialog';
-import { EmptyState } from '@/components/shared/EmptyState';
-import { TableSkeleton } from '@/components/shared/TableSkeleton';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
 import { api } from '@/lib/api';
 import { formatVND, formatVNDAxis } from '@/lib/format-vnd';
@@ -35,13 +27,20 @@ interface PartnerStats {
   activeTenants: number;
   suspendedTenants: number;
   transactionsThisMonth: number;
-  revenueThisMonth: number;
+  /** Tổng giá gói/tháng của DN đang hoạt động (MRR). */
+  recurringRevenuePerMonth: number;
+  /** Tiền nâng cấp gói PayOS xác nhận trong tháng hiện tại. */
+  paidRevenueThisMonth: number;
   aiAccuracy: number;
 }
 
 interface RevenueTrendPoint {
   month: string;
   revenue: number;
+  free: number;
+  starter: number;
+  pro: number;
+  enterprise: number;
 }
 
 interface PartnerTenant {
@@ -54,30 +53,6 @@ interface PartnerTenant {
   revenuePerMonth: number;
 }
 
-interface TenantMember {
-  id: string;
-  name: string;
-  email: string;
-  role: string;
-  createdAt: string;
-}
-
-interface TenantDetail {
-  id: string;
-  businessName: string;
-  createdAt: string;
-  classificationThreshold: number;
-  plan: string | null;
-  status: string;
-  pricePerMonth: number;
-  transactionQuota: number;
-  transactionUsedThisCycle: number;
-  transactionsThisMonth: number;
-  totalTransactions: number;
-  aiAccuracy: number;
-  members: TenantMember[];
-}
-
 const PLAN_LABELS: Record<string, string> = {
   free: 'Free',
   starter: 'Starter',
@@ -85,51 +60,130 @@ const PLAN_LABELS: Record<string, string> = {
   enterprise: 'Enterprise',
 };
 
-const ROLE_LABELS: Record<string, string> = {
-  admin: 'Admin',
-  accountant: 'Kế toán',
-  viewer: 'Người xem',
-  cas_partner: 'Cas Partner',
+const PLAN_ORDER = ['free', 'starter', 'pro', 'enterprise'];
+const PLAN_COLORS: Record<string, string> = {
+  free: 'var(--chart-4)',
+  starter: 'var(--chart-2)',
+  pro: 'var(--chart-1)',
+  enterprise: 'var(--chart-5)',
 };
+
+interface TooltipEntry {
+  value?: number | string;
+  name?: string;
+  payload?: { name?: string; label?: string };
+}
+
+function ChartTooltip({
+  active,
+  title,
+  value,
+}: {
+  active?: boolean;
+  title?: string;
+  value?: string;
+}) {
+  if (!active) return null;
+  return (
+    <div className="rounded-lg border bg-background px-3 py-2 text-sm shadow-sm">
+      {title ? <p className="font-medium">{title}</p> : null}
+      <p className="text-primary">{value}</p>
+    </div>
+  );
+}
+
+const PAID_PLANS = ['starter', 'pro', 'enterprise'] as const;
+
+function RevenueByPlanTooltip({
+  active,
+  payload,
+  label,
+}: {
+  active?: boolean;
+  payload?: TooltipEntry[];
+  label?: string;
+}) {
+  if (!active || !payload?.length) return null;
+  const total = payload.reduce((sum, entry) => sum + Number(entry.value ?? 0), 0);
+  return (
+    <div className="rounded-lg border bg-background px-3 py-2 text-sm shadow-sm">
+      <p className="font-medium">Tháng {label}</p>
+      {payload.map((entry) => (
+        <p key={entry.name} className="text-muted-foreground">
+          {PLAN_LABELS[entry.name ?? ''] ?? entry.name}:{' '}
+          <span className="font-medium text-foreground">{formatVND(Number(entry.value ?? 0))}</span>
+        </p>
+      ))}
+      <p className="mt-1 border-t pt-1">
+        Tổng: <span className="font-medium">{formatVND(total)}</span>
+      </p>
+    </div>
+  );
+}
+
+function PlanTooltip({ active, payload }: { active?: boolean; payload?: TooltipEntry[] }) {
+  if (!active || !payload?.length) return null;
+  const entry = payload[0];
+  return <ChartTooltip active title={entry?.name} value={`${entry?.value} doanh nghiệp`} />;
+}
+
+function TopRevenueTooltip({ active, payload }: { active?: boolean; payload?: TooltipEntry[] }) {
+  if (!active || !payload?.length) return null;
+  const entry = payload[0];
+  return (
+    <ChartTooltip
+      active
+      title={entry?.payload?.name}
+      value={`${formatVND(Number(entry?.value ?? 0))}/tháng (giá gói)`}
+    />
+  );
+}
 
 function StatCard({
   icon: Icon,
   label,
   value,
+  hint,
 }: {
   icon: ElementType;
   label: string;
   value: string;
+  hint?: string;
 }) {
   return (
     <Card>
-      <CardContent className="flex items-center gap-4 p-4">
-        <div className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
-          <Icon className="size-5" />
+      <CardContent className="p-3.5">
+        <div className="flex items-center justify-between gap-3">
+          <p className="text-sm font-medium text-foreground">{label}</p>
+          <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+            <Icon className="size-4" />
+          </div>
         </div>
-        <div>
-          <p className="text-xs text-muted-foreground">{label}</p>
-          <p className="text-xl font-semibold">{value}</p>
-        </div>
+        <p className="mt-1 text-2xl font-semibold tabular-nums leading-tight">{value}</p>
+        {hint ? (
+          <p className="mt-0.5 text-[11px] leading-snug text-muted-foreground">{hint}</p>
+        ) : null}
       </CardContent>
     </Card>
   );
 }
 
 export default function PartnerDashboardPage() {
-  const queryClient = useQueryClient();
-  const [search, setSearch] = useState('');
-  const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'suspended'>('all');
-  const [planFilter, setPlanFilter] = useState<'all' | string>('all');
-  const [viewingTenantId, setViewingTenantId] = useState<string | null>(null);
-  const [tenantAction, setTenantAction] = useState<{
-    type: 'suspend' | 'activate';
-    tenant: PartnerTenant;
-  } | null>(null);
+  const [fromDate, setFromDate] = useState('');
+  const [toDate, setToDate] = useState('');
+  const hasDateFilter = fromDate !== '' || toDate !== '';
+
+  const dateParams = {
+    fromDate: fromDate || undefined,
+    toDate: toDate || undefined,
+  };
 
   const { data: stats, isLoading: loadingStats } = useQuery({
-    queryKey: ['partner', 'stats'],
-    queryFn: () => api.get<{ data: PartnerStats }>('/partner/stats').then((r) => r.data.data),
+    queryKey: ['partner', 'stats', dateParams],
+    queryFn: () =>
+      api
+        .get<{ data: PartnerStats }>('/partner/stats', { params: dateParams })
+        .then((r) => r.data.data),
   });
 
   const { data: tenants, isLoading: loadingTenants } = useQuery({
@@ -138,389 +192,327 @@ export default function PartnerDashboardPage() {
   });
 
   const { data: revenueTrend, isLoading: loadingTrend } = useQuery({
-    queryKey: ['partner', 'revenue-trend'],
-    queryFn: () =>
-      api.get<{ data: RevenueTrendPoint[] }>('/partner/revenue-trend').then((r) => r.data.data),
-  });
-
-  const { data: tenantDetail, isLoading: loadingDetail } = useQuery({
-    queryKey: ['partner', 'tenant-detail', viewingTenantId],
+    queryKey: ['partner', 'revenue-trend', dateParams],
     queryFn: () =>
       api
-        .get<{ data: TenantDetail }>(`/partner/tenants/${viewingTenantId}`)
+        .get<{ data: RevenueTrendPoint[] }>('/partner/revenue-trend', { params: dateParams })
         .then((r) => r.data.data),
-    enabled: viewingTenantId !== null,
   });
 
-  const invalidate = () => {
-    queryClient.invalidateQueries({ queryKey: ['partner', 'stats'] });
-    queryClient.invalidateQueries({ queryKey: ['partner', 'tenants'] });
-  };
+  const planDistribution = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const t of tenants ?? []) {
+      const key = t.plan ?? 'free';
+      counts.set(key, (counts.get(key) ?? 0) + 1);
+    }
+    return PLAN_ORDER.filter((plan) => (counts.get(plan) ?? 0) > 0).map((plan) => ({
+      plan,
+      label: PLAN_LABELS[plan] ?? plan,
+      count: counts.get(plan) ?? 0,
+      color: PLAN_COLORS[plan] ?? 'var(--chart-1)',
+    }));
+  }, [tenants]);
 
-  const suspendMutation = useMutation({
-    mutationFn: (id: string) => api.patch(`/partner/tenants/${id}/suspend`),
-    onSuccess: () => {
-      toast.success('Đã khóa tài khoản doanh nghiệp');
-      setTenantAction(null);
-      invalidate();
-    },
-    onError: () => toast.error('Không thể khóa tài khoản'),
-  });
+  const planBreakdown = useMemo(() => {
+    const map = new Map<string, { count: number; activeCount: number; revenue: number }>();
+    for (const t of tenants ?? []) {
+      const key = t.plan ?? 'free';
+      const cur = map.get(key) ?? { count: 0, activeCount: 0, revenue: 0 };
+      const isActive = t.status === 'active';
+      map.set(key, {
+        count: cur.count + 1,
+        activeCount: cur.activeCount + (isActive ? 1 : 0),
+        revenue: cur.revenue + (isActive ? t.revenuePerMonth : 0),
+      });
+    }
+    const total = tenants?.length ?? 0;
+    return PLAN_ORDER.map((plan) => ({
+      plan,
+      label: PLAN_LABELS[plan] ?? plan,
+      color: PLAN_COLORS[plan] ?? 'var(--chart-1)',
+      count: map.get(plan)?.count ?? 0,
+      activeCount: map.get(plan)?.activeCount ?? 0,
+      revenue: map.get(plan)?.revenue ?? 0,
+      pct: total > 0 ? Math.round(((map.get(plan)?.count ?? 0) / total) * 100) : 0,
+    }));
+  }, [tenants]);
 
-  const activateMutation = useMutation({
-    mutationFn: (id: string) => api.patch(`/partner/tenants/${id}/activate`),
-    onSuccess: () => {
-      toast.success('Đã mở khóa tài khoản doanh nghiệp');
-      setTenantAction(null);
-      invalidate();
-    },
-    onError: () => toast.error('Không thể mở khóa tài khoản'),
-  });
+  // MRR (doanh thu định kỳ) tính từ cùng nguồn `tenants` với breakdown bên dưới,
+  // để card tổng và bảng phân bố không bao giờ lệch nhau.
+  const mrr = useMemo(
+    () => planBreakdown.reduce((sum, row) => sum + row.revenue, 0),
+    [planBreakdown],
+  );
 
-  const filteredTenants = useMemo(() => {
-    if (!tenants) return [];
-    const term = search.trim().toLowerCase();
-    return tenants.filter((t) => {
-      if (term && !t.businessName.toLowerCase().includes(term)) return false;
-      if (statusFilter !== 'all' && t.status !== statusFilter) return false;
-      if (planFilter !== 'all' && t.plan !== planFilter) return false;
-      return true;
-    });
-  }, [tenants, search, statusFilter, planFilter]);
+  const topRevenue = useMemo(() => {
+    return [...(tenants ?? [])]
+      .filter((t) => t.status === 'active' && t.revenuePerMonth > 0)
+      .sort((a, b) => b.revenuePerMonth - a.revenuePerMonth)
+      .slice(0, 5)
+      .map((t) => ({
+        name: t.businessName.length > 22 ? `${t.businessName.slice(0, 22)}…` : t.businessName,
+        revenue: t.revenuePerMonth,
+      }));
+  }, [tenants]);
 
   return (
-    <div className="space-y-6 p-4 sm:p-6">
-      <div>
-        <h1 className="text-xl font-semibold">Dashboard</h1>
-        <p className="text-sm text-muted-foreground">Tổng quan toàn hệ thống X-Cash AI</p>
-      </div>
-
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <StatCard
-          icon={Building2}
-          label="Tổng doanh nghiệp"
-          value={loadingStats ? '—' : String(stats?.totalTenants ?? 0)}
-        />
-        <StatCard
-          icon={ShieldCheck}
-          label="Hoạt động / Đã khóa"
-          value={
-            loadingStats ? '—' : `${stats?.activeTenants ?? 0} / ${stats?.suspendedTenants ?? 0}`
-          }
-        />
-        <StatCard
-          icon={Wallet}
-          label="Doanh thu tháng này"
-          value={loadingStats ? '—' : formatVND(stats?.revenueThisMonth ?? 0)}
-        />
-        <StatCard
-          icon={Percent}
-          label="Độ chính xác AI"
-          value={loadingStats ? '—' : `${stats?.aiAccuracy ?? 0}%`}
-        />
-      </div>
-
-      <Card>
-        <CardHeader className="pb-2">
-          <CardTitle className="text-base">Doanh thu 6 tháng qua</CardTitle>
-          <CardDescription>Tổng doanh thu nâng cấp gói toàn hệ thống theo tháng</CardDescription>
-        </CardHeader>
-        <CardContent>
-          {loadingTrend ? (
-            <Skeleton className="h-[240px] w-full" />
-          ) : (
-            <ResponsiveContainer width="100%" height={240}>
-              <LineChart
-                data={revenueTrend ?? []}
-                margin={{ top: 8, right: 8, left: 0, bottom: 0 }}
-              >
-                <CartesianGrid stroke="var(--border)" strokeDasharray="4 4" vertical={false} />
-                <XAxis
-                  dataKey="month"
-                  tickLine={false}
-                  axisLine={false}
-                  tick={{ fill: 'var(--muted-foreground)', fontSize: 12 }}
-                />
-                <YAxis
-                  tickLine={false}
-                  axisLine={false}
-                  width={48}
-                  tickFormatter={(value: number) => formatVNDAxis(value)}
-                  tick={{ fill: 'var(--muted-foreground)', fontSize: 12 }}
-                />
-                <Tooltip
-                  formatter={(value) => formatVND(Number(value))}
-                  labelFormatter={(label) => `Tháng ${label}`}
-                />
-                <Line
-                  type="monotone"
-                  dataKey="revenue"
-                  stroke="var(--chart-1)"
-                  strokeWidth={2}
-                  dot={{ fill: 'var(--chart-1)', r: 3 }}
-                  activeDot={{ r: 5 }}
-                />
-              </LineChart>
-            </ResponsiveContainer>
-          )}
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Danh sách doanh nghiệp</CardTitle>
-          <div className="flex flex-col gap-2 pt-2 sm:flex-row sm:items-center">
-            <div className="relative flex-1 sm:max-w-xs">
-              <Search className="absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                placeholder="Tìm theo tên doanh nghiệp..."
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                className="pl-8"
-              />
-            </div>
-            <Select
-              value={statusFilter}
-              onValueChange={(v) => setStatusFilter(v as typeof statusFilter)}
-            >
-              <SelectTrigger className="sm:w-40">
-                <SelectValue placeholder="Trạng thái" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Tất cả trạng thái</SelectItem>
-                <SelectItem value="active">Hoạt động</SelectItem>
-                <SelectItem value="suspended">Đã khóa</SelectItem>
-              </SelectContent>
-            </Select>
-            <Select value={planFilter} onValueChange={setPlanFilter}>
-              <SelectTrigger className="sm:w-40">
-                <SelectValue placeholder="Gói" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Tất cả gói</SelectItem>
-                {Object.entries(PLAN_LABELS).map(([value, label]) => (
-                  <SelectItem key={value} value={value}>
-                    {label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+    <>
+      <header className="sticky top-0 z-10 border-b border-border bg-background px-4 py-4 sm:px-6">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <h1 className="text-lg font-semibold sm:text-xl">Dashboard</h1>
+            <p className="mt-1 text-sm text-muted-foreground">Tổng quan toàn hệ thống X-Cash AI</p>
           </div>
-        </CardHeader>
-        <CardContent>
-          {loadingTenants ? (
-            <TableSkeleton rows={6} columns={6} />
-          ) : !tenants?.length ? (
-            <EmptyState
-              title="Chưa có doanh nghiệp nào"
-              description="Danh sách sẽ hiện ra khi có tenant đăng ký"
+          <div className="flex flex-wrap items-center gap-2">
+            <Input
+              type="date"
+              aria-label="Từ ngày"
+              value={fromDate}
+              max={toDate || undefined}
+              onChange={(e) => setFromDate(e.target.value)}
+              className="sm:w-[9.5rem]"
             />
-          ) : !filteredTenants.length ? (
-            <EmptyState
-              title="Không tìm thấy doanh nghiệp phù hợp"
-              description="Thử đổi từ khóa hoặc bộ lọc khác"
+            <span className="text-sm text-muted-foreground">→</span>
+            <Input
+              type="date"
+              aria-label="Đến ngày"
+              value={toDate}
+              min={fromDate || undefined}
+              onChange={(e) => setToDate(e.target.value)}
+              className="sm:w-[9.5rem]"
             />
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b text-left text-muted-foreground">
-                    <th className="pb-2 pr-4 font-medium">Doanh nghiệp</th>
-                    <th className="pb-2 pr-4 font-medium">Gói</th>
-                    <th className="pb-2 pr-4 font-medium">Trạng thái</th>
-                    <th className="pb-2 pr-4 font-medium">GD/tháng</th>
-                    <th className="pb-2 pr-4 font-medium">Doanh thu</th>
-                    <th className="pb-2 font-medium">Thao tác</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y">
-                  {filteredTenants.map((t) => (
-                    <tr key={t.id} className="hover:bg-muted/30">
-                      <td className="py-2 pr-4 font-medium">{t.businessName}</td>
-                      <td className="py-2 pr-4">
-                        <Badge variant="secondary">
-                          {t.plan ? (PLAN_LABELS[t.plan] ?? t.plan) : '—'}
-                        </Badge>
-                      </td>
-                      <td className="py-2 pr-4">
-                        {t.status === 'suspended' ? (
-                          <Badge className="bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400">
-                            Đã khóa
-                          </Badge>
-                        ) : (
-                          <Badge className="bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400">
-                            Hoạt động
-                          </Badge>
-                        )}
-                      </td>
-                      <td className="py-2 pr-4">{t.transactionsThisMonth}</td>
-                      <td className="py-2 pr-4">{formatVND(t.revenuePerMonth)}</td>
-                      <td className="py-2">
-                        <div className="flex items-center gap-2">
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            onClick={() => setViewingTenantId(t.id)}
-                          >
-                            <Eye className="size-4" />
-                            Chi tiết
-                          </Button>
-                          {t.status === 'suspended' ? (
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              disabled={activateMutation.isPending}
-                              onClick={() => setTenantAction({ type: 'activate', tenant: t })}
-                            >
-                              Mở khóa
-                            </Button>
-                          ) : (
-                            <Button
-                              size="sm"
-                              variant="destructive"
-                              disabled={suspendMutation.isPending}
-                              onClick={() => setTenantAction({ type: 'suspend', tenant: t })}
-                            >
-                              Khóa
-                            </Button>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </CardContent>
-      </Card>
+            {hasDateFilter ? (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  setFromDate('');
+                  setToDate('');
+                }}
+              >
+                Xóa lọc
+              </Button>
+            ) : null}
+          </div>
+        </div>
+      </header>
 
-      {/* Dialog chi tiết tenant */}
-      <Dialog
-        open={viewingTenantId !== null}
-        onOpenChange={(open) => !open && setViewingTenantId(null)}
-      >
-        <DialogContent className="max-w-lg">
-          <DialogHeader>
-            <DialogTitle>{tenantDetail?.businessName ?? 'Chi tiết doanh nghiệp'}</DialogTitle>
-          </DialogHeader>
-          {loadingDetail || !tenantDetail ? (
-            <div className="space-y-2">
-              <Skeleton className="h-4 w-full" />
-              <Skeleton className="h-4 w-full" />
-              <Skeleton className="h-4 w-2/3" />
-            </div>
-          ) : (
-            <div className="space-y-4 text-sm">
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <p className="text-xs text-muted-foreground">Gói</p>
-                  <p className="font-medium">
-                    {tenantDetail.plan
-                      ? (PLAN_LABELS[tenantDetail.plan] ?? tenantDetail.plan)
-                      : '—'}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-xs text-muted-foreground">Trạng thái</p>
-                  {tenantDetail.status === 'suspended' ? (
-                    <Badge className="bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400">
-                      Đã khóa
-                    </Badge>
-                  ) : (
-                    <Badge className="bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400">
-                      Hoạt động
-                    </Badge>
-                  )}
-                </div>
-                <div>
-                  <p className="text-xs text-muted-foreground">Giá/tháng</p>
-                  <p className="font-medium">{formatVND(tenantDetail.pricePerMonth)}</p>
-                </div>
-                <div>
-                  <p className="text-xs text-muted-foreground">Ngưỡng định khoản tự động</p>
-                  <p className="font-medium">{tenantDetail.classificationThreshold}%</p>
-                </div>
-                <div>
-                  <p className="text-xs text-muted-foreground">Quota GD/chu kỳ</p>
-                  <p className="font-medium">
-                    {tenantDetail.transactionUsedThisCycle} / {tenantDetail.transactionQuota}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-xs text-muted-foreground">GD tháng này / tổng</p>
-                  <p className="font-medium">
-                    {tenantDetail.transactionsThisMonth} / {tenantDetail.totalTransactions}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-xs text-muted-foreground">Độ chính xác AI (tháng này)</p>
-                  <p className="font-medium">{tenantDetail.aiAccuracy}%</p>
-                </div>
-                <div>
-                  <p className="text-xs text-muted-foreground">Ngày tạo</p>
-                  <p className="font-medium">
-                    {new Date(tenantDetail.createdAt).toLocaleDateString('vi-VN')}
-                  </p>
-                </div>
+      <div className="space-y-6 p-4 sm:p-6">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <StatCard
+            icon={Building2}
+            label="Tổng doanh nghiệp"
+            value={loadingStats ? '—' : String(stats?.totalTenants ?? 0)}
+            hint="Tổng số DN đã đăng ký toàn hệ thống (mọi gói, mọi trạng thái)"
+          />
+          <StatCard
+            icon={ShieldCheck}
+            label="Hoạt động / Đã khóa"
+            value={
+              loadingStats ? '—' : `${stats?.activeTenants ?? 0} / ${stats?.suspendedTenants ?? 0}`
+            }
+            hint="DN đang dùng dịch vụ · DN bị khóa (subscription suspended)"
+          />
+          <StatCard
+            icon={Wallet}
+            label="Doanh thu định kỳ (MRR)"
+            value={loadingTenants ? '—' : formatVND(mrr)}
+            hint="Giá gói/tháng của DN đang hoạt động · số dự kiến, chưa gồm phí vượt"
+          />
+          <StatCard
+            icon={Percent}
+            label="Độ chính xác AI"
+            value={loadingStats ? '—' : `${stats?.aiAccuracy ?? 0}%`}
+            hint={
+              hasDateFilter
+                ? 'Tỷ lệ giao dịch AI tự định khoản (auto) trong kỳ đã chọn'
+                : 'Tỷ lệ giao dịch AI tự định khoản (auto) trên tổng đã định khoản trong tháng'
+            }
+          />
+        </div>
+
+        {/* Doanh thu theo gói theo tháng — biểu đồ nhiều đường */}
+        <Card>
+          <CardHeader className="pb-2">
+            <div className="flex items-start justify-between gap-4">
+              <div className="space-y-1.5">
+                <CardTitle className="text-base">Doanh thu theo gói theo tháng</CardTitle>
+                <CardDescription>
+                  Tiền thực thu (PayOS) theo từng gói dịch vụ
+                  {hasDateFilter ? ' trong kỳ đã chọn' : ' trong 6 tháng gần nhất'} — mỗi đường là
+                  một gói
+                </CardDescription>
               </div>
-
-              <div>
-                <p className="mb-2 text-xs font-medium text-muted-foreground">
-                  Thành viên ({tenantDetail.members.length})
+              <div className="shrink-0 text-right">
+                <p className="text-xs text-muted-foreground">
+                  {hasDateFilter ? 'Thực thu trong kỳ' : 'Thực thu tháng này'}
                 </p>
-                <div className="max-h-48 space-y-2 overflow-y-auto">
-                  {tenantDetail.members.map((m) => (
-                    <div
-                      key={m.id}
-                      className="flex items-center justify-between rounded-md border px-3 py-2"
-                    >
-                      <div>
-                        <p className="font-medium">{m.name}</p>
-                        <p className="text-xs text-muted-foreground">{m.email}</p>
-                      </div>
-                      <Badge variant="secondary">{ROLE_LABELS[m.role] ?? m.role}</Badge>
+                <p className="text-lg font-semibold tabular-nums">
+                  {loadingStats ? '—' : formatVND(stats?.paidRevenueThisMonth ?? 0)}
+                </p>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent>
+            {loadingTrend ? (
+              <Skeleton className="h-[280px] w-full" />
+            ) : (
+              <>
+                <ResponsiveContainer width="100%" height={280}>
+                  <LineChart
+                    data={revenueTrend ?? []}
+                    margin={{ top: 8, right: 8, left: 0, bottom: 0 }}
+                  >
+                    <CartesianGrid stroke="var(--border)" strokeDasharray="4 4" vertical={false} />
+                    <XAxis
+                      dataKey="month"
+                      tickLine={false}
+                      axisLine={false}
+                      tick={{ fill: 'var(--muted-foreground)', fontSize: 12 }}
+                    />
+                    <YAxis
+                      tickLine={false}
+                      axisLine={false}
+                      width={48}
+                      tickFormatter={(value: number) => formatVNDAxis(value)}
+                      tick={{ fill: 'var(--muted-foreground)', fontSize: 12 }}
+                    />
+                    <Tooltip content={<RevenueByPlanTooltip />} />
+                    {PAID_PLANS.map((plan) => (
+                      <Line
+                        key={plan}
+                        type="monotone"
+                        dataKey={plan}
+                        name={plan}
+                        stroke={PLAN_COLORS[plan]}
+                        strokeWidth={2}
+                        dot={{ fill: PLAN_COLORS[plan], r: 3 }}
+                        activeDot={{ r: 5 }}
+                      />
+                    ))}
+                  </LineChart>
+                </ResponsiveContainer>
+                <div className="mt-2 flex flex-wrap justify-center gap-x-4 gap-y-1 text-xs">
+                  {PAID_PLANS.map((plan) => (
+                    <div key={plan} className="flex items-center gap-1.5">
+                      <span
+                        className="inline-block size-2.5 rounded-full"
+                        style={{ backgroundColor: PLAN_COLORS[plan] }}
+                      />
+                      <span className="text-muted-foreground">{PLAN_LABELS[plan]}</span>
                     </div>
                   ))}
                 </div>
-              </div>
-            </div>
-          )}
-        </DialogContent>
-      </Dialog>
+              </>
+            )}
+          </CardContent>
+        </Card>
 
-      <ConfirmDialog
-        open={tenantAction?.type === 'suspend'}
-        onOpenChange={(open) => !open && setTenantAction(null)}
-        title="Khóa tài khoản doanh nghiệp?"
-        description={
-          tenantAction?.tenant
-            ? `Bạn sắp khóa "${tenantAction.tenant.businessName}". Người dùng sẽ không thể đăng nhập cho đến khi được mở khóa.`
-            : ''
-        }
-        confirmLabel="Khóa tài khoản"
-        variant="destructive"
-        loading={suspendMutation.isPending}
-        onConfirm={() => {
-          if (tenantAction?.tenant) suspendMutation.mutate(tenantAction.tenant.id);
-        }}
-      />
+        <div className="grid gap-4 lg:grid-cols-2">
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base">Phân bố gói dịch vụ</CardTitle>
+              <CardDescription>Số lượng doanh nghiệp theo từng gói</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {loadingTenants ? (
+                <Skeleton className="h-[260px] w-full" />
+              ) : planDistribution.length === 0 ? (
+                <div className="flex h-[260px] items-center justify-center text-sm text-muted-foreground">
+                  Chưa có dữ liệu
+                </div>
+              ) : (
+                <ResponsiveContainer width="100%" height={260}>
+                  <PieChart>
+                    <Pie
+                      data={planDistribution}
+                      dataKey="count"
+                      nameKey="label"
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={55}
+                      outerRadius={90}
+                      paddingAngle={2}
+                    >
+                      {planDistribution.map((entry) => (
+                        <Cell key={entry.plan} fill={entry.color} />
+                      ))}
+                    </Pie>
+                    <Tooltip content={<PlanTooltip />} />
+                  </PieChart>
+                </ResponsiveContainer>
+              )}
+              {planDistribution.length > 0 ? (
+                <div className="mt-2 flex flex-wrap justify-center gap-x-4 gap-y-1 text-xs">
+                  {planDistribution.map((entry) => (
+                    <div key={entry.plan} className="flex items-center gap-1.5">
+                      <span
+                        className="inline-block size-2.5 rounded-full"
+                        style={{ backgroundColor: entry.color }}
+                      />
+                      <span className="text-muted-foreground">
+                        {entry.label} ({entry.count})
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              ) : null}
+            </CardContent>
+          </Card>
 
-      <ConfirmDialog
-        open={tenantAction?.type === 'activate'}
-        onOpenChange={(open) => !open && setTenantAction(null)}
-        title="Mở khóa tài khoản doanh nghiệp?"
-        description={
-          tenantAction?.tenant
-            ? `Bạn sắp mở khóa "${tenantAction.tenant.businessName}". Người dùng sẽ có thể đăng nhập và sử dụng hệ thống trở lại.`
-            : ''
-        }
-        confirmLabel="Mở khóa"
-        loading={activateMutation.isPending}
-        onConfirm={() => {
-          if (tenantAction?.tenant) activateMutation.mutate(tenantAction.tenant.id);
-        }}
-      />
-    </div>
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base">Top doanh nghiệp theo doanh thu định kỳ</CardTitle>
+              <CardDescription>
+                5 DN đang hoạt động có giá gói/tháng (MRR) cao nhất — không phải tiền đã thu
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {loadingTenants ? (
+                <Skeleton className="h-[260px] w-full" />
+              ) : topRevenue.length === 0 ? (
+                <div className="flex h-[260px] items-center justify-center text-sm text-muted-foreground">
+                  Chưa có doanh nghiệp trả phí
+                </div>
+              ) : (
+                <ResponsiveContainer width="100%" height={260}>
+                  <BarChart
+                    data={topRevenue}
+                    layout="vertical"
+                    margin={{ top: 8, right: 16, left: 8, bottom: 0 }}
+                  >
+                    <CartesianGrid
+                      stroke="var(--border)"
+                      strokeDasharray="4 4"
+                      horizontal={false}
+                    />
+                    <XAxis
+                      type="number"
+                      tickLine={false}
+                      axisLine={false}
+                      tickFormatter={(value: number) => formatVNDAxis(value)}
+                      tick={{ fill: 'var(--muted-foreground)', fontSize: 12 }}
+                    />
+                    <YAxis
+                      type="category"
+                      dataKey="name"
+                      tickLine={false}
+                      axisLine={false}
+                      width={150}
+                      tick={{ fill: 'var(--muted-foreground)', fontSize: 11 }}
+                    />
+                    <Tooltip
+                      content={<TopRevenueTooltip />}
+                      cursor={{ fill: 'var(--muted)', opacity: 0.3 }}
+                    />
+                    <Bar dataKey="revenue" fill="var(--chart-1)" radius={[0, 4, 4, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    </>
   );
 }

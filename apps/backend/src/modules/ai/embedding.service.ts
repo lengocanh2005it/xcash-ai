@@ -26,8 +26,9 @@ export class EmbeddingService {
     if (!embedding) return;
 
     const vectorLiteral = this.toVectorLiteral(embedding);
+    // id/tenant_id là cột `text` (Prisma String, không @db.Uuid) → không cast ::uuid.
     await this.prisma.$executeRawUnsafe(
-      'UPDATE transaction_classifications SET embedding = $1::vector WHERE id = $2::uuid',
+      'UPDATE transaction_classifications SET embedding = $1::vector WHERE id = $2',
       vectorLiteral,
       classificationId,
     );
@@ -48,7 +49,7 @@ export class EmbeddingService {
               1 - (tc.embedding <=> $1::vector) AS similarity
        FROM transaction_classifications tc
        INNER JOIN transactions t ON t.id = tc.transaction_id
-       WHERE tc.tenant_id = $2::uuid
+       WHERE tc.tenant_id = $2
          AND tc.embedding IS NOT NULL
          AND tc.status = 'classified'
        ORDER BY tc.embedding <=> $1::vector

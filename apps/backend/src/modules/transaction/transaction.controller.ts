@@ -1,6 +1,8 @@
-import { Controller, Get, Param, Query, UseGuards } from '@nestjs/common';
+import { Controller, Get, Param, Post, Query, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { Role } from '@xcash/shared-types';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
+import { Roles } from '../../common/decorators/roles.decorator';
 import { JwtAuthGuard, RolesGuard } from '../../common/guards/auth.guards';
 import type { AuthenticatedUser } from '../../common/types/authenticated-user.type';
 import { ListTransactionsQueryDto } from './dto/list-transactions.dto';
@@ -23,5 +25,12 @@ export class TransactionController {
   @ApiOperation({ summary: 'Chi tiết giao dịch kèm định khoản' })
   findOne(@CurrentUser() user: AuthenticatedUser, @Param('id') id: string) {
     return this.transactionService.findOne(user.tenantId as string, id);
+  }
+
+  @Post(':id/reclassify')
+  @Roles(Role.ADMIN, Role.ACCOUNTANT)
+  @ApiOperation({ summary: 'Yêu cầu AI định khoản lại giao dịch đang chờ xử lý' })
+  reclassify(@CurrentUser() user: AuthenticatedUser, @Param('id') id: string) {
+    return this.transactionService.reclassify(user.tenantId as string, id);
   }
 }

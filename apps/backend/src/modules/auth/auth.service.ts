@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { ConflictException, Injectable, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
-import { Role as PrismaRole } from '@prisma/client';
+import { Role as PrismaRole, type SubscriptionPlan } from '@prisma/client';
 import { Role } from '@xcash/shared-types';
 import * as bcrypt from 'bcryptjs';
 import type { AuthenticatedUser, AuthJwtPayload } from '../../common/types/authenticated-user.type';
@@ -49,13 +49,14 @@ export class AuthService {
       const tenant = await tx.tenant.create({
         data: {
           businessName: dto.businessName,
+          ownerName: dto.ownerName,
         },
       });
 
       const createdUser = await tx.user.create({
         data: {
           tenantId: tenant.id,
-          name: dto.businessName,
+          name: dto.ownerName,
           email: dto.email.toLowerCase(),
           passwordHash,
           role: PrismaRole.admin,
@@ -85,18 +86,20 @@ export class AuthService {
         },
       });
 
-      return { createdUser, tenantId: tenant.id };
+      return { createdUser, tenantId: tenant.id, businessName: tenant.businessName };
     });
 
     // Seed TT133 chart of accounts after successful registration
     this.chartOfAccountsService.seedTt133(user.tenantId).catch(() => {});
 
-    return this.issueTokens(this.toAuthenticatedUser(user.createdUser));
+    // Tenant vừa tạo luôn bắt đầu ở gói free
+    return this.issueTokens(this.toAuthenticatedUser(user.createdUser, user.businessName, 'free'));
   }
 
   async login(dto: LoginDto): Promise<AuthSession> {
     const user = await this.prisma.user.findUnique({
       where: { email: dto.email.toLowerCase() },
+      include: { tenant: { select: { businessName: true } } },
     });
 
     if (!user) {
@@ -108,6 +111,7 @@ export class AuthService {
       throw new UnauthorizedException('Email hoặc mật khẩu không đúng');
     }
 
+    let plan: SubscriptionPlan | null = null;
     if (user.tenantId) {
       const subscription = await this.prisma.subscription.findFirst({
         where: { tenantId: user.tenantId },
@@ -118,9 +122,12 @@ export class AuthService {
           'Tài khoản doanh nghiệp đã bị tạm khóa. Vui lòng liên hệ hỗ trợ.',
         );
       }
+      plan = subscription?.status === 'active' ? subscription.plan : null;
     }
 
-    return this.issueTokens(this.toAuthenticatedUser(user));
+    return this.issueTokens(
+      this.toAuthenticatedUser(user, user.tenant?.businessName ?? null, plan),
+    );
   }
 
   async refresh(refreshToken: string | undefined): Promise<AuthSession> {
@@ -143,13 +150,19 @@ export class AuthService {
       throw new UnauthorizedException('Refresh token không hợp lệ hoặc đã bị thu hồi');
     }
 
-    const user = await this.prisma.user.findUnique({ where: { id: payload.sub } });
+    const user = await this.prisma.user.findUnique({
+      where: { id: payload.sub },
+      include: { tenant: { select: { businessName: true } } },
+    });
     if (!user) {
       throw new UnauthorizedException('Người dùng không tồn tại');
     }
 
     await this.redisService.client.del(redisKey);
-    return this.issueTokens(this.toAuthenticatedUser(user));
+    const plan = await this.getActivePlan(user.tenantId);
+    return this.issueTokens(
+      this.toAuthenticatedUser(user, user.tenant?.businessName ?? null, plan),
+    );
   }
 
   async logout(refreshToken: string | undefined): Promise<{ message: string }> {
@@ -170,11 +183,15 @@ export class AuthService {
   }
 
   async getMe(userId: string): Promise<AuthenticatedUser> {
-    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      include: { tenant: { select: { businessName: true } } },
+    });
     if (!user) {
       throw new UnauthorizedException('Người dùng không tồn tại');
     }
-    return this.toAuthenticatedUser(user);
+    const plan = await this.getActivePlan(user.tenantId);
+    return this.toAuthenticatedUser(user, user.tenant?.businessName ?? null, plan);
   }
 
   createRefreshTokenCookie(refreshToken: string): string {
@@ -210,6 +227,8 @@ export class AuthService {
       name: user.name,
       role: user.role,
       tenantId: user.tenantId,
+      businessName: user.businessName,
+      plan: user.plan,
     };
 
     const accessToken = await this.jwtService.signAsync(payload as object, {
@@ -246,20 +265,36 @@ export class AuthService {
     return `refresh_token:${jti}`;
   }
 
-  private toAuthenticatedUser(user: {
-    id: string;
-    email: string;
-    name: string;
-    role: PrismaRole;
-    tenantId: string | null;
-  }): AuthenticatedUser {
+  private toAuthenticatedUser(
+    user: {
+      id: string;
+      email: string;
+      name: string;
+      role: PrismaRole;
+      tenantId: string | null;
+    },
+    businessName: string | null,
+    plan: SubscriptionPlan | null,
+  ): AuthenticatedUser {
     return {
       id: user.id,
       email: user.email,
       name: user.name,
       role: user.role as Role,
       tenantId: user.tenantId,
+      businessName,
+      plan,
     };
+  }
+
+  private async getActivePlan(tenantId: string | null): Promise<SubscriptionPlan | null> {
+    if (!tenantId) return null;
+    const subscription = await this.prisma.subscription.findFirst({
+      where: { tenantId, status: 'active' },
+      orderBy: { startedAt: 'desc' },
+      select: { plan: true },
+    });
+    return subscription?.plan ?? null;
   }
 
   private getNextCycleEnd(): Date {

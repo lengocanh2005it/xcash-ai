@@ -28,7 +28,7 @@ export function ProtectedRoute({ children, requireOnboarding = false }: Protecte
     return <Navigate to="/login" replace state={{ from: location.pathname }} />;
   }
 
-  if (user.role === Role.CAS_PARTNER && location.pathname !== '/partner') {
+  if (user.role === Role.CAS_PARTNER && !location.pathname.startsWith('/partner')) {
     return <Navigate to="/partner" replace />;
   }
 

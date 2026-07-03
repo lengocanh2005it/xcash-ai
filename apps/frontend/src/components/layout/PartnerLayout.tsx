@@ -1,4 +1,14 @@
-import { Layers, LayoutDashboard, LogOut, Menu, PanelLeft, PanelLeftClose, X } from 'lucide-react';
+import {
+  Building2,
+  Layers,
+  LayoutDashboard,
+  LogOut,
+  Menu,
+  PanelLeft,
+  PanelLeftClose,
+  Receipt,
+  X,
+} from 'lucide-react';
 import { useState } from 'react';
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
@@ -10,6 +20,8 @@ import { cn } from '@/lib/utils';
 
 const partnerNavItems = [
   { to: '/partner/dashboard', label: 'Dashboard', icon: LayoutDashboard },
+  { to: '/partner/tenants', label: 'Doanh nghiệp', icon: Building2 },
+  { to: '/partner/payments', label: 'Lịch sử thanh toán', icon: Receipt },
   { to: '/partner/plans', label: 'Gói dịch vụ', icon: Layers },
 ];
 
@@ -156,18 +168,21 @@ function PartnerSidebarContent({
               </div>
             </div>
           ) : null}
-          <Button
-            type="button"
-            variant="outline"
-            size={collapsed ? 'icon-sm' : 'sm'}
-            className={cn(!collapsed && 'w-full')}
-            onClick={handleLogout}
-            aria-label="Đăng xuất"
-            title={collapsed ? 'Đăng xuất' : undefined}
-          >
-            <LogOut className="size-4" />
-            {!collapsed ? 'Đăng xuất' : null}
-          </Button>
+          <div className={cn('flex gap-2', collapsed ? 'flex-col items-center' : 'items-center')}>
+            <ThemeToggle />
+            <Button
+              type="button"
+              variant="outline"
+              size={collapsed ? 'icon-sm' : 'sm'}
+              className={cn(!collapsed && 'flex-1')}
+              onClick={handleLogout}
+              aria-label="Đăng xuất"
+              title={collapsed ? 'Đăng xuất' : undefined}
+            >
+              <LogOut className="size-4" />
+              {!collapsed ? 'Đăng xuất' : null}
+            </Button>
+          </div>
         </div>
       </div>
     </div>

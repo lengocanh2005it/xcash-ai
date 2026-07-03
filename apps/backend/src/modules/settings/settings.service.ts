@@ -1,4 +1,6 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import type { SubscriptionPlan } from '@prisma/client';
+import { meetsPlan } from '../../common/util/plan.util';
 import { PrismaService } from '../../prisma/prisma.service';
 import { RedisService } from '../../redis/redis.service';
 import type { UpdateNotificationsDto, UpdateThresholdDto } from './dto/settings.dto';
@@ -47,6 +49,22 @@ export class SettingsService {
     tenantId: string,
     dto: UpdateNotificationsDto,
   ): Promise<NotificationConfig> {
+    // Thông báo Email cần gói Starter+, Slack cần gói Pro+
+    if (dto.emailEnabled || dto.slackEnabled) {
+      const subscription = await this.prisma.subscription.findFirst({
+        where: { tenantId, status: 'active' },
+        orderBy: { startedAt: 'desc' },
+        select: { plan: true },
+      });
+      const plan: SubscriptionPlan | null = subscription?.plan ?? null;
+      if (dto.emailEnabled && !meetsPlan(plan, 'starter')) {
+        throw new ForbiddenException('Thông báo Email yêu cầu gói Starter trở lên.');
+      }
+      if (dto.slackEnabled && !meetsPlan(plan, 'pro')) {
+        throw new ForbiddenException('Thông báo Slack yêu cầu gói Pro trở lên.');
+      }
+    }
+
     const config: NotificationConfig = {
       emailEnabled: dto.emailEnabled,
       email: dto.email ?? null,

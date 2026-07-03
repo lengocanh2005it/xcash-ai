@@ -93,6 +93,7 @@ describe('AuthService', () => {
     await expect(
       service.register({
         businessName: 'ABC',
+        ownerName: 'Nguyễn Văn A',
         email: 'admin@abc.edu.vn',
         password: 'password123',
       }),

@@ -4,7 +4,9 @@ import { TransactionStatus } from '@prisma/client';
 import { Type } from 'class-transformer';
 import { IsArray, IsString, ValidateNested } from 'class-validator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
+import { RequiresPlan } from '../../common/decorators/requires-plan.decorator';
 import { JwtAuthGuard, RolesGuard } from '../../common/guards/auth.guards';
+import { PlanGuard } from '../../common/guards/plan.guard';
 import type { AuthenticatedUser } from '../../common/types/authenticated-user.type';
 import { PrismaService } from '../../prisma/prisma.service';
 import { OpenAiService } from './openai.service';
@@ -29,7 +31,7 @@ class CopilotDto {
 
 @ApiTags('ai')
 @Controller('ai')
-@UseGuards(JwtAuthGuard, RolesGuard)
+@UseGuards(JwtAuthGuard, RolesGuard, PlanGuard)
 export class CopilotController {
   constructor(
     private readonly openAiService: OpenAiService,
@@ -37,6 +39,7 @@ export class CopilotController {
   ) {}
 
   @Post('copilot')
+  @RequiresPlan('starter')
   async chat(@CurrentUser() user: AuthenticatedUser, @Body() dto: CopilotDto) {
     const tenantId = user.tenantId!;
     const now = new Date();

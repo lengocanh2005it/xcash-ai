@@ -23,6 +23,7 @@ interface LoginInput {
 
 interface RegisterInput {
   businessName: string;
+  ownerName: string;
   email: string;
   password: string;
 }

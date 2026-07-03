@@ -7,6 +7,11 @@ export class RegisterDto {
   @MinLength(2)
   businessName!: string;
 
+  @ApiProperty({ example: 'Nguyễn Văn A' })
+  @IsString()
+  @MinLength(2)
+  ownerName!: string;
+
   @ApiProperty({ example: 'admin@abc.edu.vn' })
   @IsEmail()
   email!: string;

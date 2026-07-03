@@ -231,3 +231,13 @@ export function formatTransactionTime(iso: string) {
     month: '2-digit',
   });
 }
+
+/** Ngày tháng kiểu Việt Nam: DD/MM/YYYY (vd 03/07/2026). */
+export function formatDateVN(iso: string) {
+  const date = new Date(iso);
+  return date.toLocaleDateString('vi-VN', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+  });
+}

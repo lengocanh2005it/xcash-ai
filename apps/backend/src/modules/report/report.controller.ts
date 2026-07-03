@@ -10,13 +10,15 @@ import {
 import { ApiTags } from '@nestjs/swagger';
 import type { Response } from 'express';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
+import { RequiresPlan } from '../../common/decorators/requires-plan.decorator';
 import { JwtAuthGuard, RolesGuard } from '../../common/guards/auth.guards';
+import { PlanGuard } from '../../common/guards/plan.guard';
 import type { AuthenticatedUser } from '../../common/types/authenticated-user.type';
 import { ReportService } from './report.service';
 
 @ApiTags('reports')
 @Controller('reports')
-@UseGuards(JwtAuthGuard, RolesGuard)
+@UseGuards(JwtAuthGuard, RolesGuard, PlanGuard)
 export class ReportController {
   constructor(private readonly service: ReportService) {}
 
@@ -43,6 +45,7 @@ export class ReportController {
   }
 
   @Get('comparison')
+  @RequiresPlan('starter')
   getComparison(
     @CurrentUser() user: AuthenticatedUser,
     @Query('year', new DefaultValuePipe(new Date().getFullYear()), ParseIntPipe) year: number,
@@ -52,6 +55,7 @@ export class ReportController {
   }
 
   @Get('top-accounts')
+  @RequiresPlan('starter')
   getTopAccounts(
     @CurrentUser() user: AuthenticatedUser,
     @Query('year', new DefaultValuePipe(new Date().getFullYear()), ParseIntPipe) year: number,
@@ -62,6 +66,7 @@ export class ReportController {
   }
 
   @Get('export')
+  @RequiresPlan('pro')
   async exportExcel(
     @CurrentUser() user: AuthenticatedUser,
     @Query('from') from: string,

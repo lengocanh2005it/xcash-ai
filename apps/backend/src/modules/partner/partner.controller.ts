@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Patch, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Patch, Query, UseGuards } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import type { SubscriptionPlan } from '@prisma/client';
 import { JwtAuthGuard, PartnerGuard } from '../../common/guards/auth.guards';
@@ -17,8 +17,8 @@ export class PartnerController {
   }
 
   @Get('stats')
-  getStats() {
-    return this.service.getStats();
+  getStats(@Query('fromDate') fromDate?: string, @Query('toDate') toDate?: string) {
+    return this.service.getStats({ fromDate, toDate });
   }
 
   @Get('tenants/:id')
@@ -27,8 +27,29 @@ export class PartnerController {
   }
 
   @Get('revenue-trend')
-  getRevenueTrend() {
-    return this.service.getRevenueTrend();
+  getRevenueTrend(@Query('fromDate') fromDate?: string, @Query('toDate') toDate?: string) {
+    return this.service.getRevenueTrend({ fromDate, toDate });
+  }
+
+  @Get('payments')
+  listPayments(
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+    @Query('status') status?: string,
+    @Query('plan') plan?: string,
+    @Query('search') search?: string,
+    @Query('fromDate') fromDate?: string,
+    @Query('toDate') toDate?: string,
+  ) {
+    return this.service.listPayments({
+      page: page ? Number(page) : undefined,
+      limit: limit ? Number(limit) : undefined,
+      status,
+      plan,
+      search,
+      fromDate,
+      toDate,
+    });
   }
 
   @Patch('tenants/:id/plan')

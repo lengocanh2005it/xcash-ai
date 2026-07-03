@@ -60,9 +60,28 @@ export default function DashboardPage() {
   return (
     <>
       {user ? <WelcomeTour userId={user.id} /> : null}
-      <Header title="Dashboard" description={`Xin chào, ${user?.name ?? 'bạn'}`} />
+      <Header
+        title="Dashboard"
+        description="Tổng quan hoạt động định khoản và giao dịch của doanh nghiệp"
+      />
 
       <div className="space-y-6 p-4 sm:p-6">
+        <div>
+          <h2 className="text-xl font-medium text-foreground sm:text-2xl">
+            Xin chào, <span className="font-bold text-primary">{user?.name ?? 'bạn'}</span>!
+          </h2>
+          <p className="mt-1 text-sm text-muted-foreground">
+            {user?.businessName ? (
+              <>
+                Doanh nghiệp{' '}
+                <span className="font-medium text-foreground">{user.businessName}</span>
+                {' · '}
+              </>
+            ) : null}
+            Chúc bạn một ngày làm việc hiệu quả với X-Cash AI.
+          </p>
+        </div>
+
         <BankStatusCard bankingLinked={bankingLinked} grants={onboardingStatus?.grants ?? []} />
 
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">

@@ -234,6 +234,7 @@ paypilot-ai/                                   ← tên folder local có thể k
 | POST | `/webhook/cas` | Public (signature) | → enqueue `ai-classify` |
 | GET | `/transactions` | Bearer JWT | Kèm `classification` nested |
 | GET | `/transactions/:id` | Bearer JWT | Kèm `classification` nested |
+| POST | `/transactions/:id/reclassify` | Admin, Accountant | Đẩy lại job AI cho giao dịch `pending` (enqueue `ai-classify` vào `webhook-processing`) |
 | GET | `/transactions/:id/classification` | Bearer JWT | Chi tiết định khoản |
 | POST | `/transactions/:id/classification` | Admin, Accountant | Ghi đè thủ công |
 | GET | `/review/queue` | Bearer JWT | Hàng chờ Human Review |
@@ -264,9 +265,9 @@ paypilot-ai/                                   ← tên folder local có thể k
 | POST | `/billing/upgrade/:orderCode/mock-confirm` | Admin | Dev-only — giả lập xác nhận thanh toán |
 | POST | `/webhook/payos-billing` | Public (PayOS signature) | Callback thanh toán PayOS → `confirmPayment()` |
 | GET | `/partner/tenants` | Cas Partner | Danh sách toàn bộ tenant + plan/status/GD tháng/doanh thu |
-| GET | `/partner/stats` | Cas Partner | Tổng DN/active/suspended/GD tháng/doanh thu/AI accuracy toàn hệ thống |
-| GET | `/partner/revenue-trend` | Cas Partner | Doanh thu 6 tháng gần nhất (từ `payment_orders` status=paid) — kèm breakdown theo gói (`free/starter/pro/enterprise`) |
-| GET | `/partner/payments` | Cas Partner | Lịch sử thanh toán toàn hệ thống (`payment_orders` + tên DN) — phân trang server-side (`?page=&limit=&status=&plan=&search=`), trả `{ items, page, limit, total, totalPages, summary }` |
+| GET | `/partner/stats` | Cas Partner | Tổng DN/active/suspended/GD tháng/doanh thu/AI accuracy toàn hệ thống — `?fromDate=&toDate=` lọc chỉ số theo thời gian (GD, thực thu PayOS, AI accuracy); DN/MRR vẫn snapshot hiện tại |
+| GET | `/partner/revenue-trend` | Cas Partner | Doanh thu theo tháng (từ `payment_orders` status=paid) — kèm breakdown theo gói (`free/starter/pro/enterprise`); mặc định 6 tháng, `?fromDate=&toDate=` lọc khoảng (tối đa 24 tháng) |
+| GET | `/partner/payments` | Cas Partner | Lịch sử thanh toán toàn hệ thống (`payment_orders` + tên DN) — phân trang server-side (`?page=&limit=&status=&plan=&search=&fromDate=&toDate=`, lọc ngày theo `createdAt`), trả `{ items, page, limit, total, totalPages, summary }` — `summary` cũng tính theo cùng bộ lọc |
 | PATCH | `/partner/tenants/:id/suspend` | Cas Partner | Khóa tài khoản doanh nghiệp |
 | PATCH | `/partner/tenants/:id/activate` | Cas Partner | Mở khóa tài khoản doanh nghiệp |
 | GET | `/partner/tenants/:id` | Cas Partner | Chi tiết 1 tenant (plan + GD tháng + AI accuracy + members) |

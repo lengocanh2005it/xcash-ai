@@ -13,7 +13,9 @@ import DashboardPage from '@/pages/dashboard/DashboardPage';
 import OnboardingCallbackPage from '@/pages/onboarding/OnboardingCallbackPage';
 import OnboardingPage from '@/pages/onboarding/OnboardingPage';
 import PartnerDashboardPage from '@/pages/partner/PartnerDashboardPage';
+import PartnerPaymentsPage from '@/pages/partner/PartnerPaymentsPage';
 import PartnerPlansPage from '@/pages/partner/PartnerPlansPage';
+import PartnerTenantsPage from '@/pages/partner/PartnerTenantsPage';
 import ReportsPage from '@/pages/reports/ReportsPage';
 import ReviewPage from '@/pages/review/ReviewPage';
 import SettingsPage from '@/pages/settings/SettingsPage';
@@ -71,6 +73,8 @@ function App() {
             >
               <Route path="/partner" element={<Navigate to="/partner/dashboard" replace />} />
               <Route path="/partner/dashboard" element={<PartnerDashboardPage />} />
+              <Route path="/partner/tenants" element={<PartnerTenantsPage />} />
+              <Route path="/partner/payments" element={<PartnerPaymentsPage />} />
               <Route path="/partner/plans" element={<PartnerPlansPage />} />
             </Route>
 

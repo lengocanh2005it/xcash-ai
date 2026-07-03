@@ -11,6 +11,7 @@ export default function RegisterPage() {
   const navigate = useNavigate();
   const { register } = useAuth();
   const [businessName, setBusinessName] = useState('');
+  const [ownerName, setOwnerName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -20,7 +21,7 @@ export default function RegisterPage() {
     setIsSubmitting(true);
 
     try {
-      await register({ businessName, email, password });
+      await register({ businessName, ownerName, email, password });
       toast.success('Đăng ký thành công');
       navigate('/onboarding');
     } catch (error) {
@@ -40,6 +41,19 @@ export default function RegisterPage() {
             placeholder="Trung tâm Anh ngữ ABC"
             value={businessName}
             onChange={(event) => setBusinessName(event.target.value)}
+            required
+            minLength={2}
+          />
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="ownerName">Họ và tên chủ doanh nghiệp</Label>
+          <Input
+            id="ownerName"
+            autoComplete="name"
+            placeholder="Nguyễn Văn A"
+            value={ownerName}
+            onChange={(event) => setOwnerName(event.target.value)}
             required
             minLength={2}
           />

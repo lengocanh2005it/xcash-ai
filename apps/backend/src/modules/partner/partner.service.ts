@@ -1,5 +1,5 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
-import type { SubscriptionPlan } from '@prisma/client';
+import type { PaymentOrderStatus, Prisma, SubscriptionPlan } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import type { UpdatePlanPricingDto } from './dto/plan-pricing.dto';
 
@@ -142,8 +142,8 @@ export class PartnerService {
     return { success: true };
   }
 
-  async getStats() {
-    const monthStart = this.getMonthStart();
+  async getStats(params?: { fromDate?: string; toDate?: string }) {
+    const period = this.resolveStatsPeriod(params?.fromDate, params?.toDate);
 
     const [totalTenants, subscriptions, transactionsThisMonth, classifications] = await Promise.all(
       [
@@ -152,18 +152,31 @@ export class PartnerService {
           orderBy: { startedAt: 'desc' },
           distinct: ['tenantId'],
         }),
-        this.prisma.transaction.count({ where: { createdAt: { gte: monthStart } } }),
+        this.prisma.transaction.count({
+          where: { createdAt: { gte: period.start, lte: period.end } },
+        }),
         this.prisma.transactionClassification.findMany({
-          where: { createdAt: { gte: monthStart } },
+          where: { createdAt: { gte: period.start, lte: period.end } },
           select: { classificationType: true },
         }),
       ],
     );
 
     const suspendedCount = subscriptions.filter((s) => s.status === 'suspended').length;
-    const revenueThisMonth = subscriptions
-      .filter((s) => s.status === 'active')
-      .reduce((sum, s) => sum + Number(s.pricePerMonth), 0);
+    const activeSubscriptions = subscriptions.filter((s) => s.status === 'active');
+    const recurringRevenuePerMonth = activeSubscriptions.reduce(
+      (sum, s) => sum + Number(s.pricePerMonth),
+      0,
+    );
+
+    const paidOrdersAgg = await this.prisma.paymentOrder.aggregate({
+      where: {
+        status: 'paid',
+        paidAt: { gte: period.start, lte: period.end },
+      },
+      _sum: { amount: true },
+    });
+    const paidRevenueThisMonth = Number(paidOrdersAgg._sum.amount ?? 0);
 
     const autoClassified = classifications.filter((c) => c.classificationType === 'auto').length;
     const aiAccuracy =
@@ -174,30 +187,131 @@ export class PartnerService {
       activeTenants: totalTenants - suspendedCount,
       suspendedTenants: suspendedCount,
       transactionsThisMonth,
-      revenueThisMonth,
+      recurringRevenuePerMonth,
+      paidRevenueThisMonth,
       aiAccuracy,
     };
   }
 
-  async getRevenueTrend() {
-    const months = Array.from({ length: 6 }, (_, i) => {
-      const now = new Date();
-      const start = new Date(now.getFullYear(), now.getMonth() - (5 - i), 1);
-      const end = new Date(now.getFullYear(), now.getMonth() - (5 - i) + 1, 1);
-      return { start, end, label: `${start.getMonth() + 1}/${start.getFullYear()}` };
-    });
+  async getRevenueTrend(params?: { fromDate?: string; toDate?: string }) {
+    const months = this.resolveTrendMonths(params?.fromDate, params?.toDate);
+    if (months.length === 0) return [];
 
     const paidOrders = await this.prisma.paymentOrder.findMany({
-      where: { status: 'paid', paidAt: { gte: months[0].start } },
-      select: { amount: true, paidAt: true },
+      where: { status: 'paid', paidAt: { gte: months[0].start, lte: months.at(-1)!.end } },
+      select: { amount: true, paidAt: true, targetPlan: true },
     });
 
     return months.map(({ start, end, label }) => {
-      const revenue = paidOrders
-        .filter((o) => o.paidAt && o.paidAt >= start && o.paidAt < end)
-        .reduce((sum, o) => sum + Number(o.amount), 0);
-      return { month: label, revenue };
+      const inMonth = paidOrders.filter((o) => o.paidAt && o.paidAt >= start && o.paidAt <= end);
+      const byPlan = { free: 0, starter: 0, pro: 0, enterprise: 0 };
+      let revenue = 0;
+      for (const o of inMonth) {
+        const amount = Number(o.amount);
+        revenue += amount;
+        if (o.targetPlan in byPlan) {
+          byPlan[o.targetPlan as keyof typeof byPlan] += amount;
+        }
+      }
+      return { month: label, revenue, ...byPlan };
     });
+  }
+
+  async listPayments(params: {
+    page?: number;
+    limit?: number;
+    status?: string;
+    plan?: string;
+    search?: string;
+    fromDate?: string;
+    toDate?: string;
+  }) {
+    const page = Math.max(1, Math.trunc(params.page ?? 1));
+    const limit = Math.min(100, Math.max(1, Math.trunc(params.limit ?? 20)));
+
+    const where: Prisma.PaymentOrderWhereInput = {};
+    if (params.status && params.status !== 'all') {
+      where.status = params.status as PaymentOrderStatus;
+    }
+    if (params.plan && params.plan !== 'all') {
+      where.targetPlan = params.plan as SubscriptionPlan;
+    }
+
+    // Lọc theo ngày tạo đơn (createdAt) — khớp với thứ tự sắp xếp mặc định.
+    const createdAt: Prisma.DateTimeFilter = {};
+    if (params.fromDate) {
+      const from = new Date(params.fromDate);
+      if (!Number.isNaN(from.getTime())) createdAt.gte = from;
+    }
+    if (params.toDate) {
+      const to = new Date(params.toDate);
+      if (!Number.isNaN(to.getTime())) {
+        to.setHours(23, 59, 59, 999);
+        createdAt.lte = to;
+      }
+    }
+    if (createdAt.gte || createdAt.lte) {
+      where.createdAt = createdAt;
+    }
+
+    const search = params.search?.trim();
+    if (search) {
+      const matchingTenants = await this.prisma.tenant.findMany({
+        where: { businessName: { contains: search, mode: 'insensitive' } },
+        select: { id: true },
+      });
+      where.OR = [
+        { orderCode: { contains: search, mode: 'insensitive' } },
+        { tenantId: { in: matchingTenants.map((t) => t.id) } },
+      ];
+    }
+
+    const [total, orders, summaryAll, summaryPaid] = await Promise.all([
+      this.prisma.paymentOrder.count({ where }),
+      this.prisma.paymentOrder.findMany({
+        where,
+        orderBy: { createdAt: 'desc' },
+        skip: (page - 1) * limit,
+        take: limit,
+      }),
+      this.prisma.paymentOrder.count({ where }),
+      this.prisma.paymentOrder.aggregate({
+        where: { AND: [where, { status: 'paid' }] },
+        _count: { _all: true },
+        _sum: { amount: true },
+      }),
+    ]);
+
+    const tenantIds = [...new Set(orders.map((o) => o.tenantId))];
+    const tenants = await this.prisma.tenant.findMany({
+      where: { id: { in: tenantIds } },
+      select: { id: true, businessName: true },
+    });
+    const nameByTenant = new Map(tenants.map((t) => [t.id, t.businessName]));
+
+    return {
+      items: orders.map((o) => ({
+        id: o.id,
+        orderCode: o.orderCode,
+        tenantId: o.tenantId,
+        businessName: nameByTenant.get(o.tenantId) ?? '—',
+        orderType: o.orderType,
+        targetPlan: o.targetPlan,
+        amount: Number(o.amount),
+        status: o.status,
+        paidAt: o.paidAt,
+        createdAt: o.createdAt,
+      })),
+      page,
+      limit,
+      total,
+      totalPages: Math.max(1, Math.ceil(total / limit)),
+      summary: {
+        totalCount: summaryAll,
+        paidCount: summaryPaid._count._all,
+        totalPaid: Number(summaryPaid._sum.amount ?? 0),
+      },
+    };
   }
 
   async listPlanPricing() {
@@ -338,5 +452,85 @@ export class PartnerService {
   private getMonthStart() {
     const now = new Date();
     return new Date(now.getFullYear(), now.getMonth(), 1);
+  }
+
+  /** Mặc định: tháng hiện tại. Có fromDate/toDate: lọc theo khoảng (end inclusive đến 23:59:59). */
+  private resolveStatsPeriod(fromDate?: string, toDate?: string) {
+    const range = this.parseDateRange(fromDate, toDate);
+    if (range) return range;
+
+    const monthStart = this.getMonthStart();
+    const monthEnd = new Date(
+      monthStart.getFullYear(),
+      monthStart.getMonth() + 1,
+      0,
+      23,
+      59,
+      59,
+      999,
+    );
+    return { start: monthStart, end: monthEnd };
+  }
+
+  /** Mặc định: 6 tháng gần nhất. Có fromDate/toDate: bucket theo tháng trong khoảng (tối đa 24). */
+  private resolveTrendMonths(fromDate?: string, toDate?: string) {
+    const range = this.parseDateRange(fromDate, toDate);
+    if (range) return this.buildMonthBuckets(range.start, range.end);
+
+    const now = new Date();
+    const start = new Date(now.getFullYear(), now.getMonth() - 5, 1);
+    const end = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
+    return this.buildMonthBuckets(start, end);
+  }
+
+  private parseDateRange(fromDate?: string, toDate?: string) {
+    if (!fromDate && !toDate) return null;
+
+    let start: Date | null = null;
+    let end: Date | null = null;
+
+    if (fromDate) {
+      start = new Date(fromDate);
+      if (Number.isNaN(start.getTime())) return null;
+      start.setHours(0, 0, 0, 0);
+    }
+    if (toDate) {
+      end = new Date(toDate);
+      if (Number.isNaN(end.getTime())) return null;
+      end.setHours(23, 59, 59, 999);
+    }
+
+    if (!start && end) {
+      start = new Date(end.getFullYear(), end.getMonth(), 1);
+      start.setHours(0, 0, 0, 0);
+    }
+    if (start && !end) {
+      end = new Date();
+      end.setHours(23, 59, 59, 999);
+    }
+    if (!start || !end || start > end) return null;
+
+    return { start, end };
+  }
+
+  private buildMonthBuckets(rangeStart: Date, rangeEnd: Date) {
+    const buckets: { start: Date; end: Date; label: string }[] = [];
+    let cursor = new Date(rangeStart.getFullYear(), rangeStart.getMonth(), 1);
+    const lastMonth = new Date(rangeEnd.getFullYear(), rangeEnd.getMonth(), 1);
+
+    while (cursor <= lastMonth && buckets.length < 24) {
+      const monthStart = new Date(cursor);
+      const monthEnd = new Date(cursor.getFullYear(), cursor.getMonth() + 1, 0, 23, 59, 59, 999);
+      const effectiveEnd = monthEnd > rangeEnd ? rangeEnd : monthEnd;
+      const effectiveStart = monthStart < rangeStart ? rangeStart : monthStart;
+      buckets.push({
+        start: effectiveStart,
+        end: effectiveEnd,
+        label: `${cursor.getMonth() + 1}/${cursor.getFullYear()}`,
+      });
+      cursor = new Date(cursor.getFullYear(), cursor.getMonth() + 1, 1);
+    }
+
+    return buckets;
   }
 }

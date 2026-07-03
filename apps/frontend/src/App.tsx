@@ -1,5 +1,6 @@
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 import { Toaster } from 'sonner';
+import { PartnerLayout } from '@/components/layout/PartnerLayout';
 import { TenantLayout } from '@/components/layout/TenantLayout';
 import { AuthProvider } from '@/contexts/auth-context';
 import { ThemeProvider } from '@/contexts/theme-context';
@@ -11,7 +12,8 @@ import CopilotPage from '@/pages/copilot/CopilotPage';
 import DashboardPage from '@/pages/dashboard/DashboardPage';
 import OnboardingCallbackPage from '@/pages/onboarding/OnboardingCallbackPage';
 import OnboardingPage from '@/pages/onboarding/OnboardingPage';
-import PartnerPage from '@/pages/partner/PartnerPage';
+import PartnerDashboardPage from '@/pages/partner/PartnerDashboardPage';
+import PartnerPlansPage from '@/pages/partner/PartnerPlansPage';
 import ReportsPage from '@/pages/reports/ReportsPage';
 import ReviewPage from '@/pages/review/ReviewPage';
 import SettingsPage from '@/pages/settings/SettingsPage';
@@ -61,13 +63,16 @@ function App() {
             />
 
             <Route
-              path="/partner"
               element={
                 <ProtectedRoute>
-                  <PartnerPage />
+                  <PartnerLayout />
                 </ProtectedRoute>
               }
-            />
+            >
+              <Route path="/partner" element={<Navigate to="/partner/dashboard" replace />} />
+              <Route path="/partner/dashboard" element={<PartnerDashboardPage />} />
+              <Route path="/partner/plans" element={<PartnerPlansPage />} />
+            </Route>
 
             <Route
               element={

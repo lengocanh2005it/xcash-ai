@@ -1,10 +1,12 @@
 import { useQuery } from '@tanstack/react-query';
-import { Download } from 'lucide-react';
+import { Brain, Download, Scale, TrendingDown, TrendingUp } from 'lucide-react';
 import { useState } from 'react';
 import { toast } from 'sonner';
+import { DashboardStatCard } from '@/components/dashboard/DashboardStatCard';
 import { EmptyState } from '@/components/shared/EmptyState';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Skeleton } from '@/components/ui/skeleton';
 import { api } from '@/lib/api';
 
 interface SummaryData {
@@ -66,7 +68,15 @@ export default function ReportsPage() {
         responseType: 'blob',
       });
 
-      const url = URL.createObjectURL(res.data as Blob);
+      const blob = res.data as Blob;
+      if (blob.type.includes('json')) {
+        const message = JSON.parse(await blob.text()) as {
+          error?: { message?: string };
+        };
+        throw new Error(message.error?.message ?? 'Phản hồi export không hợp lệ');
+      }
+
+      const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
       a.download = `bao-cao-dinh-khoan-${from}-${to}.xlsx`;
@@ -121,51 +131,57 @@ export default function ReportsPage() {
       {isLoading ? (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           {(['revenue', 'expense', 'net', 'accuracy'] as const).map((k) => (
-            <Card key={k}>
-              <CardContent className="p-6">
-                <div className="h-8 animate-pulse rounded bg-muted" />
-              </CardContent>
-            </Card>
+            <Skeleton key={k} className="h-[120px] w-full rounded-xl" />
           ))}
         </div>
       ) : data ? (
         <>
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            <Card>
-              <CardContent className="p-6">
-                <p className="text-sm text-muted-foreground">Tổng thu</p>
-                <p className="mt-1 text-2xl font-bold text-green-600">
-                  {formatVND(data.summary.totalRevenue)}
-                </p>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardContent className="p-6">
-                <p className="text-sm text-muted-foreground">Tổng chi</p>
-                <p className="mt-1 text-2xl font-bold text-red-600">
-                  {formatVND(data.summary.totalExpense)}
-                </p>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardContent className="p-6">
-                <p className="text-sm text-muted-foreground">Lãi/Lỗ</p>
-                <p
-                  className={`mt-1 text-2xl font-bold ${data.summary.net >= 0 ? 'text-green-600' : 'text-red-600'}`}
-                >
-                  {formatVND(data.summary.net)}
-                </p>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardContent className="p-6">
-                <p className="text-sm text-muted-foreground">Độ chính xác AI</p>
-                <p className="mt-1 text-2xl font-bold">{data.stats.aiAccuracy}%</p>
+            <DashboardStatCard
+              label="Tổng thu"
+              value={<span className="text-green-600">{formatVND(data.summary.totalRevenue)}</span>}
+              icon={TrendingUp}
+              footer={
                 <p className="text-xs text-muted-foreground">
-                  {data.stats.classifiedCount}/{data.stats.totalCount} giao dịch
+                  Tổng phát sinh Có trên TK doanh thu (5xx) đã định khoản
                 </p>
-              </CardContent>
-            </Card>
+              }
+            />
+            <DashboardStatCard
+              label="Tổng chi"
+              value={<span className="text-red-600">{formatVND(data.summary.totalExpense)}</span>}
+              icon={TrendingDown}
+              footer={
+                <p className="text-xs text-muted-foreground">
+                  Tổng phát sinh Nợ trên TK chi phí (6xx) đã định khoản
+                </p>
+              }
+            />
+            <DashboardStatCard
+              label="Lãi/Lỗ"
+              value={
+                <span className={data.summary.net >= 0 ? 'text-green-600' : 'text-red-600'}>
+                  {formatVND(data.summary.net)}
+                </span>
+              }
+              icon={Scale}
+              footer={
+                <p className="text-xs text-muted-foreground">
+                  Chênh lệch thu − chi trong tháng đã chọn
+                </p>
+              }
+            />
+            <DashboardStatCard
+              label="Độ chính xác AI"
+              value={`${data.stats.aiAccuracy}%`}
+              icon={Brain}
+              footer={
+                <p className="text-xs text-muted-foreground">
+                  {data.stats.classifiedCount}/{data.stats.totalCount} giao dịch đã hoàn tất định
+                  khoản
+                </p>
+              }
+            />
           </div>
 
           <Card>

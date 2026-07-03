@@ -1,14 +1,14 @@
-# Current State — Đọc file này ĐẦU TIÊN
+﻿# Current State — Đọc file này ĐẦU TIÊN
 
 > Mục đích: cho biết **chính xác** cái gì đã tồn tại trong repo ngay lúc này, để agent không cần `find`/`grep`/`ls` lại từ đầu mỗi session mới. File này phải được cập nhật mỗi khi có thay đổi cấu trúc đáng kể (thêm module, thêm page, đổi dependency lớn, thêm service hạ tầng). Nếu file này và thực tế code lệch nhau, **tin thực tế code**, và sửa lại file này ngay sau đó.
 
-Cập nhật lần cuối: **Sprint 4 — PayOS billing upgrade (chọn gói → thanh toán → webhook xác nhận) + Partner sidebar layout đã xong. Deploy VPS thật/SSL/nginx production CHƯA làm (hoãn, cần môi trường thật ngoài phạm vi code).**
+Cập nhật lần cuối: **Sprint 4 — Overage billing (phí vượt quota Starter/Pro), cron reset chu kỳ hàng tháng, Partner đổi gói DN bất kỳ, Partner Dashboard planBreakdown card, chặn đóng dialog thanh toán khi click ngoài — đã xong. Deploy VPS thật/SSL/nginx production CHƯA làm.**
 
 ---
 
 ## Repo đang ở giai đoạn nào
 
-**Trạng thái: Sprint 3 HOÀN THÀNH toàn bộ. Sprint 4 — Partner Dashboard (API + UI), rate limiting per-tenant/per-phút, onboarding welcome tour, Partner sidebar layout, PayOS billing upgrade đã xong. Còn lại: Docker build pipeline production, SSL/nginx, deploy VPS thật, final E2E QA thủ công.**
+**Trạng thái: Sprint 3 HOÀN THÀNH toàn bộ. Sprint 4 — Partner Dashboard, rate limiting, welcome tour, PayOS billing, overage billing, Partner quản lý gói DN đã xong. Còn lại: Docker build pipeline production, SSL/nginx, deploy VPS thật, final E2E QA thủ công.**
 
 **Đã xong (Sprint 1–2):**
 - Auth, Onboarding (Cas Link), Banking webhook, Transaction module ✅
@@ -48,6 +48,13 @@ Cập nhật lần cuối: **Sprint 4 — PayOS billing upgrade (chọn gói →
 - Backend: `PayosService` — wrapper PayOS v2 SDK (`@payos/node`), mock mode khi keys không có ✅
 - Frontend: Partner refactor sang sidebar layout (logo, collapse/expand, mobile) — 2 route: `/partner/dashboard`, `/partner/plans` ✅
 - Frontend: `SettingsPage` BillingTab — luồng nâng cấp đầy đủ: chọn gói → QR thanh toán + polling → auto-close khi plan đổi; dev-only mock button ✅
+- **Chặn tính năng theo gói (plan gating):** Backend `PlanGuard` + `@RequiresPlan` — Copilot/comparison/top-accounts cần Starter+, export Excel cần Pro+, thông báo Email/Slack validate trong `settings.service`. JWT/session có field `plan`; FE `PlanGate` + icon khóa sidebar + khóa switch thông báo/xuất Excel ✅
+- **Partner đổi gói DN:** `PATCH /partner/tenants/:id/plan` — Cas Partner đặt gói bất kỳ cho bất kỳ tenant (không giới hạn downgrade như user tự nâng cấp); `PartnerTenantsPage.tsx` (page riêng, tách khỏi PartnerPage cũ) với dialog 2 bước (chọn gói → ConfirmDialog) ✅
+- **Overage billing:** `planPricing.overagePricePerTransaction` seed Starter=800đ, Pro=600đ/GD (Partner đổi được qua UI); `banking.service` chỉ log overage cho Starter/Pro; `BillingCycleService` cron 2am — tìm subscription hết cycle → tạo PayOS overage order nếu có → reset `transactionUsedThisCycle`; `billing.controller` thêm 3 endpoint overage; `SettingsPage` BillingTab thêm banner cam + dialog QR riêng cho phí vượt quota ✅
+- **Partner Dashboard planBreakdown card:** card "Phân bố theo gói dịch vụ" — mỗi gói hiện số DN + doanh thu định kỳ + mini progress bar; data từ `/partner/tenants` (không cần API mới) ✅
+- **Dialog thanh toán:** `onInteractOutside` + `onEscapeKeyDown` → `e.preventDefault()` — user không thể vô tình đóng dialog thanh toán khi click ra ngoài hay bấm Escape ✅
+- **QR code fix:** thay `<img src={qrCode}>` bằng `<QRCodeSVG value={qrCode} size={176} />` từ `qrcode.react` — PayOS v2 trả về raw VietQR string, không phải URL ảnh ✅
+- **Chặn downgrade tự nâng cấp:** `billing.service.upgrade()` so sánh `pricePerMonth` từ `planPricing` table (không hardcode), ném 400 nếu target thấp hơn current; FE disable card + badge "Không khả dụng" cho gói giá thấp hơn ✅
 
 **Chưa làm (Sprint 4 — còn lại):**
 - Production env vars + Docker build pipeline, SSL/HTTPS + nginx config production
@@ -97,7 +104,8 @@ paypilot-ai/                                   ← tên folder local có thể k
 │   │   │       ├── 20260702032642_add_cas_grant_account_holder_name/
 │   │   │       ├── 20260702080000_add_cas_grant_bank_logo/
 │   │   │       ├── 20260703041453_klassi_ai_pivot/   ← migration đã apply (tên lịch sử) ✅
-│   │   │       └── 20260703091815_add_plan_pricing/  ← thêm bảng plan_pricing + seed giá mặc định ✅
+│   │   │       ├── 20260703091815_add_plan_pricing/  ← thêm bảng plan_pricing + seed giá mặc định ✅
+│   │   │       └── 20260703120000_add_payment_order_type_and_overage_prices/ ← thêm order_type vào payment_orders + seed overagePricePerTransaction (Starter=800, Pro=600) ✅
 │   │   ├── package.json
 │   │   ├── nest-cli.json
 │   │   ├── .swcrc
@@ -192,8 +200,10 @@ paypilot-ai/                                   ← tên folder local có thể k
 │           │   ├── settings/SettingsPage.tsx  # Tabs: Banking/Threshold/Notifications/Team/Billing ✅
 │           │   ├── accounts/AccountsPage.tsx  # Danh mục TK TT133 ✅
 │           │   └── partner/
-│   │   ├── PartnerLayout.tsx          # Sidebar layout (logo, collapse/expand, mobile) ✅
-│   │   ├── PartnerDashboardPage.tsx   # Stat cards, revenue chart, filter, bảng tenant, dialog chi tiết ✅
+│   │   ├── PartnerLayout.tsx          # Sidebar layout (logo, collapse/expand, mobile); nav: Dashboard/Doanh nghiệp/Lịch sử thanh toán/Gói dịch vụ ✅
+│   │   ├── PartnerDashboardPage.tsx   # Stat cards (có mô tả) + biểu đồ doanh thu theo gói theo tháng (multi-line) ✅
+│   │   ├── PartnerTenantsPage.tsx     # Danh sách tenant, filter, dialog chi tiết + đổi gói ✅
+│   │   ├── PartnerPaymentsPage.tsx    # Lịch sử thanh toán (bảng payment_orders + filter + summary) ✅
 │   │   └── PartnerPlansPage.tsx       # 4 plan cards, bảng giá, dialog chỉnh giá ✅
 │           ├── components/shared/WelcomeTour.tsx  # Dialog 4 bước, 1 lần/user (localStorage) ✅
 │           ├── hooks/                          # + useReviewCount.ts (poll 20s /review/count)
@@ -254,7 +264,8 @@ paypilot-ai/                                   ← tên folder local có thể k
 | POST | `/webhook/payos-billing` | Public (PayOS signature) | Callback thanh toán PayOS → `confirmPayment()` |
 | GET | `/partner/tenants` | Cas Partner | Danh sách toàn bộ tenant + plan/status/GD tháng/doanh thu |
 | GET | `/partner/stats` | Cas Partner | Tổng DN/active/suspended/GD tháng/doanh thu/AI accuracy toàn hệ thống |
-| GET | `/partner/revenue-trend` | Cas Partner | Doanh thu 6 tháng gần nhất (từ `payment_orders` status=paid) |
+| GET | `/partner/revenue-trend` | Cas Partner | Doanh thu 6 tháng gần nhất (từ `payment_orders` status=paid) — kèm breakdown theo gói (`free/starter/pro/enterprise`) |
+| GET | `/partner/payments` | Cas Partner | Lịch sử thanh toán toàn hệ thống (mọi `payment_orders` + tên DN), mọi trạng thái |
 | PATCH | `/partner/tenants/:id/suspend` | Cas Partner | Khóa tài khoản doanh nghiệp |
 | PATCH | `/partner/tenants/:id/activate` | Cas Partner | Mở khóa tài khoản doanh nghiệp |
 | GET | `/partner/tenants/:id` | Cas Partner | Chi tiết 1 tenant (plan + GD tháng + AI accuracy + members) |
@@ -345,7 +356,7 @@ prisma:migrate   → prisma migrate deploy
 postinstall      → prisma generate
 ```
 
-**Dependencies đáng chú ý:** `xlsx` (export Excel), `openai`, `bullmq`, `@nestjs/bullmq`, `@nestjs/throttler` (rate limiting per-tenant), `@prisma/client ^6`, `@xcash/shared-types`.
+**Dependencies đáng chú ý:** `xlsx` (export Excel), `openai`, `bullmq`, `@nestjs/bullmq`, `@nestjs/throttler` (rate limiting per-tenant), `@nestjs/schedule` + `cron` (billing cycle cron), `@prisma/client ^6`, `@xcash/shared-types`.
 
 **Build:** NestJS SWC builder. `@Roles()` decorator nhận `Role` từ `@xcash/shared-types` (không phải `@prisma/client`) — quan trọng, dùng sai sẽ lỗi type.
 
@@ -364,6 +375,9 @@ postinstall      → prisma generate
 - **ShadCN mới (Progress/Separator/Switch/Tabs) dùng `radix-ui` umbrella package**, KHÔNG dùng `@radix-ui/react-progress` v.v. riêng lẻ — dự án chỉ có `radix-ui` (^1.6.1) trong `package.json`, import theo pattern `import { Progress as ProgressPrimitive } from 'radix-ui'` giống `select.tsx` đã có sẵn. Chạy `pnpm dlx shadcn@latest add <name>` có thể ghi nhầm vào thư mục `@/` sai chỗ (alias resolve lỗi) — nếu gặp, viết file thủ công theo pattern của component ShadCN có sẵn trong repo (`select.tsx`) thay vì tin theo output CLI.
 - **Team invite đơn giản hoá:** tạo user trực tiếp với password do Admin nhập, không gửi email thật (chỉ demo).
 - **`dto.role as unknown as import('@prisma/client').Role`** — cast cần thiết trong `team.service.ts` vì `Role` từ `@xcash/shared-types` (dùng cho DTO/RBAC) không trùng type với `Role` enum của Prisma Client dù cùng giá trị string.
+- **Frontend dependencies đáng chú ý:** `qrcode.react` (`QRCodeSVG`) — PayOS v2 trả về raw VietQR string, không phải URL; phải render bằng `QRCodeSVG` thay vì `<img src>`. Import: `import { QRCodeSVG } from 'qrcode.react'`.
+- **Overage billing flow:** (1) webhook banking ghi `usageLog(metric='overage_transaction')` khi Starter/Pro vượt quota; (2) cron `BillingCycleService` 2am daily tìm sub hết `currentCycleEnd` → gọi `createOverageOrder()` nếu có overage → reset `transactionUsedThisCycle=0` và `currentCycleEnd`; (3) tenant thấy banner cam trên BillingTab → click "Thanh toán ngay" → tạo PayOS order `orderType='overage'`; (4) webhook PayOS xác nhận → `confirmPayment()` nhận biết `orderType` → chỉ mark paid + auditLog, không đổi gói. Giá đọc từ `planPricing.overagePricePerTransaction` (không hardcode).
+- **`payment_orders.order_type`:** field mới (migration `20260703120000`), default `'upgrade'`. Prisma client cũ chưa có type này — trong service dùng `(this.prisma.paymentOrder.findUnique as any)(...)` với `biome-ignore lint/suspicious/noExplicitAny` comment. Nếu regenerate Prisma client thành công (cần stop backend trước để giải phóng DLL lock trên Windows), có thể bỏ các cast `as any` này.
 - **Rate limiting per-tenant:** `TenantThrottlerGuard` override `getTracker()` để dùng `tenantId` (fallback `userId` rồi IP) làm key thay vì mặc định theo IP — vì nhiều user cùng tenant có thể gọi API từ IP khác nhau, và Cas Partner (không có `tenantId`) vẫn cần giới hạn theo user. Áp dụng global qua `APP_GUARD`, bỏ qua `/health`. Giới hạn: `RATE_LIMIT_PER_MINUTE` (default 120 request/phút/tenant).
 - **Tenant suspend chặn login:** `auth.service.ts` → `login()` tra `subscription` mới nhất theo `tenantId`, nếu `status === 'suspended'` thì từ chối đăng nhập luôn (không cho vào hệ thống dù JWT hợp lệ) — khớp edge case đã ghi trong `rbac.md`.
 

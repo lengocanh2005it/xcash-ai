@@ -9,7 +9,7 @@ import {
   UserPlus,
   Users,
 } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { Header } from '@/components/layout/Header';
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog';
@@ -39,6 +39,7 @@ import { Switch } from '@/components/ui/switch';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useAuth } from '@/hooks/useAuth';
 import { api } from '@/lib/api';
+import { formatDateVN } from '@/lib/dashboard-transactions';
 import { formatVND } from '@/lib/format-vnd';
 import { cn } from '@/lib/utils';
 
@@ -393,18 +394,102 @@ interface PlanData {
   status: string;
 }
 
+interface UpgradeResult {
+  orderCode: string;
+  checkoutUrl: string;
+  qrCode: string;
+  amount: number;
+  isMock: boolean;
+}
+
+const PLAN_LABEL: Record<string, string> = {
+  free: 'Free',
+  starter: 'Starter',
+  pro: 'Pro',
+  enterprise: 'Enterprise',
+};
+
+const PLAN_PRICE: Record<string, number> = {
+  free: 0,
+  starter: 299_000,
+  pro: 799_000,
+  enterprise: 2_990_000,
+};
+
+const PLAN_QUOTA: Record<string, string> = {
+  free: '50 GD/tháng',
+  starter: '500 GD/tháng',
+  pro: '2.000 GD/tháng',
+  enterprise: 'Không giới hạn',
+};
+
+const PLAN_FEATURES: Record<string, string[]> = {
+  free: ['50 giao dịch/tháng', 'AI định khoản tự động', 'Export Excel'],
+  starter: ['500 giao dịch/tháng', 'AI Copilot', 'Analytics', 'Email thông báo'],
+  pro: ['2.000 giao dịch/tháng', 'RAG Knowledge Base', 'Slack/Discord', 'Phí vượt 600đ/GD'],
+  enterprise: ['Không giới hạn GD', 'SLA cam kết', 'Partner support riêng', 'Custom Integration'],
+};
+
+const ALL_PLANS = ['free', 'starter', 'pro', 'enterprise'];
+
 function BillingTab() {
+  const qc = useQueryClient();
+  const [upgradeOpen, setUpgradeOpen] = useState(false);
+  const [paymentOpen, setPaymentOpen] = useState(false);
+  const [upgradeResult, setUpgradeResult] = useState<UpgradeResult | null>(null);
+  const [selectedPlan, setSelectedPlan] = useState<string | null>(null);
+
   const { data, isLoading } = useQuery({
     queryKey: ['billing', 'current-plan'],
     queryFn: () => api.get<{ data: PlanData }>('/billing/current-plan').then((r) => r.data.data),
+    // poll mỗi 5s khi dialog thanh toán đang mở để tự động detect khi payment xong
+    refetchInterval: paymentOpen ? 5_000 : false,
   });
 
-  const planLabel: Record<string, string> = {
-    free: 'Free',
-    starter: 'Starter',
-    pro: 'Pro',
-    enterprise: 'Enterprise',
-  };
+  // Tự đóng dialog khi plan đã đổi thành targetPlan
+  const prevPlanRef = useRef<string | undefined>(undefined);
+  useEffect(() => {
+    if (!paymentOpen || !upgradeResult || !data) return;
+    if (prevPlanRef.current && data.plan === upgradeResult?.orderCode) return;
+    if (data.plan !== prevPlanRef.current && prevPlanRef.current !== undefined) {
+      setPaymentOpen(false);
+      setUpgradeResult(null);
+      setSelectedPlan(null);
+      toast.success(`Nâng cấp lên gói ${PLAN_LABEL[data.plan] ?? data.plan} thành công!`);
+      qc.invalidateQueries({ queryKey: ['billing', 'current-plan'] });
+    }
+    prevPlanRef.current = data.plan;
+  }, [data, paymentOpen, upgradeResult, qc]);
+
+  useEffect(() => {
+    if (data && !paymentOpen) prevPlanRef.current = data.plan;
+  }, [data, paymentOpen]);
+
+  const upgradeMutation = useMutation({
+    mutationFn: (targetPlan: string) =>
+      api
+        .post<{ data: UpgradeResult }>('/billing/upgrade', { targetPlan })
+        .then((r) => r.data.data),
+    onSuccess: (result) => {
+      setUpgradeResult(result);
+      setUpgradeOpen(false);
+      setPaymentOpen(true);
+      prevPlanRef.current = data?.plan;
+    },
+    onError: () => toast.error('Không thể tạo đơn thanh toán, vui lòng thử lại'),
+  });
+
+  const mockConfirmMutation = useMutation({
+    mutationFn: (orderCode: string) => api.post(`/billing/upgrade/${orderCode}/mock-confirm`),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['billing', 'current-plan'] });
+      setPaymentOpen(false);
+      setUpgradeResult(null);
+      setSelectedPlan(null);
+      toast.success('Demo: Thanh toán thành công!');
+    },
+    onError: () => toast.error('Không thể xác nhận mock'),
+  });
 
   if (isLoading) return <Skeleton className="h-48" />;
 
@@ -412,57 +497,197 @@ function BillingTab() {
     ? Math.min(100, Math.round((data.transactionUsed / data.transactionQuota) * 100))
     : 0;
   const isNearLimit = usedPct >= 80;
+  const isDev = import.meta.env.DEV;
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="text-base">Gói dịch vụ</CardTitle>
-        <CardDescription>Gói hiện tại và usage của doanh nghiệp</CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        {data && (
-          <>
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <Badge
-                  variant={data.plan === 'free' ? 'secondary' : 'default'}
-                  className="uppercase"
-                >
-                  {planLabel[data.plan] ?? data.plan}
-                </Badge>
-                <span className="text-sm text-muted-foreground">
-                  {data.pricePerMonth > 0 ? `${formatVND(data.pricePerMonth)}/tháng` : 'Miễn phí'}
-                </span>
-              </div>
-              <span className="text-xs text-muted-foreground">
-                Hết chu kỳ: {new Date(data.currentCycleEnd).toLocaleDateString('vi-VN')}
-              </span>
+    <>
+      <Card>
+        <CardHeader>
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <CardTitle className="text-base">Gói dịch vụ</CardTitle>
+              <CardDescription>Gói hiện tại và usage của doanh nghiệp</CardDescription>
             </div>
-
-            <div className="space-y-1.5">
-              <div className="flex justify-between text-sm">
-                <span className="text-muted-foreground">Giao dịch đã dùng</span>
-                <span className={cn('font-medium', isNearLimit && 'text-destructive')}>
-                  {data.transactionUsed.toLocaleString()} / {data.transactionQuota.toLocaleString()}
+            {data && (
+              <Button size="sm" onClick={() => setUpgradeOpen(true)}>
+                Nâng cấp gói
+              </Button>
+            )}
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {data && (
+            <>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Badge
+                    variant={data.plan === 'free' ? 'secondary' : 'default'}
+                    className="uppercase"
+                  >
+                    {PLAN_LABEL[data.plan] ?? data.plan}
+                  </Badge>
+                  <span className="text-sm text-muted-foreground">
+                    {data.pricePerMonth > 0 ? `${formatVND(data.pricePerMonth)}/tháng` : 'Miễn phí'}
+                  </span>
+                </div>
+                <span className="text-xs text-muted-foreground">
+                  Hết chu kỳ: {formatDateVN(data.currentCycleEnd)}
                 </span>
               </div>
-              <Progress value={usedPct} className={cn(isNearLimit && '[&>div]:bg-destructive')} />
-              {isNearLimit && (
-                <p className="text-xs text-destructive">
-                  Sắp đạt giới hạn. Nâng cấp gói để tiếp tục nhận giao dịch.
-                </p>
+
+              <div className="space-y-1.5">
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">Giao dịch đã dùng</span>
+                  <span className={cn('font-medium', isNearLimit && 'text-destructive')}>
+                    {data.transactionUsed.toLocaleString()} /{' '}
+                    {data.transactionQuota.toLocaleString()}
+                  </span>
+                </div>
+                <Progress value={usedPct} className={cn(isNearLimit && '[&>div]:bg-destructive')} />
+                {isNearLimit && (
+                  <p className="text-xs text-destructive">
+                    Sắp đạt giới hạn. Nâng cấp gói để tiếp tục nhận giao dịch.
+                  </p>
+                )}
+              </div>
+            </>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Dialog chọn gói */}
+      <Dialog open={upgradeOpen} onOpenChange={setUpgradeOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Chọn gói dịch vụ</DialogTitle>
+          </DialogHeader>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            {ALL_PLANS.map((plan) => {
+              const isCurrent = data?.plan === plan;
+              const isSelected = selectedPlan === plan;
+              return (
+                <button
+                  key={plan}
+                  type="button"
+                  disabled={isCurrent}
+                  onClick={() => setSelectedPlan(plan)}
+                  className={cn(
+                    'rounded-xl border p-4 text-left transition-all',
+                    isCurrent
+                      ? 'cursor-not-allowed border-primary/40 bg-primary/5 opacity-60'
+                      : isSelected
+                        ? 'border-primary ring-1 ring-primary'
+                        : 'hover:border-primary/50',
+                  )}
+                >
+                  <div className="mb-2 flex items-center justify-between">
+                    <span className="font-semibold">{PLAN_LABEL[plan]}</span>
+                    {isCurrent && (
+                      <Badge variant="secondary" className="text-[10px]">
+                        Hiện tại
+                      </Badge>
+                    )}
+                  </div>
+                  <p className="mb-2 text-lg font-bold text-primary">
+                    {PLAN_PRICE[plan] === 0
+                      ? 'Miễn phí'
+                      : `${formatVND(PLAN_PRICE[plan] ?? 0)}/tháng`}
+                  </p>
+                  <p className="mb-2 text-xs text-muted-foreground">{PLAN_QUOTA[plan]}</p>
+                  <ul className="space-y-1">
+                    {(PLAN_FEATURES[plan] ?? []).map((f) => (
+                      <li
+                        key={f}
+                        className="flex items-center gap-1.5 text-xs text-muted-foreground"
+                      >
+                        <span className="text-primary">✓</span> {f}
+                      </li>
+                    ))}
+                  </ul>
+                </button>
+              );
+            })}
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setUpgradeOpen(false)}>
+              Hủy
+            </Button>
+            <Button
+              disabled={!selectedPlan || upgradeMutation.isPending}
+              onClick={() => selectedPlan && upgradeMutation.mutate(selectedPlan)}
+            >
+              {upgradeMutation.isPending ? 'Đang tạo đơn...' : 'Tiếp tục thanh toán'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog thanh toán */}
+      <Dialog
+        open={paymentOpen}
+        onOpenChange={(open) => {
+          if (!open) {
+            setPaymentOpen(false);
+            setUpgradeResult(null);
+            setSelectedPlan(null);
+          }
+        }}
+      >
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Thanh toán nâng cấp gói</DialogTitle>
+          </DialogHeader>
+          {upgradeResult && (
+            <div className="space-y-4 text-center">
+              <p className="text-sm text-muted-foreground">
+                Số tiền:{' '}
+                <span className="font-semibold text-foreground">
+                  {formatVND(upgradeResult.amount)}
+                </span>
+              </p>
+
+              {upgradeResult.qrCode ? (
+                <img
+                  src={upgradeResult.qrCode}
+                  alt="QR thanh toán"
+                  className="mx-auto size-48 rounded-lg border"
+                />
+              ) : (
+                <div className="flex h-48 items-center justify-center rounded-lg border bg-muted text-xs text-muted-foreground">
+                  {upgradeResult.isMock ? 'QR mock — chưa có PayOS key thật' : 'Đang tải QR...'}
+                </div>
+              )}
+
+              <Button
+                variant="outline"
+                className="w-full"
+                onClick={() => window.open(upgradeResult.checkoutUrl, '_blank')}
+              >
+                Mở trang thanh toán PayOS
+              </Button>
+
+              <p className="text-xs text-muted-foreground">
+                Hệ thống tự cập nhật sau khi thanh toán xong. Có thể đóng cửa sổ này rồi quay lại
+                sau.
+              </p>
+
+              {isDev && (
+                <Button
+                  variant="secondary"
+                  className="w-full"
+                  disabled={mockConfirmMutation.isPending}
+                  onClick={() => mockConfirmMutation.mutate(upgradeResult.orderCode)}
+                >
+                  {mockConfirmMutation.isPending
+                    ? 'Đang xử lý...'
+                    : '🧪 Demo: Giả lập thanh toán thành công'}
+                </Button>
               )}
             </div>
-
-            <Separator />
-
-            <p className="text-sm text-muted-foreground">
-              Để nâng cấp gói, vui lòng liên hệ đội ngũ X-Cash AI.
-            </p>
-          </>
-        )}
-      </CardContent>
-    </Card>
+          )}
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }
 

@@ -43,4 +43,8 @@ export default () => ({
   OPENAI_CHAT_MODEL: process.env.OPENAI_CHAT_MODEL ?? 'gpt-4o-mini',
   AI_CLASSIFICATION_THRESHOLD: Number.parseInt(process.env.AI_CLASSIFICATION_THRESHOLD ?? '85', 10),
   RATE_LIMIT_PER_MINUTE: Number.parseInt(process.env.RATE_LIMIT_PER_MINUTE ?? '120', 10),
+  PAYOS_CLIENT_ID: process.env.PAYOS_CLIENT_ID ?? '',
+  PAYOS_API_KEY: process.env.PAYOS_API_KEY ?? '',
+  PAYOS_CHECKSUM_KEY: process.env.PAYOS_CHECKSUM_KEY ?? '',
+  PAYOS_BILLING_WEBHOOK_URL: process.env.PAYOS_BILLING_WEBHOOK_URL ?? '',
 });

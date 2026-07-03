@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { TrendingDown, TrendingUp } from 'lucide-react';
 import { useState } from 'react';
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
+import { Header } from '@/components/layout/Header';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import {
@@ -82,257 +83,258 @@ export default function AnalyticsPage() {
   const prevYear = month === 1 ? year - 1 : year;
 
   return (
-    <div className="flex flex-col gap-6 p-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-xl font-semibold">Phân tích</h1>
-          <p className="text-sm text-muted-foreground">So sánh với tháng trước, top danh mục</p>
-        </div>
-        <div className="flex gap-2">
-          <Select value={String(month)} onValueChange={(v) => setMonth(Number(v))}>
-            <SelectTrigger className="w-32">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {months.map((m) => (
-                <SelectItem key={m.value} value={String(m.value)}>
-                  {m.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <Select value={String(year)} onValueChange={(v) => setYear(Number(v))}>
-            <SelectTrigger className="w-24">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {years.map((y) => (
-                <SelectItem key={y} value={String(y)}>
-                  {y}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-      </div>
-
-      {/* Comparison stats */}
-      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-        {loadingComp
-          ? Array.from({ length: 4 }, (_, i) => `skel-stat-${i}`).map((k) => (
-              <Skeleton key={k} className="h-28" />
-            ))
-          : comparison && (
-              <>
-                <Card>
-                  <CardHeader className="pb-2">
-                    <CardTitle className="text-sm font-medium text-muted-foreground">
-                      Doanh thu tháng {month}
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <p className="text-2xl font-bold">
-                      {formatVND(comparison.current.totalRevenue)}
-                    </p>
-                    <div className="flex items-center gap-1 mt-1">
-                      <PctBadge value={comparison.changes.revenue} />
-                      <span className="text-xs text-muted-foreground">
-                        vs tháng {prevMonth}/{prevYear}
-                      </span>
-                    </div>
-                  </CardContent>
-                </Card>
-                <Card>
-                  <CardHeader className="pb-2">
-                    <CardTitle className="text-sm font-medium text-muted-foreground">
-                      Chi phí tháng {month}
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <p className="text-2xl font-bold">
-                      {formatVND(comparison.current.totalExpense)}
-                    </p>
-                    <div className="flex items-center gap-1 mt-1">
-                      <PctBadge value={-comparison.changes.expense} />
-                      <span className="text-xs text-muted-foreground">
-                        vs tháng {prevMonth}/{prevYear}
-                      </span>
-                    </div>
-                  </CardContent>
-                </Card>
-                <Card>
-                  <CardHeader className="pb-2">
-                    <CardTitle className="text-sm font-medium text-muted-foreground">
-                      Lãi/lỗ
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <p
-                      className={`text-2xl font-bold ${comparison.current.net >= 0 ? 'text-green-600' : 'text-red-500'}`}
-                    >
-                      {formatVND(comparison.current.net)}
-                    </p>
-                    <div className="flex items-center gap-1 mt-1">
-                      <PctBadge value={comparison.changes.net} />
-                      <span className="text-xs text-muted-foreground">vs tháng trước</span>
-                    </div>
-                  </CardContent>
-                </Card>
-                <Card>
-                  <CardHeader className="pb-2">
-                    <CardTitle className="text-sm font-medium text-muted-foreground">
-                      Độ chính xác AI
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <p className="text-2xl font-bold">{comparison.currentStats.aiAccuracy}%</p>
-                    <div className="flex items-center gap-1 mt-1">
-                      <PctBadge value={comparison.changes.aiAccuracy} />
-                      <span className="text-xs text-muted-foreground">vs tháng trước</span>
-                    </div>
-                  </CardContent>
-                </Card>
-              </>
-            )}
-      </div>
-
-      {/* Revenue vs Expense side-by-side chart */}
-      {comparison && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-sm">
-              So sánh thu chi — Tháng {month} vs Tháng {prevMonth}
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <ResponsiveContainer width="100%" height={220}>
-              <BarChart
-                data={[
-                  {
-                    name: `Tháng ${prevMonth}`,
-                    revenue: comparison.previous.totalRevenue,
-                    expense: comparison.previous.totalExpense,
-                  },
-                  {
-                    name: `Tháng ${month}`,
-                    revenue: comparison.current.totalRevenue,
-                    expense: comparison.current.totalExpense,
-                  },
-                ]}
-                barCategoryGap="35%"
-              >
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="name" tick={{ fontSize: 12 }} />
-                <YAxis
-                  tickFormatter={(v: number) => formatVND(v)}
-                  tick={{ fontSize: 11 }}
-                  width={80}
-                />
-                <Tooltip formatter={(v) => (typeof v === 'number' ? formatVND(v) : String(v))} />
-                <Bar dataKey="revenue" name="Doanh thu" fill="#16AB64" radius={[4, 4, 0, 0]} />
-                <Bar dataKey="expense" name="Chi phí" fill="#ef4444" radius={[4, 4, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Top accounts */}
-      <div className="grid gap-4 lg:grid-cols-2">
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-sm">Top 5 danh mục chi phí</CardTitle>
-          </CardHeader>
-          <CardContent>
-            {loadingTop ? (
-              <div className="space-y-2">
-                {Array.from({ length: 5 }, (_, i) => `skel-exp-${i}`).map((k) => (
-                  <Skeleton key={k} className="h-8" />
+    <>
+      <Header
+        title="Phân tích"
+        description="So sánh với tháng trước, top danh mục"
+        actions={
+          <div className="flex gap-2">
+            <Select value={String(month)} onValueChange={(v) => setMonth(Number(v))}>
+              <SelectTrigger className="w-32">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {months.map((m) => (
+                  <SelectItem key={m.value} value={String(m.value)}>
+                    {m.label}
+                  </SelectItem>
                 ))}
-              </div>
-            ) : topAccounts?.topExpense.length === 0 ? (
-              <p className="text-sm text-muted-foreground text-center py-8">Chưa có dữ liệu</p>
-            ) : (
-              <div className="space-y-3">
-                {topAccounts?.topExpense.map((acc, i) => {
-                  const max = topAccounts.topExpense[0]?.total ?? 1;
-                  return (
-                    <div key={acc.accountCode} className="space-y-1">
-                      <div className="flex justify-between text-sm">
-                        <span className="font-medium truncate max-w-[200px]">
-                          <Badge variant="outline" className="mr-1 text-xs">
-                            {acc.accountCode}
-                          </Badge>
-                          {acc.accountName}
-                        </span>
-                        <span className="text-muted-foreground shrink-0">
-                          {formatVND(acc.total)}
-                        </span>
-                      </div>
-                      <div className="h-1.5 rounded-full bg-muted overflow-hidden">
-                        <div
-                          className="h-full rounded-full"
-                          style={{
-                            width: `${(acc.total / max) * 100}%`,
-                            backgroundColor: COLORS[i],
-                          }}
-                        />
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-sm">Top 5 nguồn doanh thu</CardTitle>
-          </CardHeader>
-          <CardContent>
-            {loadingTop ? (
-              <div className="space-y-2">
-                {Array.from({ length: 5 }, (_, i) => `skel-rev-${i}`).map((k) => (
-                  <Skeleton key={k} className="h-8" />
+              </SelectContent>
+            </Select>
+            <Select value={String(year)} onValueChange={(v) => setYear(Number(v))}>
+              <SelectTrigger className="w-24">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {years.map((y) => (
+                  <SelectItem key={y} value={String(y)}>
+                    {y}
+                  </SelectItem>
                 ))}
-              </div>
-            ) : topAccounts?.topRevenue.length === 0 ? (
-              <p className="text-sm text-muted-foreground text-center py-8">Chưa có dữ liệu</p>
-            ) : (
-              <div className="space-y-3">
-                {topAccounts?.topRevenue.map((acc, i) => {
-                  const max = topAccounts.topRevenue[0]?.total ?? 1;
-                  return (
-                    <div key={acc.accountCode} className="space-y-1">
-                      <div className="flex justify-between text-sm">
-                        <span className="font-medium truncate max-w-[200px]">
-                          <Badge variant="outline" className="mr-1 text-xs">
-                            {acc.accountCode}
-                          </Badge>
-                          {acc.accountName}
-                        </span>
-                        <span className="text-muted-foreground shrink-0">
-                          {formatVND(acc.total)}
+              </SelectContent>
+            </Select>
+          </div>
+        }
+      />
+      <div className="flex flex-col gap-6 p-4 sm:p-6">
+        {/* Comparison stats */}
+        <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+          {loadingComp
+            ? Array.from({ length: 4 }, (_, i) => `skel-stat-${i}`).map((k) => (
+                <Skeleton key={k} className="h-28" />
+              ))
+            : comparison && (
+                <>
+                  <Card>
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-sm font-medium text-muted-foreground">
+                        Doanh thu tháng {month}
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <p className="text-2xl font-bold">
+                        {formatVND(comparison.current.totalRevenue)}
+                      </p>
+                      <div className="flex items-center gap-1 mt-1">
+                        <PctBadge value={comparison.changes.revenue} />
+                        <span className="text-xs text-muted-foreground">
+                          vs tháng {prevMonth}/{prevYear}
                         </span>
                       </div>
-                      <div className="h-1.5 rounded-full bg-muted overflow-hidden">
-                        <div
-                          className="h-full rounded-full"
-                          style={{
-                            width: `${(acc.total / max) * 100}%`,
-                            backgroundColor: COLORS[i],
-                          }}
-                        />
+                    </CardContent>
+                  </Card>
+                  <Card>
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-sm font-medium text-muted-foreground">
+                        Chi phí tháng {month}
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <p className="text-2xl font-bold">
+                        {formatVND(comparison.current.totalExpense)}
+                      </p>
+                      <div className="flex items-center gap-1 mt-1">
+                        <PctBadge value={-comparison.changes.expense} />
+                        <span className="text-xs text-muted-foreground">
+                          vs tháng {prevMonth}/{prevYear}
+                        </span>
                       </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </CardContent>
-        </Card>
+                    </CardContent>
+                  </Card>
+                  <Card>
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-sm font-medium text-muted-foreground">
+                        Lãi/lỗ
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <p
+                        className={`text-2xl font-bold ${comparison.current.net >= 0 ? 'text-green-600' : 'text-red-500'}`}
+                      >
+                        {formatVND(comparison.current.net)}
+                      </p>
+                      <div className="flex items-center gap-1 mt-1">
+                        <PctBadge value={comparison.changes.net} />
+                        <span className="text-xs text-muted-foreground">vs tháng trước</span>
+                      </div>
+                    </CardContent>
+                  </Card>
+                  <Card>
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-sm font-medium text-muted-foreground">
+                        Độ chính xác AI
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <p className="text-2xl font-bold">{comparison.currentStats.aiAccuracy}%</p>
+                      <div className="flex items-center gap-1 mt-1">
+                        <PctBadge value={comparison.changes.aiAccuracy} />
+                        <span className="text-xs text-muted-foreground">vs tháng trước</span>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </>
+              )}
+        </div>
+
+        {/* Revenue vs Expense side-by-side chart */}
+        {comparison && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-sm">
+                So sánh thu chi — Tháng {month} vs Tháng {prevMonth}
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <ResponsiveContainer width="100%" height={220}>
+                <BarChart
+                  data={[
+                    {
+                      name: `Tháng ${prevMonth}`,
+                      revenue: comparison.previous.totalRevenue,
+                      expense: comparison.previous.totalExpense,
+                    },
+                    {
+                      name: `Tháng ${month}`,
+                      revenue: comparison.current.totalRevenue,
+                      expense: comparison.current.totalExpense,
+                    },
+                  ]}
+                  barCategoryGap="35%"
+                >
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="name" tick={{ fontSize: 12 }} />
+                  <YAxis
+                    tickFormatter={(v: number) => formatVND(v)}
+                    tick={{ fontSize: 11 }}
+                    width={80}
+                  />
+                  <Tooltip formatter={(v) => (typeof v === 'number' ? formatVND(v) : String(v))} />
+                  <Bar dataKey="revenue" name="Doanh thu" fill="#16AB64" radius={[4, 4, 0, 0]} />
+                  <Bar dataKey="expense" name="Chi phí" fill="#ef4444" radius={[4, 4, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Top accounts */}
+        <div className="grid gap-4 lg:grid-cols-2">
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-sm">Top 5 danh mục chi phí</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {loadingTop ? (
+                <div className="space-y-2">
+                  {Array.from({ length: 5 }, (_, i) => `skel-exp-${i}`).map((k) => (
+                    <Skeleton key={k} className="h-8" />
+                  ))}
+                </div>
+              ) : topAccounts?.topExpense.length === 0 ? (
+                <p className="text-sm text-muted-foreground text-center py-8">Chưa có dữ liệu</p>
+              ) : (
+                <div className="space-y-3">
+                  {topAccounts?.topExpense.map((acc, i) => {
+                    const max = topAccounts.topExpense[0]?.total ?? 1;
+                    return (
+                      <div key={acc.accountCode} className="space-y-1">
+                        <div className="flex justify-between text-sm">
+                          <span className="font-medium truncate max-w-[200px]">
+                            <Badge variant="outline" className="mr-1 text-xs">
+                              {acc.accountCode}
+                            </Badge>
+                            {acc.accountName}
+                          </span>
+                          <span className="text-muted-foreground shrink-0">
+                            {formatVND(acc.total)}
+                          </span>
+                        </div>
+                        <div className="h-1.5 rounded-full bg-muted overflow-hidden">
+                          <div
+                            className="h-full rounded-full"
+                            style={{
+                              width: `${(acc.total / max) * 100}%`,
+                              backgroundColor: COLORS[i],
+                            }}
+                          />
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-sm">Top 5 nguồn doanh thu</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {loadingTop ? (
+                <div className="space-y-2">
+                  {Array.from({ length: 5 }, (_, i) => `skel-rev-${i}`).map((k) => (
+                    <Skeleton key={k} className="h-8" />
+                  ))}
+                </div>
+              ) : topAccounts?.topRevenue.length === 0 ? (
+                <p className="text-sm text-muted-foreground text-center py-8">Chưa có dữ liệu</p>
+              ) : (
+                <div className="space-y-3">
+                  {topAccounts?.topRevenue.map((acc, i) => {
+                    const max = topAccounts.topRevenue[0]?.total ?? 1;
+                    return (
+                      <div key={acc.accountCode} className="space-y-1">
+                        <div className="flex justify-between text-sm">
+                          <span className="font-medium truncate max-w-[200px]">
+                            <Badge variant="outline" className="mr-1 text-xs">
+                              {acc.accountCode}
+                            </Badge>
+                            {acc.accountName}
+                          </span>
+                          <span className="text-muted-foreground shrink-0">
+                            {formatVND(acc.total)}
+                          </span>
+                        </div>
+                        <div className="h-1.5 rounded-full bg-muted overflow-hidden">
+                          <div
+                            className="h-full rounded-full"
+                            style={{
+                              width: `${(acc.total / max) * 100}%`,
+                              backgroundColor: COLORS[i],
+                            }}
+                          />
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </div>
       </div>
-    </div>
+    </>
   );
 }

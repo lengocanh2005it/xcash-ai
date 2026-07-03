@@ -13,11 +13,13 @@ import {
   Settings,
   X,
 } from 'lucide-react';
+import { useEffect, useRef } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { Logo } from '@/components/brand/Logo';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/hooks/useAuth';
+import { useReviewCount } from '@/hooks/useReviewCount';
 import { cn } from '@/lib/utils';
 
 interface NavItem {
@@ -66,10 +68,12 @@ function NavItemLink({
   item,
   collapsed,
   onNavigate,
+  badgeCount,
 }: {
   item: NavItem;
   collapsed: boolean;
   onNavigate?: () => void;
+  badgeCount?: number;
 }) {
   const Icon = item.icon;
 
@@ -80,7 +84,7 @@ function NavItemLink({
       title={collapsed ? item.label : undefined}
       className={({ isActive }) =>
         cn(
-          'group flex items-center rounded-lg px-3 py-2.5 text-sm transition-colors',
+          'group relative flex items-center rounded-lg px-3 py-2.5 text-sm transition-colors',
           collapsed ? 'justify-center' : 'gap-3',
           isActive
             ? 'bg-primary/10 font-medium text-primary ring-1 ring-primary/15'
@@ -90,6 +94,16 @@ function NavItemLink({
     >
       <Icon className="size-4 shrink-0" />
       {!collapsed ? <span className="truncate">{item.label}</span> : null}
+      {badgeCount ? (
+        <span
+          className={cn(
+            'flex h-5 min-w-5 items-center justify-center rounded-full bg-red-500 px-1 text-[11px] font-semibold text-white',
+            collapsed ? 'absolute top-1 right-1' : 'ml-auto',
+          )}
+        >
+          {badgeCount > 99 ? '99+' : badgeCount}
+        </span>
+      ) : null}
     </NavLink>
   );
 }
@@ -104,6 +118,20 @@ export function SidebarContent({
 }: SidebarContentProps) {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
+  const { data: reviewCount } = useReviewCount();
+  const prevReviewCount = useRef<number | undefined>(undefined);
+
+  useEffect(() => {
+    if (
+      reviewCount !== undefined &&
+      prevReviewCount.current !== undefined &&
+      reviewCount > prevReviewCount.current
+    ) {
+      const delta = reviewCount - prevReviewCount.current;
+      toast.info(`Có ${delta} giao dịch mới cần review`);
+    }
+    prevReviewCount.current = reviewCount;
+  }, [reviewCount]);
 
   const handleLogout = async () => {
     try {
@@ -175,7 +203,13 @@ export function SidebarContent({
             </p>
           ) : null}
           {primaryNavItems.map((item) => (
-            <NavItemLink key={item.to} item={item} collapsed={collapsed} onNavigate={onNavigate} />
+            <NavItemLink
+              key={item.to}
+              item={item}
+              collapsed={collapsed}
+              onNavigate={onNavigate}
+              badgeCount={item.to === '/review' ? reviewCount : undefined}
+            />
           ))}
         </div>
       </nav>

@@ -20,6 +20,12 @@ export class ClassificationService {
     return classification;
   }
 
+  async getReviewCount(tenantId: string) {
+    return this.prisma.transactionClassification.count({
+      where: { tenantId, status: TransactionStatus.review },
+    });
+  }
+
   async getReviewQueue(tenantId: string, page: number, limit: number) {
     const skip = (page - 1) * limit;
     const where = { tenantId, status: TransactionStatus.review };

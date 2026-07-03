@@ -1,5 +1,6 @@
 import { Bot, Send, User } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
+import { Header } from '@/components/layout/Header';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { api } from '@/lib/api';
@@ -69,10 +70,11 @@ export default function CopilotPage() {
 
   return (
     <div className="flex h-full flex-col">
-      <div className="border-b px-6 py-4">
-        <h1 className="text-xl font-semibold">AI Copilot</h1>
-        <p className="text-sm text-muted-foreground">Hỏi đáp tài chính bằng ngôn ngữ tự nhiên</p>
-      </div>
+      <Header
+        title="AI Copilot"
+        description="Hỏi đáp tài chính bằng ngôn ngữ tự nhiên"
+        className="relative"
+      />
 
       <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4">
         {messages.map((msg) => (

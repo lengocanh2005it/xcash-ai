@@ -20,7 +20,7 @@ export class BillingController {
   }
 
   @Get('usage-history')
-  @Roles(Role.ADMIN)
+  @Roles(Role.ADMIN, Role.ACCOUNTANT)
   getUsageHistory(@CurrentUser() user: AuthenticatedUser) {
     return this.service.getUsageHistory(user.tenantId!);
   }

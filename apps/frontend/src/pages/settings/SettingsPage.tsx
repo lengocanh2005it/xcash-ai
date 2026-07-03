@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import { useState } from 'react';
 import { toast } from 'sonner';
+import { Header } from '@/components/layout/Header';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -439,7 +440,7 @@ function BillingTab() {
             <Separator />
 
             <p className="text-sm text-muted-foreground">
-              Để nâng cấp gói, vui lòng liên hệ đội ngũ Klassi AI.
+              Để nâng cấp gói, vui lòng liên hệ đội ngũ X-Cash AI.
             </p>
           </>
         )}
@@ -546,33 +547,31 @@ export default function SettingsPage() {
   ];
 
   return (
-    <div className="flex flex-col gap-6 p-6">
-      <div>
-        <h1 className="text-xl font-semibold">Cài đặt</h1>
-        <p className="text-sm text-muted-foreground">Quản lý tài khoản và cấu hình hệ thống</p>
+    <>
+      <Header title="Cài đặt" description="Quản lý tài khoản và cấu hình hệ thống" />
+      <div className="flex flex-col gap-6 p-4 sm:p-6">
+        <Tabs defaultValue="banking">
+          <TabsList className="w-full justify-start gap-1 overflow-x-auto">
+            {tabs.map((tab) => {
+              const Icon = tab.icon;
+              const locked = tab.adminOnly && !isAdmin;
+              return (
+                <TabsTrigger key={tab.value} value={tab.value} disabled={locked} className="gap-2">
+                  <Icon className="size-3.5" />
+                  {tab.label}
+                  {locked && <Lock className="size-3 opacity-50" />}
+                </TabsTrigger>
+              );
+            })}
+          </TabsList>
+
+          {tabs.map((tab) => (
+            <TabsContent key={tab.value} value={tab.value} className="mt-4">
+              {tab.component}
+            </TabsContent>
+          ))}
+        </Tabs>
       </div>
-
-      <Tabs defaultValue="banking">
-        <TabsList className="w-full justify-start gap-1 overflow-x-auto">
-          {tabs.map((tab) => {
-            const Icon = tab.icon;
-            const locked = tab.adminOnly && !isAdmin;
-            return (
-              <TabsTrigger key={tab.value} value={tab.value} disabled={locked} className="gap-2">
-                <Icon className="size-3.5" />
-                {tab.label}
-                {locked && <Lock className="size-3 opacity-50" />}
-              </TabsTrigger>
-            );
-          })}
-        </TabsList>
-
-        {tabs.map((tab) => (
-          <TabsContent key={tab.value} value={tab.value} className="mt-4">
-            {tab.component}
-          </TabsContent>
-        ))}
-      </Tabs>
-    </div>
+    </>
   );
 }

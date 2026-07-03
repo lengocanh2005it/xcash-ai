@@ -33,7 +33,7 @@ Chỉ compose wrapper mỏng ở `components/layout/` (app shell) hoặc `compon
 ## Dark / Light mode
 
 - Dùng class `.dark` trên `document.documentElement` (token màu đã khai báo trong `apps/frontend/src/index.css`).
-- `ThemeProvider` (`contexts/theme-context.tsx`) + `ThemeToggle` (`components/shared/ThemeToggle.tsx`) — lưu preference vào `localStorage` key `klassi-theme`.
+- `ThemeProvider` (`contexts/theme-context.tsx`) + `ThemeToggle` (`components/shared/ThemeToggle.tsx`) — lưu preference vào `localStorage` key `xcash-theme`.
 - Lần đầu vào app: nếu chưa có key, fallback theo `prefers-color-scheme`; `index.html` có inline script nhỏ để tránh flash theme sai lúc load.
 - **Vị trí toggle trên UI:** Sidebar (tenant layout), Header (onboarding/partner), góc phải trên (auth layout). Mọi layout mới phải có chỗ toggle theme, không tạo logic riêng lẻ.
 
@@ -84,7 +84,7 @@ apps/frontend/src/
 │   └── shared/                     # ConfidenceBadge, StatusBadge, EmptyState, TableSkeleton, ThemeToggle...
 ├── contexts/
 │   ├── auth-context.tsx
-│   └── theme-context.tsx           # dark/light mode (localStorage klassi-theme)
+│   └── theme-context.tsx           # dark/light mode (localStorage xcash-theme)
 ├── hooks/
 │   ├── useAuth.ts
 │   ├── usePermission.ts             # xem reference/rbac.md mục Frontend — Ẩn/hiện UI theo role
@@ -104,7 +104,7 @@ apps/frontend/src/
 |---|---|---|
 | Role | Admin / Accountant / Viewer | Cas Partner |
 | Route | `/dashboard`, `/transactions`, `/review`, `/reports`, `/accounts`... | `/partner` |
-| Sidebar | Có, menu Klassi AI | Không, chỉ top nav |
+| Sidebar | Có, menu X-Cash AI | Không, chỉ top nav |
 
 Chi tiết đầy đủ 2 layout tại [`reference/ui-design.md`](./reference/ui-design.md#-global-layout-tenant--mục-18) mục Global Layout và mục 9 Partner Dashboard. **Không import component/API nghiệp vụ tenant (`/transactions`, `/review`, `/reports`) vào bất kỳ đâu trong `pages/partner/`**.
 
@@ -162,7 +162,7 @@ Nguồn sự thật palette brand: mục **Brand palette** trong `reference/ui-d
 
 ## Types dùng chung với backend
 
-Import enum/type từ `@klassi/shared-types` thay vì tự định nghĩa lại (vd: `Role`, `TransactionStatus`, `ClassificationType`, `AccountType`, `SubscriptionPlan`). Nếu BE trả thêm field mới, cập nhật type ở `packages/shared-types/src/index.ts` trước, rồi dùng lại ở FE — không duplicate định nghĩa.
+Import enum/type từ `@xcash/shared-types` thay vì tự định nghĩa lại (vd: `Role`, `TransactionStatus`, `ClassificationType`, `AccountType`, `SubscriptionPlan`). Nếu BE trả thêm field mới, cập nhật type ở `packages/shared-types/src/index.ts` trước, rồi dùng lại ở FE — không duplicate định nghĩa.
 
 ## States bắt buộc cho mọi màn hình danh sách/bảng
 
@@ -178,3 +178,5 @@ pnpm dlx shadcn@latest add button card badge table input label select dialog she
 ```
 
 Cấu hình: `apps/frontend/components.json` (style `new-york`). Alias `@/` → `apps/frontend/src`. **Không sửa logic bên trong file `components/ui/*.tsx`** trừ khi sync lại từ ShadCN — chỉ compose từ bên ngoài. Docs: [https://ui.shadcn.com/docs/components](https://ui.shadcn.com/docs/components).
+
+⚠️ **Gotcha đã gặp:** dependency Radix trong repo này là package umbrella `radix-ui` (một gói duy nhất, không phải `@radix-ui/react-progress`, `@radix-ui/react-switch`... riêng lẻ). Mọi component ShadCN mới generate ra phải import theo pattern `import { Progress as ProgressPrimitive } from 'radix-ui'` (xem `select.tsx` làm mẫu) — nếu code CLI sinh ra `from '@radix-ui/react-progress'`, sửa lại thủ công. Ngoài ra `pnpm dlx shadcn@latest add` từng ghi nhầm file vào thư mục `apps/frontend/@/...` thay vì `src/components/ui/` do lỗi resolve alias trên máy Windows — luôn kiểm tra `ls src/components/ui/` sau khi chạy CLI, nếu file không xuất hiện đúng chỗ thì viết tay theo pattern của component có sẵn.

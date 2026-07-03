@@ -53,7 +53,7 @@ Cập nhật lần cuối: **Sprint 4 — phần code (Partner Dashboard, rate l
 ## Cây file thực tế toàn repo (không tính `node_modules`, `.git`, `.turbo`)
 
 ```
-paypilot-ai/                                   ← tên folder trên disk (package name: x-cash-ai)
+paypilot-ai/                                   ← tên folder local có thể khác; repo GitHub: lengocanh2005it/xcash-ai (package npm: x-cash-ai)
 ├── .claude/skills/                            # 6 skills
 ├── .env.example
 ├── .github/workflows/

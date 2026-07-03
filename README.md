@@ -156,7 +156,7 @@ flowchart TD
 ## Cấu trúc monorepo
 
 ```
-x-cash-ai/
+xcash-ai/
 ├── apps/
 │   ├── backend/          # NestJS API — auth, banking, AI, classification, report...
 │   └── frontend/         # React SPA — dashboard, giao dịch, review, báo cáo...
@@ -188,8 +188,8 @@ x-cash-ai/
 ### Bước 1 — Clone & cài dependency
 
 ```bash
-git clone https://github.com/lengocanh2005it/x-cash-ai.git
-cd x-cash-ai
+git clone https://github.com/lengocanh2005it/xcash-ai.git
+cd xcash-ai
 pnpm install
 ```
 

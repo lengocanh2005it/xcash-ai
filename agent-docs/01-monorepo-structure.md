@@ -9,7 +9,7 @@
 ## Cây thư mục thực tế
 
 ```
-x-cash-ai/
+xcash-ai/
 ├── apps/
 │   ├── backend/                 # NestJS — @xcash/backend
 │   │   ├── src/

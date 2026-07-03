@@ -11,8 +11,8 @@
 ## Cài đặt lần đầu
 
 ```bash
-git clone <repo>
-cd x-cash-ai
+git clone https://github.com/lengocanh2005it/xcash-ai.git
+cd xcash-ai
 pnpm install
 
 # Copy env theo từng app (KHÔNG commit file .env thật)

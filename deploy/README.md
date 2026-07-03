@@ -10,8 +10,8 @@
 ## Cài đặt lần đầu
 
 ```bash
-git clone https://github.com/lengocanh2005it/x-cash-ai.git
-cd x-cash-ai
+git clone https://github.com/lengocanh2005it/xcash-ai.git
+cd xcash-ai
 cp .env.example .env
 # Chỉnh .env: JWT secrets, CAS keys, DATABASE_URL...
 docker compose --profile production up -d --build
@@ -34,4 +34,4 @@ Workflow `deploy.yml` dùng SSH để pull + `docker compose up` trên VPS.
 | `DEPLOY_HOST` | IP hoặc hostname VPS |
 | `DEPLOY_USER` | SSH user (vd `ubuntu`) |
 | `DEPLOY_SSH_KEY` | Private key SSH |
-| `DEPLOY_PATH` | Đường dẫn repo trên VPS (vd `/home/ubuntu/x-cash-ai`) |
+| `DEPLOY_PATH` | Đường dẫn repo trên VPS (vd `/home/ubuntu/xcash-ai`) |

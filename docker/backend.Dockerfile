@@ -13,9 +13,9 @@ RUN pnpm install --frozen-lockfile
 FROM deps AS build
 COPY apps/backend apps/backend
 COPY packages/shared-types packages/shared-types
-RUN pnpm --filter @paypilot/shared-types build
-RUN pnpm --filter @paypilot/backend exec prisma generate
-RUN pnpm --filter @paypilot/backend build
+RUN pnpm --filter @klassi/shared-types build
+RUN pnpm --filter @klassi/backend exec prisma generate
+RUN pnpm --filter @klassi/backend build
 
 FROM base AS runner
 ENV NODE_ENV=production

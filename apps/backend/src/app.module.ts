@@ -9,10 +9,11 @@ import { AiModule } from './modules/ai/ai.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { BankingModule } from './modules/banking/banking.module';
 import { CasModule } from './modules/cas/cas.module';
-import { CustomerModule } from './modules/customer/customer.module';
+import { ChartOfAccountsModule } from './modules/chart-of-accounts/chart-of-accounts.module';
+import { ClassificationModule } from './modules/classification/classification.module';
 import { HealthModule } from './modules/health/health.module';
-import { InvoiceModule } from './modules/invoice/invoice.module';
 import { OnboardingModule } from './modules/onboarding/onboarding.module';
+import { ReportModule } from './modules/report/report.module';
 import { TransactionModule } from './modules/transaction/transaction.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { QueueModule } from './queue/queue.module';
@@ -34,8 +35,9 @@ import { RedisModule } from './redis/redis.module';
     OnboardingModule,
     BankingModule,
     AiModule,
-    CustomerModule,
-    InvoiceModule,
+    ChartOfAccountsModule,
+    ClassificationModule,
+    ReportModule,
     TransactionModule,
   ],
   providers: [

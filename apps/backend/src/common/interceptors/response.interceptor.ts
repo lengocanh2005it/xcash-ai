@@ -1,5 +1,5 @@
+import type { ApiResponse } from '@klassi/shared-types';
 import { CallHandler, ExecutionContext, Injectable, NestInterceptor } from '@nestjs/common';
-import type { ApiResponse } from '@paypilot/shared-types';
 import type { Request } from 'express';
 import { map, Observable } from 'rxjs';
 

@@ -1,4 +1,4 @@
-jest.mock('@paypilot/shared-types', () => ({
+jest.mock('@klassi/shared-types', () => ({
   Role: {
     CAS_PARTNER: 'cas_partner',
     ADMIN: 'admin',

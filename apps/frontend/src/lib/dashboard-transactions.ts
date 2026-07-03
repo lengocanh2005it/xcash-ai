@@ -1,16 +1,16 @@
-import { TransactionStatus } from '@paypilot/shared-types';
+import { TransactionStatus } from '@klassi/shared-types';
 import type { TransactionSummary } from '@/types/transaction';
 
 export const TRANSACTION_STATUS_LABELS: Record<TransactionStatus, string> = {
   [TransactionStatus.PENDING]: 'Chờ xử lý',
-  [TransactionStatus.MATCHED]: 'Đã khớp',
+  [TransactionStatus.CLASSIFIED]: 'Đã định khoản',
   [TransactionStatus.REVIEW]: 'Cần review',
   [TransactionStatus.SKIPPED]: 'Bỏ qua',
 };
 
 export const TRANSACTION_STATUS_COLORS: Record<TransactionStatus, string> = {
   [TransactionStatus.PENDING]: 'var(--chart-4)',
-  [TransactionStatus.MATCHED]: 'var(--chart-1)',
+  [TransactionStatus.CLASSIFIED]: 'var(--chart-1)',
   [TransactionStatus.REVIEW]: 'var(--chart-2)',
   [TransactionStatus.SKIPPED]: 'var(--chart-5)',
 };
@@ -69,8 +69,10 @@ export function buildDailyRevenueTrend(
   items: TransactionSummary[],
   days = 7,
 ): DailyTransactionTrendPoint[] {
-  const matchedItems = items.filter((item) => item.status === TransactionStatus.MATCHED);
-  return buildDailyTransactionTrend(matchedItems, days);
+  const classifiedItems = items.filter(
+    (item) => item.status === TransactionStatus.CLASSIFIED && Number(item.amount) > 0,
+  );
+  return buildDailyTransactionTrend(classifiedItems, days);
 }
 
 export function buildTransactionStatusBreakdown(
@@ -78,7 +80,7 @@ export function buildTransactionStatusBreakdown(
 ): TransactionStatusSlice[] {
   const counts: Record<TransactionStatus, number> = {
     [TransactionStatus.PENDING]: 0,
-    [TransactionStatus.MATCHED]: 0,
+    [TransactionStatus.CLASSIFIED]: 0,
     [TransactionStatus.REVIEW]: 0,
     [TransactionStatus.SKIPPED]: 0,
   };
@@ -109,7 +111,14 @@ export interface DashboardOverviewStats {
   revenueChangePercent: number | null;
   pendingCount: number;
   reviewCount: number;
+  classifiedTodayCount: number;
+  classifiedYesterdayCount: number;
+  classifiedChangePercent: number | null;
   aiAccuracyPercent: number | null;
+}
+
+export function getTransactionConfidenceScore(item: TransactionSummary): number | null {
+  return item.classification?.confidenceScore ?? item.confidenceScore ?? null;
 }
 
 export function buildDashboardOverviewStats(items: TransactionSummary[]): DashboardOverviewStats {
@@ -121,12 +130,15 @@ export function buildDashboardOverviewStats(items: TransactionSummary[]): Dashbo
   let yesterdayRevenue = 0;
   let pendingCount = 0;
   let reviewCount = 0;
+  let classifiedTodayCount = 0;
+  let classifiedYesterdayCount = 0;
   let scoredCount = 0;
   let highConfidenceCount = 0;
 
   for (const item of items) {
     const amount = Number(item.amount) || 0;
     const itemDay = startOfDay(new Date(item.transactionDate)).getTime();
+    const confidenceScore = getTransactionConfidenceScore(item);
 
     if (item.status === TransactionStatus.PENDING) {
       pendingCount += 1;
@@ -135,18 +147,24 @@ export function buildDashboardOverviewStats(items: TransactionSummary[]): Dashbo
       reviewCount += 1;
     }
 
-    if (item.status === TransactionStatus.MATCHED) {
+    if (item.status === TransactionStatus.CLASSIFIED) {
       if (itemDay === today.getTime()) {
-        todayRevenue += amount;
+        classifiedTodayCount += 1;
+        if (amount > 0) {
+          todayRevenue += amount;
+        }
       }
       if (itemDay === yesterday.getTime()) {
-        yesterdayRevenue += amount;
+        classifiedYesterdayCount += 1;
+        if (amount > 0) {
+          yesterdayRevenue += amount;
+        }
       }
     }
 
-    if (item.confidenceScore != null && item.status !== TransactionStatus.PENDING) {
+    if (confidenceScore != null && item.status !== TransactionStatus.PENDING) {
       scoredCount += 1;
-      if (item.confidenceScore >= 95) {
+      if (confidenceScore >= 85) {
         highConfidenceCount += 1;
       }
     }
@@ -154,6 +172,11 @@ export function buildDashboardOverviewStats(items: TransactionSummary[]): Dashbo
 
   const revenueChangePercent =
     yesterdayRevenue > 0 ? ((todayRevenue - yesterdayRevenue) / yesterdayRevenue) * 100 : null;
+
+  const classifiedChangePercent =
+    classifiedYesterdayCount > 0
+      ? ((classifiedTodayCount - classifiedYesterdayCount) / classifiedYesterdayCount) * 100
+      : null;
 
   const aiAccuracyPercent = scoredCount > 0 ? (highConfidenceCount / scoredCount) * 100 : null;
 
@@ -163,6 +186,9 @@ export function buildDashboardOverviewStats(items: TransactionSummary[]): Dashbo
     revenueChangePercent,
     pendingCount,
     reviewCount,
+    classifiedTodayCount,
+    classifiedYesterdayCount,
+    classifiedChangePercent,
     aiAccuracyPercent,
   };
 }

@@ -1,4 +1,4 @@
-import type { ApiResponse } from '@paypilot/shared-types';
+import type { ApiResponse } from '@klassi/shared-types';
 import axios from 'axios';
 
 export function getErrorMessage(

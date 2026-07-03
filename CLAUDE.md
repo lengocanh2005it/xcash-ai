@@ -1,6 +1,6 @@
-# PayPilot AI — Agent Entry Point
+# Klassi AI — Agent Entry Point
 
-PayPilot AI là nền tảng AI-powered Payment Operations & Reconciliation cho doanh nghiệp: nhận giao dịch ngân hàng real-time qua **Cas Balance Hook**, dùng AI (OpenAI Embedding + pgvector) để tự động ghép giao dịch với hóa đơn.
+Klassi AI là nền tảng AI-powered Automatic Transaction Classification (Định khoản tự động) cho SME Việt Nam: nhận giao dịch ngân hàng real-time qua **Cas Balance Hook**, dùng AI (OpenAI gpt-4o-mini + pgvector) để tự động phân loại giao dịch theo chuẩn kế toán TT133, kế toán xác nhận qua Human Review, export báo cáo Excel cuối tháng.
 
 Đây là **Turborepo monorepo** (pnpm workspaces) gồm backend NestJS + frontend React, chia sẻ types qua package nội bộ.
 
@@ -28,11 +28,12 @@ PayPilot AI là nền tảng AI-powered Payment Operations & Reconciliation cho 
 ## Nguyên tắc quan trọng khi làm việc trên repo này
 
 - **Không tự chế nghiệp vụ.** Mọi hành vi (RBAC, luồng webhook, cách tính quota, luồng Cas Link...) đã được đặc tả rất chi tiết trong `agent-docs/reference/`. Nếu chưa chắc, đọc lại tài liệu trước khi đoán.
-- **2 webhook khác nhau, đừng nhầm:** `POST /api/v1/webhook/cas` (nghiệp vụ, Cas Balance Hook, 1 URL chung cho toàn app, routing qua `grantId`) vs `POST /api/v1/webhook/payos-billing` (billing, PayOS, routing qua `orderCode`). Xem [`reference/business-overview.md`](./agent-docs/reference/business-overview.md) mục Webhook URL.
+- **2 webhook khác nhau, đừng nhầm:** `POST /api/v1/webhook/cas` (nghiệp vụ, Cas Balance Hook, 1 URL chung cho toàn app, routing qua `grantId`) vs `POST /api/v1/webhook/payos-billing` (billing, PayOS, routing qua `orderCode`). Xem [`reference/business-overview.md`](./agent-docs/reference/business-overview.md) mục Webhook.
 - **4 role RBAC:** `cas_partner` (system-level, `tenant_id = NULL`, chỉ được gọi `/partner/*`) / `admin` / `accountant` / `viewer`. Mọi endpoint nghiệp vụ mới phải tra bảng phân quyền trong [`reference/rbac.md`](./agent-docs/reference/rbac.md) trước khi gắn `@Roles()`.
 - **Đa tenant:** hầu hết bảng có `tenant_id`. Mọi query nghiệp vụ phải scope theo `tenant_id` của user hiện tại (trừ route `/partner/*`).
-- **AI không tự train model** — toàn bộ AI chạy qua OpenAI API (embedding `text-embedding-3-small`, chat `gpt-4o-mini`) + pgvector, không có ML infra riêng.
+- **AI không tự train model** — toàn bộ AI chạy qua OpenAI API (chat `gpt-4o-mini` + embedding `text-embedding-3-small`) + pgvector, không có ML infra riêng.
 - **Idempotency trước, quota sau:** khi xử lý webhook Cas, luôn check Redis idempotency (theo `transaction.id`) trước khi đếm quota — tránh đếm trùng khi Cas retry.
+- **Chuẩn kế toán TT133** — Thông tư 133/2016/TT-BTC cho SME, khoảng 60–70 tài khoản, seed sẵn khi tenant đăng ký. Threshold confidence mặc định **85%** — dưới ngưỡng → Human Review queue.
 - Toàn bộ text UI, message lỗi, tên nghiệp vụ dùng **tiếng Việt** (đúng theo `ui-design.md`), code (biến, hàm, comment) dùng tiếng Anh theo chuẩn thông thường.
 
 ## Lệnh thường dùng (chạy từ root)

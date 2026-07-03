@@ -1,3 +1,4 @@
+import type { ApiResponse } from '@klassi/shared-types';
 import {
   ArgumentsHost,
   Catch,
@@ -6,7 +7,6 @@ import {
   HttpStatus,
   Logger,
 } from '@nestjs/common';
-import type { ApiResponse } from '@paypilot/shared-types';
 import type { Request, Response } from 'express';
 
 @Catch()

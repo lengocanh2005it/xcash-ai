@@ -1,8 +1,9 @@
 import type { LucideIcon } from 'lucide-react';
 import {
   BarChart3,
+  BookOpen,
   Bot,
-  FileText,
+  ClipboardCheck,
   LayoutDashboard,
   LogOut,
   PanelLeft,
@@ -10,8 +11,6 @@ import {
   Receipt,
   Settings,
   Sparkles,
-  Users,
-  Wallet,
   X,
 } from 'lucide-react';
 import { NavLink, useNavigate } from 'react-router-dom';
@@ -31,10 +30,9 @@ interface NavItem {
 export const navItems: NavItem[] = [
   { to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { to: '/transactions', label: 'Giao dịch', icon: Receipt },
-  { to: '/review', label: 'Human Review', icon: Users, disabled: true },
-  { to: '/invoices', label: 'Hóa đơn', icon: FileText, disabled: true },
-  { to: '/customers', label: 'Khách hàng', icon: Wallet, disabled: true },
-  { to: '/analytics', label: 'Analytics', icon: BarChart3, disabled: true },
+  { to: '/review', label: 'Human Review', icon: ClipboardCheck },
+  { to: '/reports', label: 'Báo cáo', icon: BarChart3 },
+  { to: '/accounts', label: 'Danh mục TK', icon: BookOpen },
   { to: '/copilot', label: 'AI Copilot', icon: Bot, disabled: true },
   { to: '/settings', label: 'Cài đặt', icon: Settings, disabled: true },
 ];
@@ -44,7 +42,7 @@ const comingSoonNavItems = navItems.filter((item) => item.disabled);
 
 function getInitials(name?: string | null) {
   if (!name?.trim()) {
-    return 'PP';
+    return 'KL';
   }
 
   return name
@@ -134,12 +132,12 @@ export function SidebarContent({
         >
           <div className={cn('flex min-w-0 items-center gap-3', collapsed && 'flex-col')}>
             <div className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-primary text-sm font-semibold text-primary-foreground shadow-sm">
-              {collapsed ? 'P' : 'PP'}
+              {collapsed ? 'K' : 'KL'}
             </div>
             {!collapsed ? (
               <div className="min-w-0">
-                <p className="truncate text-sm font-semibold text-foreground">PayPilot AI</p>
-                <p className="truncate text-xs text-muted-foreground">Đối soát thông minh</p>
+                <p className="truncate text-sm font-semibold text-foreground">Klassi AI</p>
+                <p className="truncate text-xs text-muted-foreground">Định khoản tự động</p>
               </div>
             ) : null}
           </div>

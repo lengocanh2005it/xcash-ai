@@ -23,6 +23,9 @@ importers:
 
   apps/backend:
     dependencies:
+      '@klassi/shared-types':
+        specifier: workspace:*
+        version: link:../../packages/shared-types
       '@nestjs/bullmq':
         specifier: ^11.0.4
         version: 11.0.4(@nestjs/common@11.1.27(class-transformer@0.5.1)(class-validator@0.15.1)(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/core@11.1.27)(bullmq@5.79.2)
@@ -47,9 +50,6 @@ importers:
       '@nestjs/swagger':
         specifier: ^11.4.5
         version: 11.4.5(@nestjs/common@11.1.27(class-transformer@0.5.1)(class-validator@0.15.1)(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/core@11.1.27)(class-transformer@0.5.1)(class-validator@0.15.1)(reflect-metadata@0.2.2)
-      '@paypilot/shared-types':
-        specifier: workspace:*
-        version: link:../../packages/shared-types
       '@prisma/client':
         specifier: ^6.8.0
         version: 6.19.3(prisma@6.19.3(typescript@5.9.3))(typescript@5.9.3)
@@ -156,7 +156,7 @@ importers:
 
   apps/frontend:
     dependencies:
-      '@paypilot/shared-types':
+      '@klassi/shared-types':
         specifier: workspace:*
         version: link:../../packages/shared-types
       '@radix-ui/react-slot':

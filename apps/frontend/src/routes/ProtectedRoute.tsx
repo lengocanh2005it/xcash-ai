@@ -1,4 +1,4 @@
-import { Role } from '@paypilot/shared-types';
+import { Role } from '@klassi/shared-types';
 import { Navigate, useLocation } from 'react-router-dom';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useAuth } from '@/hooks/useAuth';

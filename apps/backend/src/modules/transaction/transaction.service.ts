@@ -1,15 +1,11 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma, TransactionStatus } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
-import { MatchingService } from '../ai/matching.service';
 import type { ListTransactionsQueryDto } from './dto/list-transactions.dto';
 
 @Injectable()
 export class TransactionService {
-  constructor(
-    private readonly prisma: PrismaService,
-    private readonly matchingService: MatchingService,
-  ) {}
+  constructor(private readonly prisma: PrismaService) {}
 
   async findAll(tenantId: string, query: ListTransactionsQueryDto) {
     const page = query.page ?? 1;
@@ -32,6 +28,17 @@ export class TransactionService {
     const [items, total] = await Promise.all([
       this.prisma.transaction.findMany({
         where,
+        include: {
+          classification: {
+            select: {
+              debitAccount: true,
+              creditAccount: true,
+              confidenceScore: true,
+              classificationType: true,
+              status: true,
+            },
+          },
+        },
         orderBy: { transactionDate: 'desc' },
         skip,
         take: limit,
@@ -39,17 +46,15 @@ export class TransactionService {
       this.prisma.transaction.count({ where }),
     ]);
 
-    return {
-      items,
-      page,
-      limit,
-      total,
-    };
+    return { items, page, limit, total };
   }
 
   async findOne(tenantId: string, id: string) {
     const transaction = await this.prisma.transaction.findFirst({
       where: { id, tenantId },
+      include: {
+        classification: true,
+      },
     });
 
     if (!transaction) {
@@ -57,11 +62,5 @@ export class TransactionService {
     }
 
     return transaction;
-  }
-
-  async getMatches(tenantId: string, id: string) {
-    await this.findOne(tenantId, id);
-    const candidates = await this.matchingService.getMatchSuggestions(tenantId, id);
-    return { candidates };
   }
 }

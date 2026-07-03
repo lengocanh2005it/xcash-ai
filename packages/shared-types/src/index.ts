@@ -1,5 +1,4 @@
-// Shared enums & types between @paypilot/backend and @paypilot/frontend.
-// Source of truth: agent-docs/03-database-schema.md and agent-docs/04-rbac.md
+// Shared enums & types between @klassi/backend and @klassi/frontend.
 
 export enum Role {
   CAS_PARTNER = 'cas_partner',
@@ -10,21 +9,22 @@ export enum Role {
 
 export enum TransactionStatus {
   PENDING = 'pending',
-  MATCHED = 'matched',
+  CLASSIFIED = 'classified',
   REVIEW = 'review',
   SKIPPED = 'skipped',
 }
 
-export enum InvoiceStatus {
-  UNPAID = 'unpaid',
-  PARTIAL = 'partial',
-  PAID = 'paid',
-  OVERPAID = 'overpaid',
-}
-
-export enum MatchType {
+export enum ClassificationType {
   AUTO = 'auto',
   MANUAL = 'manual',
+}
+
+export enum AccountType {
+  ASSET = 'asset',
+  LIABILITY = 'liability',
+  EQUITY = 'equity',
+  REVENUE = 'revenue',
+  EXPENSE = 'expense',
 }
 
 export enum CasGrantStatus {

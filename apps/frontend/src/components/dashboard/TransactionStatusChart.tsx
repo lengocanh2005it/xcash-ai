@@ -38,7 +38,7 @@ export function TransactionStatusChart({ data, isLoading }: TransactionStatusCha
   return (
     <Card className="h-full">
       <CardHeader className="pb-2">
-        <CardTitle className="text-base">Trạng thái đối soát</CardTitle>
+        <CardTitle className="text-base">Trạng thái định khoản</CardTitle>
         <CardDescription>Phân bổ giao dịch theo trạng thái xử lý</CardDescription>
       </CardHeader>
       <CardContent>

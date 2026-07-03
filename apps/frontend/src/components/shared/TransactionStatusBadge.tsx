@@ -1,4 +1,4 @@
-import { TransactionStatus } from '@paypilot/shared-types';
+import { TransactionStatus } from '@klassi/shared-types';
 import { Badge } from '@/components/ui/badge';
 import { TRANSACTION_STATUS_LABELS } from '@/lib/dashboard-transactions';
 import { cn } from '@/lib/utils';
@@ -11,7 +11,7 @@ interface TransactionStatusBadgeProps {
 const STATUS_VARIANTS: Record<TransactionStatus, 'secondary' | 'success' | 'warning' | 'outline'> =
   {
     [TransactionStatus.PENDING]: 'secondary',
-    [TransactionStatus.MATCHED]: 'success',
+    [TransactionStatus.CLASSIFIED]: 'success',
     [TransactionStatus.REVIEW]: 'warning',
     [TransactionStatus.SKIPPED]: 'outline',
   };

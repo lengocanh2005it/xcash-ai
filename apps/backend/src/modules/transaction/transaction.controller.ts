@@ -19,14 +19,8 @@ export class TransactionController {
     return this.transactionService.findAll(user.tenantId as string, query);
   }
 
-  @Get(':id/matches')
-  @ApiOperation({ summary: 'Top 3 hóa đơn AI gợi ý + confidence' })
-  getMatches(@CurrentUser() user: AuthenticatedUser, @Param('id') id: string) {
-    return this.transactionService.getMatches(user.tenantId as string, id);
-  }
-
   @Get(':id')
-  @ApiOperation({ summary: 'Chi tiết giao dịch' })
+  @ApiOperation({ summary: 'Chi tiết giao dịch kèm định khoản' })
   findOne(@CurrentUser() user: AuthenticatedUser, @Param('id') id: string) {
     return this.transactionService.findOne(user.tenantId as string, id);
   }

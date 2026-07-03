@@ -41,6 +41,5 @@ export default () => ({
   OPENAI_API_KEY: process.env.OPENAI_API_KEY ?? '',
   OPENAI_EMBEDDING_MODEL: process.env.OPENAI_EMBEDDING_MODEL ?? 'text-embedding-3-small',
   OPENAI_CHAT_MODEL: process.env.OPENAI_CHAT_MODEL ?? 'gpt-4o-mini',
-  AI_MATCHING_AUTO_THRESHOLD: Number.parseInt(process.env.AI_MATCHING_AUTO_THRESHOLD ?? '95', 10),
-  AI_MATCHING_MIN_THRESHOLD: Number.parseInt(process.env.AI_MATCHING_MIN_THRESHOLD ?? '50', 10),
+  AI_CLASSIFICATION_THRESHOLD: Number.parseInt(process.env.AI_CLASSIFICATION_THRESHOLD ?? '85', 10),
 });

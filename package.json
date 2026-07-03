@@ -1,5 +1,5 @@
 {
-  "name": "paypilot-ai",
+  "name": "klassi-ai",
   "version": "0.0.1",
   "private": true,
   "packageManager": "pnpm@10.33.0",
@@ -14,8 +14,8 @@
     "test": "turbo run test",
     "type-check": "turbo run type-check",
     "verify": "turbo run lint type-check test build",
-    "dev:backend": "turbo run dev --filter=@paypilot/backend",
-    "dev:frontend": "turbo run dev --filter=@paypilot/frontend",
+    "dev:backend": "turbo run dev --filter=@klassi/backend",
+    "dev:frontend": "turbo run dev --filter=@klassi/frontend",
     "prepare": "husky"
   },
   "lint-staged": {

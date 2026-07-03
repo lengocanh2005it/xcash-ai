@@ -2,7 +2,7 @@
 
 **AI-powered Payment Operations & Reconciliation Platform**
 
-> Tự động hóa quy trình đối soát thanh toán, ghép giao dịch với hóa đơn và vận hành tài chính cho doanh nghiệp — tích hợp Cas Balance Hook để nhận giao dịch ngân hàng thời gian thực.
+> Tự động hóa quy trình đối soát thanh toán, ghép giao dịch với hóa đơn và vận hành tài chính — nhắm vào doanh nghiệp B2B (nhà cung cấp, đại lý, xưởng sản xuất, công ty dịch vụ) nơi đối tác/khách hàng chuyển khoản thủ công qua internet banking doanh nghiệp, không qua QR tự điền. Tích hợp Cas Balance Hook để nhận giao dịch ngân hàng thời gian thực.
 
 ---
 
@@ -56,16 +56,33 @@ Hệ thống tích hợp với **Cas Balance Hook** để nhận giao dịch chu
         Doanh nghiệp / Kế toán
 ```
 
-### Khách hàng thanh toán như thế nào?
+### Target Segment — Ai dùng PayPilot AI?
 
-Doanh nghiệp dùng **QR ngân hàng công khai** (chuẩn VietQR — giống QR dán tại quán cà phê, shop online) chứa số tài khoản đã liên kết với Cas. Khách quét QR bằng app ngân hàng bất kỳ, tự gõ nội dung chuyển khoản, chuyển tiền — không cần qua bất kỳ cổng thanh toán trung gian nào:
+PayPilot AI nhắm vào **doanh nghiệp B2B**: nhà cung cấp, đại lý phân phối, xưởng sản xuất, công ty dịch vụ — những nơi nhận thanh toán từ đối tác/khách hàng doanh nghiệp khác.
+
+**Tại sao B2B, không phải B2C (shop quét QR)?**
+
+| | B2C (shop bán lẻ) | B2B (target của PayPilot) |
+|---|---|---|
+| Cách khách thanh toán | Quét QR VietQR động → nội dung tự điền sẵn | Chuyển khoản qua internet banking doanh nghiệp, gõ tay nội dung |
+| Nội dung chuyển khoản | Điền sẵn, ít sai | Tự gõ: viết tắt, không dấu, nhầm mã, gộp nhiều hóa đơn |
+| Giá trị mỗi giao dịch | Nhỏ (vài trăm nghìn) | Lớn (hàng triệu → hàng trăm triệu) |
+| Hậu quả đối soát sai | Nhỏ | Nghiêm trọng — ảnh hưởng dòng tiền, công nợ |
+| Cần AI Matching không? | Không (rule-based đủ) | **Có — AI thật sự cần thiết** |
+
+> **Lưu ý về QR VietQR động:** Với B2C (shop nhỏ, quán cà phê), QR VietQR động đã tự điền sẵn nội dung → AI matching gần như không cần thiết, Casso đã xử lý đủ. PayPilot **không cạnh tranh segment này** — mà nhắm vào lớp B2B phía trên, nơi VietQR không giải quyết được vì thanh toán đến từ internet banking doanh nghiệp.
+
+### Khách hàng thanh toán như thế nào? (luồng B2B)
+
+Đối tác/khách hàng doanh nghiệp nhận hóa đơn từ nhà cung cấp, sau đó chuyển khoản qua internet banking doanh nghiệp — **tự gõ nội dung**, không quét QR:
 
 ```
-Doanh nghiệp dán QR ngân hàng công khai
-(tại quầy / website / hóa đơn)
+Nhà cung cấp (dùng PayPilot) gửi hóa đơn cho đối tác
         │
         ▼
-Khách quét QR → tự gõ nội dung → chuyển khoản
+Đối tác mở internet banking doanh nghiệp
+→ nhập số tài khoản + tự gõ nội dung (vd: "TT HD1025", "ck thang 6", "tt cong no")
+→ chuyển khoản
         │
         ▼
 Ngân hàng ghi nhận giao dịch
@@ -75,11 +92,12 @@ Cas phát hiện biến động số dư trên tài khoản đã liên kết
         │
         ▼
 Cas tự động POST webhook về PayPilot
+        │
+        ▼
+AI Matching — hiểu ngữ nghĩa nội dung tự gõ → ghép đúng hóa đơn
 ```
 
-> **Vì sao không cần Payment Gateway cho nghiệp vụ đối soát:** QR ngân hàng công khai đã đủ để khách thanh toán thuận tiện (quét thay vì gõ tay số tài khoản). Nội dung chuyển khoản trong trường hợp này **vẫn là khách tự gõ** — đây chính là lý do AI Transaction Matching có giá trị thực sự, thay vì bị làm dư thừa bởi một payment link đã điền sẵn nội dung. Việc bổ sung Payment Gateway để gửi link thanh toán online cho khách hàng cuối là tính năng có thể cân nhắc ở giai đoạn mở rộng (xem Future Enhancements), không phải nhu cầu cốt lõi của bài toán đối soát.
->
-> **Lưu ý:** Điều này chỉ áp dụng cho luồng nghiệp vụ (doanh nghiệp nhận tiền từ khách hàng cuối). PayPilot vẫn dùng **PayOS riêng** cho việc thu phí dịch vụ từ chính doanh nghiệp khi nâng cấp gói — xem mục Billing và `RBAC.md`.
+> **Lưu ý:** PayPilot vẫn dùng **PayOS riêng** cho việc thu phí dịch vụ từ chính doanh nghiệp khi nâng cấp gói — xem mục Billing và `RBAC.md`.
 
 ### Authentication & Liên kết ngân hàng — 2 cơ chế tách biệt
 
@@ -174,25 +192,25 @@ Lưu transaction với đúng tenant_id, chạy tiếp AI Matching
 
 ### Bối cảnh
 
-Trong thực tế, doanh nghiệp nhận hàng trăm chuyển khoản mỗi ngày với nội dung hoàn toàn tự do:
+Doanh nghiệp B2B (nhà cung cấp, đại lý, công ty dịch vụ) nhận hàng chục đến hàng trăm chuyển khoản từ đối tác mỗi tháng. Vì đối tác chuyển khoản thủ công qua internet banking doanh nghiệp, nội dung hoàn toàn tự do và không nhất quán:
 
 ```
-"Thanh toan DH1025"
-"Thanh toán đơn hàng 1025"
-"TT HD1025"
-"Nguyen Van A CK"
-"CK don hang 1025 cho shop"
-"tien hang thang 1"
+"Thanh toan DH1025"          ← viết không dấu
+"TT HD1025"                  ← viết tắt
+"Nguyen Van A CK"            ← chỉ ghi tên, không có mã
+"CK don hang 1025 cho shop"  ← ghi dư thông tin
+"tien hang thang 1"          ← không có mã hóa đơn
+"tt cong no quy 1"           ← gộp nhiều hóa đơn
 ```
 
-Mỗi khách hàng có cách ghi nội dung khác nhau khiến việc đối soát trở nên phức tạp. Kế toán phải:
+Kế toán phải xử lý thủ công:
 
 - Dò từng giao dịch trong sao kê ngân hàng
-- Tìm hóa đơn tương ứng
+- Tìm hóa đơn tương ứng (không phải lúc nào cũng rõ)
 - Đánh dấu thủ công trạng thái đã thanh toán
 - Xử lý các trường hợp thanh toán thiếu, dư, gộp nhiều hóa đơn
 
-Các hệ thống hiện tại dùng **Rule-based** (Regex, If-Else) để match nội dung — phức tạp để bảo trì và dễ bỏ sót khi khách ghi sai.
+**Tại sao Rule-based không đủ cho B2B:** Regex/If-Else chỉ khớp được khi nội dung đúng format định sẵn. Trong B2B, mỗi đối tác có cách ghi khác nhau, không ai tuân theo format chung — rule phải viết lại liên tục và vẫn bỏ sót. AI hiểu ngữ nghĩa mới xử lý được.
 
 ### Giải pháp
 

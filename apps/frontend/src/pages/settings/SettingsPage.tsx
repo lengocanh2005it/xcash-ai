@@ -503,6 +503,7 @@ interface PlanData {
   transactionUsed: number;
   currentCycleEnd: string;
   status: string;
+  usageBreakdown?: { fromBank: number; fromImport: number };
 }
 
 interface UpgradeResult {
@@ -771,6 +772,19 @@ function BillingTab() {
                     Sắp đạt giới hạn. Nâng cấp gói để tiếp tục nhận giao dịch.
                   </p>
                 )}
+                {data.usageBreakdown &&
+                  (data.usageBreakdown.fromBank > 0 || data.usageBreakdown.fromImport > 0) && (
+                    <div className="flex items-center gap-4 pt-1 text-xs text-muted-foreground">
+                      <span className="flex items-center gap-1">
+                        <span className="inline-block size-2 rounded-full bg-primary" />
+                        Ngân hàng: {data.usageBreakdown.fromBank.toLocaleString()}
+                      </span>
+                      <span className="flex items-center gap-1">
+                        <span className="inline-block size-2 rounded-full bg-amber-500" />
+                        Import Excel: {data.usageBreakdown.fromImport.toLocaleString()}
+                      </span>
+                    </div>
+                  )}
               </div>
             </>
           )}

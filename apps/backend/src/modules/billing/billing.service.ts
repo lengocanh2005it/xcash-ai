@@ -6,7 +6,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import type { SubscriptionPlan } from '@prisma/client';
+import { type SubscriptionPlan, TransactionSource } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { NotificationService } from '../notification/notification.service';
 import { PayosService } from './payos.service';
@@ -50,6 +50,23 @@ export class BillingService {
     });
     if (!sub) throw new NotFoundException('Không tìm thấy gói dịch vụ');
 
+    const [fromBank, fromImport] = await Promise.all([
+      this.prisma.transaction.count({
+        where: {
+          tenantId,
+          source: TransactionSource.cas,
+          transactionDate: { gte: sub.currentCycleStart, lte: sub.currentCycleEnd },
+        },
+      }),
+      this.prisma.transaction.count({
+        where: {
+          tenantId,
+          source: TransactionSource.import,
+          transactionDate: { gte: sub.currentCycleStart, lte: sub.currentCycleEnd },
+        },
+      }),
+    ]);
+
     return {
       plan: sub.plan,
       pricePerMonth: Number(sub.pricePerMonth),
@@ -58,6 +75,7 @@ export class BillingService {
       currentCycleStart: sub.currentCycleStart,
       currentCycleEnd: sub.currentCycleEnd,
       status: sub.status,
+      usageBreakdown: { fromBank, fromImport },
     };
   }
 

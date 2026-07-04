@@ -36,6 +36,12 @@ export class BillingController {
     return this.service.getUsageHistory(user.tenantId!);
   }
 
+  @Get('cycle-transactions')
+  @Roles(Role.ADMIN, Role.ACCOUNTANT)
+  getCycleTransactions(@CurrentUser() user: AuthenticatedUser) {
+    return this.service.getCycleTransactions(user.tenantId!);
+  }
+
   @Post('upgrade')
   @Roles(Role.ADMIN)
   upgrade(@CurrentUser() user: AuthenticatedUser, @Body() dto: UpgradeBillingDto) {

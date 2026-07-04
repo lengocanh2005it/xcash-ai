@@ -501,6 +501,7 @@ interface PlanData {
   pricePerMonth: number;
   transactionQuota: number;
   transactionUsed: number;
+  currentCycleStart: string;
   currentCycleEnd: string;
   status: string;
   usageBreakdown?: { fromBank: number; fromImport: number };
@@ -518,6 +519,23 @@ interface OverageOrder {
   orderCode: string;
   amount: number;
   createdAt: string;
+}
+
+interface CycleTx {
+  id: string;
+  transactionDate: string;
+  content: string | null;
+  amount: string;
+  direction: 'in' | 'out';
+  source: 'cas' | 'import';
+  status: string;
+}
+
+interface CycleTransactionsData {
+  cycleStart: string;
+  cycleEnd: string;
+  total: number;
+  transactions: CycleTx[];
 }
 
 interface OveragePaymentResult {
@@ -592,6 +610,16 @@ function BillingTab() {
   const [selectedPlan, setSelectedPlan] = useState<string | null>(null);
   const [overagePaymentOpen, setOveragePaymentOpen] = useState(false);
   const [overageResult, setOverageResult] = useState<OveragePaymentResult | null>(null);
+  const [cycleDetailOpen, setCycleDetailOpen] = useState(false);
+
+  const { data: cycleData, isLoading: isCycleLoading } = useQuery({
+    queryKey: ['billing', 'cycle-transactions'],
+    queryFn: () =>
+      api
+        .get<{ data: CycleTransactionsData }>('/billing/cycle-transactions')
+        .then((r) => r.data.data),
+    enabled: cycleDetailOpen,
+  });
 
   // Mở sẵn dialog chọn gói khi được điều hướng từ nút "Nâng cấp gói dịch vụ" (?upgrade=1)
   useEffect(() => {
@@ -785,11 +813,117 @@ function BillingTab() {
                       </span>
                     </div>
                   )}
+                {data.transactionUsed > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setCycleDetailOpen(true)}
+                    className="pt-0.5 text-xs text-primary underline-offset-2 hover:underline"
+                  >
+                    Xem chi tiết {data.transactionUsed.toLocaleString()} giao dịch trong chu kỳ →
+                  </button>
+                )}
               </div>
             </>
           )}
         </CardContent>
       </Card>
+
+      {/* Dialog xem giao dịch trong chu kỳ */}
+      <Dialog open={cycleDetailOpen} onOpenChange={setCycleDetailOpen}>
+        <DialogContent className="max-h-[80vh] max-w-3xl overflow-hidden flex flex-col">
+          <DialogHeader>
+            <DialogTitle>Giao dịch trong chu kỳ hiện tại</DialogTitle>
+            <DialogDescription>
+              {cycleData
+                ? `${formatDateVN(cycleData.cycleStart)} – ${formatDateVN(cycleData.cycleEnd)} · ${cycleData.total.toLocaleString()} giao dịch`
+                : 'Đang tải...'}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="overflow-y-auto flex-1 -mx-6 px-6">
+            {isCycleLoading ? (
+              <div className="space-y-2 py-4">
+                {Array.from({ length: 5 }).map((_, i) => (
+                  // biome-ignore lint/suspicious/noArrayIndexKey: skeleton placeholder
+                  <Skeleton key={i} className="h-10 w-full" />
+                ))}
+              </div>
+            ) : cycleData?.transactions.length === 0 ? (
+              <p className="py-8 text-center text-sm text-muted-foreground">
+                Chưa có giao dịch nào trong chu kỳ này.
+              </p>
+            ) : (
+              <table className="w-full text-sm">
+                <thead className="sticky top-0 bg-background">
+                  <tr className="border-b text-left text-xs text-muted-foreground">
+                    <th className="pb-2 pr-3 font-medium">Ngày</th>
+                    <th className="pb-2 pr-3 font-medium">Nội dung</th>
+                    <th className="pb-2 pr-3 text-right font-medium">Số tiền</th>
+                    <th className="pb-2 pr-3 font-medium">Nguồn</th>
+                    <th className="pb-2 font-medium">Trạng thái</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {cycleData?.transactions.map((tx) => (
+                    <tr key={tx.id} className="border-b last:border-0">
+                      <td className="py-2 pr-3 whitespace-nowrap text-muted-foreground">
+                        {formatDateVN(tx.transactionDate)}
+                      </td>
+                      <td className="py-2 pr-3 max-w-[240px] truncate" title={tx.content ?? ''}>
+                        {tx.content || '—'}
+                      </td>
+                      <td
+                        className={cn(
+                          'py-2 pr-3 text-right whitespace-nowrap font-medium tabular-nums',
+                          tx.direction === 'in' ? 'text-green-600' : 'text-red-500',
+                        )}
+                      >
+                        {tx.direction === 'in' ? '+' : '-'}
+                        {Number(tx.amount).toLocaleString('vi-VN')}đ
+                      </td>
+                      <td className="py-2 pr-3">
+                        {tx.source === 'import' ? (
+                          <Badge
+                            variant="outline"
+                            className="border-amber-300 bg-amber-50 text-amber-700 dark:bg-amber-950 dark:text-amber-300"
+                          >
+                            Excel
+                          </Badge>
+                        ) : (
+                          <Badge variant="outline">Ngân hàng</Badge>
+                        )}
+                      </td>
+                      <td className="py-2">
+                        <Badge
+                          variant={
+                            tx.status === 'classified'
+                              ? 'default'
+                              : tx.status === 'review'
+                                ? 'secondary'
+                                : 'outline'
+                          }
+                        >
+                          {tx.status === 'classified'
+                            ? 'Đã định khoản'
+                            : tx.status === 'review'
+                              ? 'Chờ review'
+                              : tx.status === 'skipped'
+                                ? 'Đã bỏ qua'
+                                : 'Chờ xử lý'}
+                        </Badge>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+          <DialogFooter className="pt-2">
+            <Button variant="outline" onClick={() => setCycleDetailOpen(false)}>
+              Đóng
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Banner phí vượt quota */}
       {pendingOverage && (

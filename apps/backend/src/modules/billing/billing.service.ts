@@ -79,6 +79,39 @@ export class BillingService {
     };
   }
 
+  async getCycleTransactions(tenantId: string) {
+    const sub = await this.prisma.subscription.findFirst({
+      where: { tenantId, status: 'active' },
+      orderBy: { startedAt: 'desc' },
+    });
+    if (!sub) throw new NotFoundException('Không tìm thấy gói dịch vụ');
+
+    const transactions = await this.prisma.transaction.findMany({
+      where: {
+        tenantId,
+        transactionDate: { gte: sub.currentCycleStart, lte: sub.currentCycleEnd },
+      },
+      select: {
+        id: true,
+        transactionDate: true,
+        content: true,
+        amount: true,
+        direction: true,
+        source: true,
+        status: true,
+      },
+      orderBy: { transactionDate: 'desc' },
+      take: 500,
+    });
+
+    return {
+      cycleStart: sub.currentCycleStart,
+      cycleEnd: sub.currentCycleEnd,
+      total: transactions.length,
+      transactions,
+    };
+  }
+
   async getUsageHistory(tenantId: string) {
     const logs = await this.prisma.usageLog.findMany({
       where: { tenantId },

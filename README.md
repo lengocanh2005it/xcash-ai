@@ -39,15 +39,17 @@
 
 **Đã có trong MVP (demo được):**
 
-- Auth, onboarding Cas Link, webhook giao dịch, AI định khoản, Human Review
-- Danh mục TK TT133, báo cáo tháng, export Excel
-- Dashboard, multi-tenant, RBAC cơ bản
+- Auth (đăng ký, xác thực email OTP, quên/đặt lại mật khẩu, ghi nhớ đăng nhập), onboarding Cas Link, webhook giao dịch, AI định khoản, Human Review
+- Danh mục TK TT133, báo cáo tháng, export Excel, Analytics, AI Copilot, Settings (threshold, team, thông báo)
+- Billing PayOS (nâng cấp gói, phí vượt quota), thông báo in-app + email (Resend)
+- Partner Dashboard (quản lý DN, giá gói, lịch sử thanh toán)
+- Landing page marketing tại `/`, multi-tenant, RBAC
 
-**Chưa có (go-live / Sprint 3–4):**
+**Chưa có / còn lại (go-live):**
 
-- Billing PayOS end-to-end (module + webhook + UI Settings)
-- AI Copilot, Partner Dashboard
-- Deploy production, tích hợp MISA/ERP, SLA vận hành
+- Deploy production thật (VPS, SSL/nginx, env đầy đủ)
+- E2E QA thủ công toàn luồng trên staging
+- Tích hợp MISA/ERP, SLA vận hành thương mại
 
 ---
 
@@ -90,7 +92,8 @@ Báo cáo thu chi real-time + Export Excel cuối tháng
 
 | Module | Mô tả | MVP |
 |--------|--------|-----|
-| **Đăng ký / Đăng nhập** | Multi-tenant SaaS, JWT + refresh cookie, tự seed danh mục TK TT133 khi tạo tenant | ✅ |
+| **Đăng ký / Đăng nhập** | Multi-tenant SaaS, JWT + refresh cookie, xác thực email OTP, quên mật khẩu | ✅ |
+| **Landing page** | Trang giới thiệu marketing tại `/` — hero, tính năng, bảng giá, CTA đăng ký | ✅ |
 | **Onboarding Cas Link** | Liên kết tài khoản ngân hàng qua Cas SDK (sandbox) | ✅ |
 | **Webhook Cas Balance Hook** | Nhận giao dịch real-time, idempotency Redis, enqueue AI classification | ✅ |
 | **AI Định khoản tự động** | OpenAI `gpt-4o-mini` + pgvector few-shot, gợi ý TK Nợ/Có theo TT133 | ✅ |
@@ -98,10 +101,13 @@ Báo cáo thu chi real-time + Export Excel cuối tháng
 | **Giao dịch** | Danh sách + chi tiết giao dịch kèm kết quả định khoản | ✅ |
 | **Danh mục TK (TT133)** | ~60 tài khoản chuẩn, CRUD theo tenant | ✅ |
 | **Báo cáo** | Tổng thu / tổng chi / lãi lỗ / tỷ lệ định khoản, chi tiết theo TK, export Excel | ✅ |
+| **Analytics** | So sánh tháng, top chi phí/doanh thu theo tài khoản | ✅ |
+| **AI Copilot** | Hỏi đáp tự nhiên về số liệu tài chính doanh nghiệp | ✅ |
+| **Settings** | Ngưỡng AI, thông báo Email/Slack, quản lý team, billing | ✅ |
+| **Billing PayOS** | Nâng cấp gói Free/Starter/Pro/Enterprise, phí vượt quota | ✅ |
+| **Thông báo** | In-app (SSE) + email qua Resend | ✅ |
 | **Dashboard** | Thống kê định khoản hôm nay, chờ AI, chờ review, biểu đồ doanh thu | ✅ |
-| **Billing PayOS** | Nâng cấp gói Free/Starter/Pro qua PayOS | 🔜 |
-| **AI Copilot / Settings** | Hỏi đáp tự nhiên, cài đặt tenant | 🔜 |
-| **Partner Dashboard** | Cas Partner quản lý tenant toàn hệ thống | 🔜 |
+| **Partner Dashboard** | Cas Partner quản lý tenant, giá gói, lịch sử thanh toán toàn hệ thống | ✅ |
 
 ---
 
@@ -113,7 +119,7 @@ Báo cáo thu chi real-time + Export Excel cuối tháng
 1. Đăng ký & Đăng nhập     →  Tạo tenant + admin, seed TT133
 2. Onboarding (1 lần)      →  Liên kết ngân hàng qua Cas Link
 3. Sử dụng hàng ngày       →  Webhook → AI định khoản → Human Review → Báo cáo
-4. Nâng cấp gói (Sprint 3+) →  Billing qua PayOS khi hết quota Free
+4. Nâng cấp gói → Billing qua PayOS khi hết quota Free
 ```
 
 ### Pipeline kỹ thuật
@@ -171,9 +177,9 @@ xcash-ai/
 └── pnpm-workspace.yaml
 ```
 
-**Backend modules hiện có:** `auth`, `banking`, `ai`, `chart-of-accounts`, `classification`, `report`, `transaction`, `onboarding`, `cas`, `health`.
+**Backend modules hiện có:** `auth`, `banking`, `ai`, `chart-of-accounts`, `classification`, `report`, `transaction`, `onboarding`, `cas`, `settings`, `team`, `billing`, `notification`, `partner`, `health`.
 
-**Frontend pages:** Dashboard, Giao dịch, Human Review, Báo cáo, Danh mục TK, Onboarding, Auth.
+**Frontend pages:** Landing (`/`), Dashboard, Giao dịch, Human Review, Báo cáo, Phân tích, AI Copilot, Danh mục TK, Cài đặt, Onboarding, Auth (login/register/verify/forgot-password), Partner (`/partner/*`).
 
 ---
 
@@ -221,7 +227,7 @@ pnpm --filter @xcash/backend exec prisma migrate deploy
 ```bash
 pnpm dev
 # Backend:  http://localhost:3000
-# Frontend: http://localhost:5173
+# Frontend: http://localhost:5173  (landing page tại /, app sau khi đăng nhập)
 # Swagger:  http://localhost:3000/api/docs
 ```
 
@@ -303,6 +309,8 @@ Prefix: `/api/v1`
 |--------|------|--------|
 | `POST` | `/auth/register` | Đăng ký tenant + seed TT133 |
 | `POST` | `/auth/login` | Đăng nhập |
+| `POST` | `/auth/verify-email` | Xác thực email bằng OTP |
+| `POST` | `/auth/forgot-password` | Gửi OTP đặt lại mật khẩu |
 | `GET` | `/auth/me` | User hiện tại |
 | `POST` | `/onboarding/banking/grant-token` | Bắt đầu Cas Link |
 | `GET` | `/onboarding/status` | Trạng thái liên kết ngân hàng |
@@ -314,8 +322,12 @@ Prefix: `/api/v1`
 | `GET` | `/accounts` | Danh mục tài khoản TT133 |
 | `GET` | `/reports/summary` | Tổng hợp tháng |
 | `GET` | `/reports/export` | Export Excel `.xlsx` |
+| `POST` | `/ai/copilot` | AI Copilot hỏi đáp tài chính |
+| `GET/POST` | `/billing/*` | Gói hiện tại, nâng cấp PayOS, phí vượt quota |
+| `POST` | `/webhook/payos-billing` | Webhook xác nhận thanh toán PayOS (public) |
+| `GET` | `/partner/*` | Partner API (Cas Partner only) |
 
-> **Lưu ý:** Có 2 webhook khác nhau — `POST /webhook/cas` (giao dịch ngân hàng, **đã có**) và `POST /webhook/payos-billing` (billing PayOS, **chưa implement**).
+> **Lưu ý:** Có 2 webhook khác nhau — `POST /webhook/cas` (giao dịch ngân hàng) và `POST /webhook/payos-billing` (billing PayOS). Routing khác nhau: Cas qua `grantId`, PayOS qua `orderCode`.
 
 Swagger UI: `http://localhost:3000/api/docs`
 
@@ -392,11 +404,11 @@ pnpm --filter @xcash/backend prisma:generate
 | Sprint | Trạng thái | Nội dung |
 |--------|------------|----------|
 | Sprint 1 | ✅ Xong | Auth, Cas Link, Webhook, Transactions |
-| Sprint 2 | ✅ Xong | Pivot X-Cash AI — AI định khoản TT133, Human Review, Báo cáo, Export Excel |
-| Sprint 3 | 🔜 Tiếp theo | AI Copilot, Settings + Billing PayOS, Analytics nâng cao |
-| Sprint 4 | 📋 Kế hoạch | Partner Dashboard, Polish, Deploy production (go-live) |
+| Sprint 2 | ✅ Xong | AI định khoản TT133, Human Review, Báo cáo, Export Excel |
+| Sprint 3 | ✅ Xong | AI Copilot, Analytics, Settings, Billing PayOS, Thông báo |
+| Sprint 4 | 🔄 Code xong | Partner Dashboard, Landing page, Polish — **còn deploy production + E2E QA** |
 
-Sau Sprint 2, repo ở mức **POC/MVP demo được** — đủ báo cáo thực tập / pitch ý tưởng, chưa sẵn sàng vận hành thương mại.
+Sprint 1–4 feature code đã hoàn thành — đủ demo end-to-end và báo cáo thực tập. Còn lại: deploy VPS + SSL, QA thủ công trên staging.
 
 ---
 

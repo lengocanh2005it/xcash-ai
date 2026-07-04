@@ -242,7 +242,7 @@ function HeroSection() {
             X-Cash AI tự động nhận giao dịch ngân hàng và dùng AI gợi ý tài khoản Nợ/Có theo chuẩn
             kế toán — kế toán chỉ cần xác nhận hoặc sửa. Giảm tới 80% thời gian nhập liệu thủ công.
           </p>
-          <div className="mt-8 flex flex-col items-center gap-3 sm:flex-row lg:justify-start">
+          <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row sm:justify-center lg:justify-start">
             <Button
               size="lg"
               className="h-12 w-full px-8 shadow-lg shadow-primary/25 sm:w-auto"

@@ -247,7 +247,7 @@ export default function TransactionsPage() {
               </Button>
             )}
             <Button variant="link" size="sm" onClick={() => refetch()} disabled={isFetching}>
-              {isFetching ? 'Đang tải...' : 'Làm mới'}
+              Làm mới
             </Button>
           </div>
         }

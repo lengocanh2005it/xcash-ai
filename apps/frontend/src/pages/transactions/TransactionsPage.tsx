@@ -1,8 +1,11 @@
-import { useQuery } from '@tanstack/react-query';
-import { Receipt } from 'lucide-react';
-import { useCallback, useState } from 'react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { Role } from '@xcash/shared-types';
+import { Loader2, Receipt, Sparkles } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { toast } from 'sonner';
 import { Header } from '@/components/layout/Header';
 import { ConfidenceBadge } from '@/components/shared/ConfidenceBadge';
+import { ConfirmDialog } from '@/components/shared/ConfirmDialog';
 import { EmptyState } from '@/components/shared/EmptyState';
 import { SignedTransactionAmount } from '@/components/shared/SignedTransactionAmount';
 import { TableSkeleton } from '@/components/shared/TableSkeleton';
@@ -10,6 +13,7 @@ import { TransactionStatusBadge } from '@/components/shared/TransactionStatusBad
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import {
@@ -27,9 +31,11 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
+import { useAuth } from '@/hooks/useAuth';
 import { useDebouncedValue } from '@/hooks/useDebouncedValue';
-import { getApiData } from '@/lib/api';
+import { getApiData, postApiData } from '@/lib/api';
 import { formatTransactionTime } from '@/lib/dashboard-transactions';
+import { getErrorMessage } from '@/lib/errors';
 import type { TransactionListResponse, TransactionSummary } from '@/types/transaction';
 import { TransactionDetailSheet } from './TransactionDetailSheet';
 
@@ -74,7 +80,19 @@ function buildTransactionsUrl(params: {
   return `/transactions?${search.toString()}`;
 }
 
+interface BulkReclassifyResult {
+  queued: number;
+  skipped: number;
+}
+
+function isPendingTransaction(status: string) {
+  return status === 'pending';
+}
+
 export default function TransactionsPage() {
+  const { user } = useAuth();
+  const queryClient = useQueryClient();
+  const canBulkReclassify = user?.role === Role.ADMIN || user?.role === Role.ACCOUNTANT;
   const [page, setPage] = useState(1);
   const [status, setStatus] = useState('');
   const [fromDate, setFromDate] = useState('');
@@ -89,6 +107,8 @@ export default function TransactionsPage() {
   );
   const [selectedTxn, setSelectedTxn] = useState<TransactionSummary | null>(null);
   const [sheetOpen, setSheetOpen] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [bulkConfirmOpen, setBulkConfirmOpen] = useState(false);
 
   const queryUrl = buildTransactionsUrl({
     page,
@@ -108,6 +128,79 @@ export default function TransactionsPage() {
   const items = data?.items ?? [];
   const totalPages = data ? Math.max(1, Math.ceil(data.total / PAGE_SIZE)) : 1;
   const isSearchPending = searchText !== debouncedSearch;
+
+  const pendingOnPage = useMemo(
+    () => items.filter((txn) => isPendingTransaction(txn.status)),
+    [items],
+  );
+  const selectedPendingCount = useMemo(
+    () => pendingOnPage.filter((txn) => selectedIds.has(txn.id)).length,
+    [pendingOnPage, selectedIds],
+  );
+  const allPendingOnPageSelected =
+    pendingOnPage.length > 0 && selectedPendingCount === pendingOnPage.length;
+
+  useEffect(() => {
+    setSelectedIds(new Set());
+  }, [page, status, fromDate, toDate, debouncedSearch]);
+
+  const bulkReclassifyMutation = useMutation({
+    mutationFn: (ids: string[]) =>
+      postApiData<BulkReclassifyResult>('/transactions/bulk-reclassify', { ids }),
+    onSuccess: (result) => {
+      const skippedNote =
+        result.skipped > 0 ? ` (${result.skipped} GD bỏ qua vì không đủ điều kiện)` : '';
+      toast.success(`Đã gửi ${result.queued} giao dịch cho AI định khoản lại${skippedNote}`);
+      setSelectedIds(new Set());
+      setBulkConfirmOpen(false);
+      queryClient.invalidateQueries({ queryKey: ['transactions'] });
+    },
+    onError: (error) =>
+      toast.error(getErrorMessage(error, 'Không thể gửi yêu cầu định khoản hàng loạt')),
+  });
+
+  function toggleSelection(txn: TransactionSummary, checked: boolean) {
+    if (!isPendingTransaction(txn.status)) {
+      return;
+    }
+    setSelectedIds((current) => {
+      const next = new Set(current);
+      if (checked) {
+        next.add(txn.id);
+      } else {
+        next.delete(txn.id);
+      }
+      return next;
+    });
+  }
+
+  function toggleSelectAllPendingOnPage(checked: boolean) {
+    if (!checked) {
+      setSelectedIds((current) => {
+        const next = new Set(current);
+        for (const txn of pendingOnPage) {
+          next.delete(txn.id);
+        }
+        return next;
+      });
+      return;
+    }
+    setSelectedIds((current) => {
+      const next = new Set(current);
+      for (const txn of pendingOnPage) {
+        next.add(txn.id);
+      }
+      return next;
+    });
+  }
+
+  function handleBulkReclassify() {
+    const ids = pendingOnPage.filter((txn) => selectedIds.has(txn.id)).map((txn) => txn.id);
+    if (ids.length === 0) {
+      return;
+    }
+    bulkReclassifyMutation.mutate(ids);
+  }
 
   function openDetail(txn: TransactionSummary) {
     setSelectedTxn(txn);
@@ -249,39 +342,110 @@ export default function TransactionsPage() {
           </Card>
         ) : (
           <>
+            {canBulkReclassify && selectedIds.size > 0 ? (
+              <Card className="border-primary/20 bg-primary/5 py-3">
+                <CardContent className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <p className="text-sm font-medium">
+                    Đã chọn {selectedIds.size} giao dịch
+                    {selectedPendingCount < selectedIds.size ? (
+                      <span className="ml-1 font-normal text-muted-foreground">
+                        ({selectedPendingCount} đang chờ xử lý)
+                      </span>
+                    ) : null}
+                  </p>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setSelectedIds(new Set())}
+                      disabled={bulkReclassifyMutation.isPending}
+                    >
+                      Bỏ chọn
+                    </Button>
+                    <Button
+                      size="sm"
+                      onClick={() => setBulkConfirmOpen(true)}
+                      disabled={bulkReclassifyMutation.isPending || selectedPendingCount === 0}
+                    >
+                      {bulkReclassifyMutation.isPending ? (
+                        <>
+                          <Loader2 className="mr-2 size-4 animate-spin" />
+                          Đang gửi...
+                        </>
+                      ) : (
+                        <>
+                          <Sparkles className="mr-2 size-4" />
+                          Định khoản lại hàng loạt
+                        </>
+                      )}
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            ) : null}
+
             <div className="space-y-3 md:hidden">
-              {items.map((txn) => (
-                <Card
-                  key={txn.id}
-                  className="cursor-pointer py-4 transition-colors hover:bg-muted/30"
-                  onClick={() => openDetail(txn)}
-                >
-                  <CardContent className="text-sm">
-                    <div className="flex items-start justify-between gap-3">
-                      <p className="text-xs text-muted-foreground">
-                        {formatTransactionTime(txn.transactionDate)}
-                      </p>
-                      <TransactionStatusBadge status={txn.status} />
-                    </div>
-                    <p className="mt-2 font-semibold">
-                      <SignedTransactionAmount amount={Number(txn.amount)} />
-                    </p>
-                    <p className="mt-1 text-muted-foreground">{txn.content ?? '—'}</p>
-                    <div className="mt-2 flex items-center justify-between">
-                      <p className="text-xs text-muted-foreground">
-                        {txn.senderAccount ?? 'Không rõ người gửi'}
-                      </p>
-                      <ConfidenceBadge score={txn.confidenceScore} />
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
+              {items.map((txn) => {
+                const selectable = canBulkReclassify && isPendingTransaction(txn.status);
+                const checked = selectedIds.has(txn.id);
+
+                return (
+                  <Card key={txn.id} className="py-4 transition-colors hover:bg-muted/30">
+                    <CardContent className="text-sm">
+                      <div className="flex items-start gap-3">
+                        {canBulkReclassify ? (
+                          <Checkbox
+                            checked={checked}
+                            disabled={!selectable}
+                            onCheckedChange={(value) => toggleSelection(txn, value === true)}
+                            onClick={(event) => event.stopPropagation()}
+                            aria-label={`Chọn giao dịch ${txn.transactionId}`}
+                            className="mt-0.5"
+                          />
+                        ) : null}
+                        <button
+                          type="button"
+                          className="min-w-0 flex-1 text-left"
+                          onClick={() => openDetail(txn)}
+                        >
+                          <div className="flex items-start justify-between gap-3">
+                            <p className="text-xs text-muted-foreground">
+                              {formatTransactionTime(txn.transactionDate)}
+                            </p>
+                            <TransactionStatusBadge status={txn.status} />
+                          </div>
+                          <p className="mt-2 font-semibold">
+                            <SignedTransactionAmount amount={Number(txn.amount)} />
+                          </p>
+                          <p className="mt-1 text-muted-foreground">{txn.content ?? '—'}</p>
+                          <div className="mt-2 flex items-center justify-between">
+                            <p className="text-xs text-muted-foreground">
+                              {txn.senderAccount ?? 'Không rõ người gửi'}
+                            </p>
+                            <ConfidenceBadge score={txn.confidenceScore} />
+                          </div>
+                        </button>
+                      </div>
+                    </CardContent>
+                  </Card>
+                );
+              })}
             </div>
 
             <Card className="hidden overflow-hidden py-0 md:block">
               <Table>
                 <TableHeader className="bg-muted/50">
                   <TableRow className="hover:bg-transparent">
+                    {canBulkReclassify ? (
+                      <TableHead className="w-10 py-3">
+                        <Checkbox
+                          checked={allPendingOnPageSelected}
+                          disabled={pendingOnPage.length === 0}
+                          onCheckedChange={(value) => toggleSelectAllPendingOnPage(value === true)}
+                          aria-label="Chọn tất cả giao dịch chờ xử lý trên trang"
+                        />
+                      </TableHead>
+                    ) : null}
                     <TableHead className="py-3">Thời gian</TableHead>
                     <TableHead className="py-3 text-right">Số tiền</TableHead>
                     <TableHead className="py-3">Nội dung</TableHead>
@@ -292,43 +456,68 @@ export default function TransactionsPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {items.map((txn) => (
-                    <TableRow
-                      key={txn.id}
-                      className="cursor-pointer"
-                      onClick={() => openDetail(txn)}
-                    >
-                      <TableCell className="text-sm text-muted-foreground">
-                        {formatTransactionTime(txn.transactionDate)}
-                      </TableCell>
-                      <TableCell className="text-right font-semibold">
-                        <SignedTransactionAmount amount={Number(txn.amount)} />
-                      </TableCell>
-                      <TableCell className="max-w-[260px] truncate text-sm">
-                        {txn.content ?? '—'}
-                      </TableCell>
-                      <TableCell className="text-sm">{txn.senderAccount ?? '—'}</TableCell>
-                      <TableCell className="text-center font-mono text-xs">
-                        {txn.classification ? (
-                          <span>
-                            {txn.classification.debitAccount}/{txn.classification.creditAccount}
-                          </span>
-                        ) : (
-                          <span className="text-muted-foreground">—</span>
-                        )}
-                      </TableCell>
-                      <TableCell className="text-center">
-                        <ConfidenceBadge
-                          score={txn.classification?.confidenceScore ?? txn.confidenceScore}
-                        />
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <div className="flex justify-end">
-                          <TransactionStatusBadge status={txn.status} />
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))}
+                  {items.map((txn) => {
+                    const selectable = canBulkReclassify && isPendingTransaction(txn.status);
+                    const checked = selectedIds.has(txn.id);
+
+                    return (
+                      <TableRow key={txn.id} className="cursor-pointer">
+                        {canBulkReclassify ? (
+                          <TableCell className="w-10" onClick={(event) => event.stopPropagation()}>
+                            <Checkbox
+                              checked={checked}
+                              disabled={!selectable}
+                              onCheckedChange={(value) => toggleSelection(txn, value === true)}
+                              aria-label={`Chọn giao dịch ${txn.transactionId}`}
+                            />
+                          </TableCell>
+                        ) : null}
+                        <TableCell
+                          className="text-sm text-muted-foreground"
+                          onClick={() => openDetail(txn)}
+                        >
+                          {formatTransactionTime(txn.transactionDate)}
+                        </TableCell>
+                        <TableCell
+                          className="text-right font-semibold"
+                          onClick={() => openDetail(txn)}
+                        >
+                          <SignedTransactionAmount amount={Number(txn.amount)} />
+                        </TableCell>
+                        <TableCell
+                          className="max-w-[260px] truncate text-sm"
+                          onClick={() => openDetail(txn)}
+                        >
+                          {txn.content ?? '—'}
+                        </TableCell>
+                        <TableCell className="text-sm" onClick={() => openDetail(txn)}>
+                          {txn.senderAccount ?? '—'}
+                        </TableCell>
+                        <TableCell
+                          className="text-center font-mono text-xs"
+                          onClick={() => openDetail(txn)}
+                        >
+                          {txn.classification ? (
+                            <span>
+                              {txn.classification.debitAccount}/{txn.classification.creditAccount}
+                            </span>
+                          ) : (
+                            <span className="text-muted-foreground">—</span>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-center" onClick={() => openDetail(txn)}>
+                          <ConfidenceBadge
+                            score={txn.classification?.confidenceScore ?? txn.confidenceScore}
+                          />
+                        </TableCell>
+                        <TableCell className="text-right" onClick={() => openDetail(txn)}>
+                          <div className="flex justify-end">
+                            <TransactionStatusBadge status={txn.status} />
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
                 </TableBody>
               </Table>
             </Card>
@@ -371,6 +560,16 @@ export default function TransactionsPage() {
         transaction={selectedTxn}
         open={sheetOpen}
         onOpenChange={setSheetOpen}
+      />
+
+      <ConfirmDialog
+        open={bulkConfirmOpen}
+        onOpenChange={setBulkConfirmOpen}
+        title="Định khoản lại hàng loạt?"
+        description={`Gửi ${selectedPendingCount} giao dịch đang chờ xử lý cho AI định khoản lại. Thao tác này có thể mất vài phút tùy số lượng.`}
+        confirmLabel="Gửi cho AI"
+        loading={bulkReclassifyMutation.isPending}
+        onConfirm={handleBulkReclassify}
       />
     </>
   );

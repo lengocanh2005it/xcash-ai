@@ -1,10 +1,11 @@
-import { Controller, Get, Param, Post, Query, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Query, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { Role } from '@xcash/shared-types';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { JwtAuthGuard, RolesGuard } from '../../common/guards/auth.guards';
 import type { AuthenticatedUser } from '../../common/types/authenticated-user.type';
+import { BulkReclassifyDto } from './dto/bulk-reclassify.dto';
 import { ListTransactionsQueryDto } from './dto/list-transactions.dto';
 import { TransactionService } from './transaction.service';
 
@@ -25,6 +26,13 @@ export class TransactionController {
   @ApiOperation({ summary: 'Chi tiết giao dịch kèm định khoản' })
   findOne(@CurrentUser() user: AuthenticatedUser, @Param('id') id: string) {
     return this.transactionService.findOne(user.tenantId as string, id);
+  }
+
+  @Post('bulk-reclassify')
+  @Roles(Role.ADMIN, Role.ACCOUNTANT)
+  @ApiOperation({ summary: 'Yêu cầu AI định khoản lại hàng loạt (chỉ GD pending)' })
+  bulkReclassify(@CurrentUser() user: AuthenticatedUser, @Body() dto: BulkReclassifyDto) {
+    return this.transactionService.bulkReclassify(user.tenantId as string, dto.ids);
   }
 
   @Post(':id/reclassify')

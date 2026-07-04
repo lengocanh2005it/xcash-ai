@@ -99,8 +99,48 @@ export class TransactionService {
       );
     }
 
-    await this.webhookQueue.add(AI_CLASSIFY_JOB, { transactionDbId: transaction.id });
+    await this.enqueueReclassify(transaction.id);
 
     return { success: true, status: transaction.status };
+  }
+
+  /** Đẩy lại job AI hàng loạt — chỉ enqueue GD thuộc tenant và đang pending. */
+  async bulkReclassify(tenantId: string, ids: string[]) {
+    const uniqueIds = [...new Set(ids)];
+
+    const transactions = await this.prisma.transaction.findMany({
+      where: { tenantId, id: { in: uniqueIds } },
+      select: { id: true, status: true },
+    });
+
+    const foundById = new Map(transactions.map((txn) => [txn.id, txn]));
+    let queued = 0;
+    let skipped = 0;
+
+    for (const id of uniqueIds) {
+      const transaction = foundById.get(id);
+      if (!transaction) {
+        skipped += 1;
+        continue;
+      }
+      if (transaction.status !== TransactionStatus.pending) {
+        skipped += 1;
+        continue;
+      }
+      await this.enqueueReclassify(transaction.id);
+      queued += 1;
+    }
+
+    if (queued === 0) {
+      throw new BadRequestException(
+        'Không có giao dịch nào đủ điều kiện để định khoản lại (chỉ GD đang chờ xử lý)',
+      );
+    }
+
+    return { queued, skipped };
+  }
+
+  private async enqueueReclassify(transactionDbId: string): Promise<void> {
+    await this.webhookQueue.add(AI_CLASSIFY_JOB, { transactionDbId });
   }
 }

@@ -1,4 +1,4 @@
-import { Body, Controller, Get, HttpCode, Post, Req, Res, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, Post, Query, Req, Res, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiCookieAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import type { Request, Response } from 'express';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
@@ -6,6 +6,9 @@ import { JwtAuthGuard } from '../../common/guards/auth.guards';
 import type { AuthenticatedUser } from '../../common/types/authenticated-user.type';
 import { AuthService } from './auth.service';
 import {
+  AcceptInviteDto,
+  ChangePasswordConfirmDto,
+  ChangePasswordRequestDto,
   ForgotPasswordDto,
   LoginDto,
   RegisterDto,
@@ -66,6 +69,24 @@ export class AuthController {
     return this.authService.resetPassword(dto);
   }
 
+  @Get('invite')
+  @ApiOperation({ summary: 'Xem thông tin lời mời tham gia doanh nghiệp (public)' })
+  getInviteInfo(@Query('token') token: string) {
+    return this.authService.getInviteInfo(token);
+  }
+
+  @Post('accept-invite')
+  @HttpCode(200)
+  @ApiOperation({ summary: 'Kích hoạt tài khoản qua link mời — đặt mật khẩu và đăng nhập' })
+  async acceptInvite(@Body() dto: AcceptInviteDto, @Res({ passthrough: true }) res: Response) {
+    const session = await this.authService.acceptInvite(dto);
+    res.setHeader(
+      'Set-Cookie',
+      this.authService.createRefreshTokenCookie(session.refreshToken, session.rememberMe),
+    );
+    return this.authService.toPublicSession(session);
+  }
+
   @Post('login')
   @HttpCode(200)
   @ApiOperation({ summary: 'Đăng nhập email + mật khẩu' })
@@ -109,5 +130,38 @@ export class AuthController {
   @ApiOperation({ summary: 'Thông tin user hiện tại' })
   getMe(@CurrentUser() user: AuthenticatedUser) {
     return user;
+  }
+
+  @Post('change-password/request')
+  @HttpCode(200)
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Yêu cầu đổi mật khẩu — xác thực mật khẩu cũ và gửi OTP email' })
+  requestChangePassword(
+    @CurrentUser() user: AuthenticatedUser,
+    @Body() dto: ChangePasswordRequestDto,
+  ) {
+    return this.authService.requestChangePassword(user, dto);
+  }
+
+  @Post('change-password/resend')
+  @HttpCode(200)
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Gửi lại mã OTP đổi mật khẩu' })
+  resendChangePasswordOtp(@CurrentUser() user: AuthenticatedUser) {
+    return this.authService.resendChangePasswordOtp(user);
+  }
+
+  @Post('change-password/confirm')
+  @HttpCode(200)
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Xác nhận đổi mật khẩu bằng mã OTP' })
+  confirmChangePassword(
+    @CurrentUser() user: AuthenticatedUser,
+    @Body() dto: ChangePasswordConfirmDto,
+  ) {
+    return this.authService.confirmChangePassword(user, dto);
   }
 }

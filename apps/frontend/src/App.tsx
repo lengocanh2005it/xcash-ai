@@ -6,6 +6,7 @@ import { AuthProvider } from '@/contexts/auth-context';
 import { ThemeProvider } from '@/contexts/theme-context';
 import AccountsPage from '@/pages/accounts/AccountsPage';
 import AnalyticsPage from '@/pages/analytics/AnalyticsPage';
+import AcceptInvitePage from '@/pages/auth/AcceptInvitePage';
 import ForgotPasswordPage from '@/pages/auth/ForgotPasswordPage';
 import LoginPage from '@/pages/auth/LoginPage';
 import RegisterPage from '@/pages/auth/RegisterPage';
@@ -13,9 +14,11 @@ import ResetPasswordPage from '@/pages/auth/ResetPasswordPage';
 import VerifyEmailPage from '@/pages/auth/VerifyEmailPage';
 import CopilotPage from '@/pages/copilot/CopilotPage';
 import DashboardPage from '@/pages/dashboard/DashboardPage';
+import NotFoundPage from '@/pages/errors/NotFoundPage';
 import LandingPage from '@/pages/landing/LandingPage';
 import OnboardingCallbackPage from '@/pages/onboarding/OnboardingCallbackPage';
 import OnboardingPage from '@/pages/onboarding/OnboardingPage';
+import PartnerAuditPage from '@/pages/partner/PartnerAuditPage';
 import PartnerDashboardPage from '@/pages/partner/PartnerDashboardPage';
 import PartnerPaymentsPage from '@/pages/partner/PartnerPaymentsPage';
 import PartnerPlansPage from '@/pages/partner/PartnerPlansPage';
@@ -24,7 +27,13 @@ import ReportsPage from '@/pages/reports/ReportsPage';
 import ReviewPage from '@/pages/review/ReviewPage';
 import SettingsPage from '@/pages/settings/SettingsPage';
 import TransactionsPage from '@/pages/transactions/TransactionsPage';
-import { GuestRoute, LandingRoute, ProtectedRoute } from '@/routes/ProtectedRoute';
+import {
+  GuestRoute,
+  LandingRoute,
+  PartnerRoute,
+  ProtectedRoute,
+  TenantAuthRoute,
+} from '@/routes/ProtectedRoute';
 
 function App() {
   return (
@@ -58,6 +67,7 @@ function App() {
               }
             />
             <Route path="/verify-email" element={<VerifyEmailPage />} />
+            <Route path="/accept-invite" element={<AcceptInvitePage />} />
             <Route
               path="/forgot-password"
               element={
@@ -78,31 +88,32 @@ function App() {
             <Route
               path="/onboarding"
               element={
-                <ProtectedRoute>
+                <TenantAuthRoute>
                   <OnboardingPage />
-                </ProtectedRoute>
+                </TenantAuthRoute>
               }
             />
             <Route
               path="/onboarding/callback"
               element={
-                <ProtectedRoute>
+                <TenantAuthRoute>
                   <OnboardingCallbackPage />
-                </ProtectedRoute>
+                </TenantAuthRoute>
               }
             />
 
             <Route
               element={
-                <ProtectedRoute>
+                <PartnerRoute>
                   <PartnerLayout />
-                </ProtectedRoute>
+                </PartnerRoute>
               }
             >
               <Route path="/partner" element={<Navigate to="/partner/dashboard" replace />} />
               <Route path="/partner/dashboard" element={<PartnerDashboardPage />} />
               <Route path="/partner/tenants" element={<PartnerTenantsPage />} />
               <Route path="/partner/payments" element={<PartnerPaymentsPage />} />
+              <Route path="/partner/audit-logs" element={<PartnerAuditPage />} />
               <Route path="/partner/plans" element={<PartnerPlansPage />} />
             </Route>
 
@@ -123,7 +134,7 @@ function App() {
               <Route path="/settings" element={<SettingsPage />} />
             </Route>
 
-            <Route path="*" element={<Navigate to="/" replace />} />
+            <Route path="*" element={<NotFoundPage />} />
           </Routes>
           <Toaster richColors position="top-right" />
         </AuthProvider>

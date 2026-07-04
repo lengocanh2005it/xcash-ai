@@ -6,6 +6,7 @@ import { RecentTransactionsCard } from '@/components/dashboard/RecentTransaction
 import { RevenueLineChart } from '@/components/dashboard/RevenueLineChart';
 import { TransactionStatusChart } from '@/components/dashboard/TransactionStatusChart';
 import { Header } from '@/components/layout/Header';
+import { UserAvatar } from '@/components/shared/UserAvatar';
 import { WelcomeTour } from '@/components/shared/WelcomeTour';
 import { Card, CardContent } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -20,19 +21,6 @@ import {
 import type { TransactionListResponse } from '@/types/transaction';
 
 const DASHBOARD_TRANSACTION_LIMIT = 100;
-
-function getInitials(name?: string | null) {
-  if (!name?.trim()) {
-    return 'U';
-  }
-
-  return name
-    .trim()
-    .split(/\s+/)
-    .slice(0, 2)
-    .map((part) => part[0]?.toUpperCase() ?? '')
-    .join('');
-}
 
 export default function DashboardPage() {
   const { user, onboardingStatus } = useAuth();
@@ -81,9 +69,12 @@ export default function DashboardPage() {
       <div className="space-y-6 p-4 sm:p-6">
         <Card className="overflow-hidden border-primary/15 bg-gradient-to-r from-primary/10 via-primary/5 to-transparent py-0 shadow-sm">
           <CardContent className="flex flex-col items-start gap-3 p-5 sm:flex-row sm:items-center sm:gap-5 sm:p-6">
-            <div className="flex size-12 shrink-0 items-center justify-center rounded-full bg-primary text-base font-semibold text-primary-foreground shadow-sm sm:size-14 sm:text-lg">
-              {getInitials(user?.name)}
-            </div>
+            <UserAvatar
+              name={user?.name}
+              avatarUrl={user?.avatarUrl}
+              size="md"
+              className="shadow-sm"
+            />
             <div className="min-w-0">
               <h2 className="text-xl font-medium text-foreground sm:text-2xl">
                 Xin chào, <span className="font-bold text-primary">{user?.name ?? 'bạn'}</span>!

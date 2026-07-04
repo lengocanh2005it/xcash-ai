@@ -2,10 +2,14 @@ import { Processor, WorkerHost } from '@nestjs/bullmq';
 import { Logger } from '@nestjs/common';
 import type { Job } from 'bullmq';
 import {
+  EMAIL_CHANGE_PASSWORD_OTP_JOB,
+  EMAIL_INVITE_JOB,
   EMAIL_OTP_JOB,
   EMAIL_QUEUE,
   EMAIL_RESET_OTP_JOB,
   EMAIL_SEND_JOB,
+  type EmailChangePasswordOtpJobData,
+  type EmailInviteJobData,
   type EmailJobData,
   type EmailOtpJobData,
   type EmailResetOtpJobData,
@@ -20,7 +24,15 @@ export class EmailProcessor extends WorkerHost {
     super();
   }
 
-  async process(job: Job<EmailJobData | EmailOtpJobData | EmailResetOtpJobData>): Promise<void> {
+  async process(
+    job: Job<
+      | EmailJobData
+      | EmailOtpJobData
+      | EmailResetOtpJobData
+      | EmailChangePasswordOtpJobData
+      | EmailInviteJobData
+    >,
+  ): Promise<void> {
     try {
       if (job.name === EMAIL_SEND_JOB) {
         await this.resendEmailService.send(job.data as EmailJobData);
@@ -34,6 +46,18 @@ export class EmailProcessor extends WorkerHost {
 
       if (job.name === EMAIL_RESET_OTP_JOB) {
         await this.resendEmailService.sendPasswordResetOtp(job.data as EmailResetOtpJobData);
+        return;
+      }
+
+      if (job.name === EMAIL_CHANGE_PASSWORD_OTP_JOB) {
+        await this.resendEmailService.sendChangePasswordOtp(
+          job.data as EmailChangePasswordOtpJobData,
+        );
+        return;
+      }
+
+      if (job.name === EMAIL_INVITE_JOB) {
+        await this.resendEmailService.sendTeamInvite(job.data as EmailInviteJobData);
         return;
       }
     } catch (error) {

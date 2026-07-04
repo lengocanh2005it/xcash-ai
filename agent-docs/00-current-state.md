@@ -24,11 +24,11 @@ Cập nhật lần cuối: **Docs đồng bộ Sprint 4** — toàn bộ feature
 **Đã xong (Sprint 3):**
 - Backend: `POST /ai/copilot` — AI Copilot chat có financial context real-time (doanh thu/chi phí/review count tháng hiện tại) ✅
 - Backend: `settings` module — threshold (Prisma) + notifications (Redis key `settings:notifications:{tenantId}`) ✅
-- Backend: `team` module — invite/list/remove member, safety check (không xóa chính mình, không xóa admin cuối) ✅
+- Backend: `team` module — invite qua email (link kích hoạt + tự đặt mật khẩu), list/remove member, resend invite, safety check ✅
 - Backend: `billing` module — current-plan + usage-history ✅
 - Backend: `report` module mở rộng — `GET /reports/comparison` (so tháng trước) + `GET /reports/top-accounts` (top 5 chi/thu) ✅
 - Backend: `GET /review/count` — đếm số GD đang chờ review, dùng cho polling notification (không dùng SSE vì `EventSource` chuẩn không gửi được header `Authorization: Bearer`) ✅
-- Frontend: `AnalyticsPage` (so sánh tháng, BarChart thu/chi, top 5 danh mục), `CopilotPage` (chat UI), `SettingsPage` (5 tab: Banking/Threshold/Notifications/Team/Billing) ✅
+- Frontend: `SettingsPage` (6 tab: Banking/Threshold/Notifications/Team/**Nhật ký**/Billing) ✅
 - Frontend: hook `useReviewCount` (poll 20s) → Sidebar hiện badge đỏ + toast khi review count tăng ✅
 - Frontend: `ReviewPage` — thêm `SwipeableReviewCard` cho mobile (vuốt phải confirm / vuốt trái skip), giữ bảng cũ cho desktop ✅
 - Frontend: ShadCN components mới — `progress.tsx`, `separator.tsx`, `switch.tsx`, `tabs.tsx` (dùng `radix-ui` umbrella package, pattern giống `select.tsx` — KHÔNG dùng `@radix-ui/react-*` riêng lẻ) ✅
@@ -61,7 +61,13 @@ Cập nhật lần cuối: **Docs đồng bộ Sprint 4** — toàn bộ feature
 - **Email xác thực đăng ký:** `confirmPassword` khi register; sau đăng ký gửi OTP 6 số qua Resend (BullMQ); `POST /auth/verify-email` mới cấp token; login chặn `EMAIL_NOT_VERIFIED` (403); FE `/verify-email` ✅
 - **Quên mật khẩu / đặt lại mật khẩu:** `POST /auth/forgot-password` gửi OTP qua email; `POST /auth/reset-password` (OTP + mật khẩu mới); `POST /auth/resend-password-reset`; FE `/forgot-password`, `/reset-password`, link "Quên mật khẩu?" trên LoginPage ✅
 - **Ghi nhớ đăng nhập:** `rememberMe` trên `POST /auth/login` — tick → cookie refresh 7 ngày + lưu email/preference `localStorage`; bỏ tick → session cookie (đóng trình duyệt = hết phiên) + TTL Redis 12h (`JWT_REFRESH_SESSION_EXPIRES_IN`) ✅
+- **Mời thành viên qua email:** Admin nhập tên/email/vai trò → tạo user pending (`email_verified_at = null`) + gửi email Resend (BullMQ) chứa link `/accept-invite?token=`; thành viên tự đặt mật khẩu qua `POST /auth/accept-invite` → auto-login; Admin không biết mật khẩu; `POST /team/members/:id/resend-invite` gửi lại link ✅
+- **Audit log (tenant):** module `audit-log` — `GET /audit-logs` (admin + accountant, phân trang + lọc action/ngày); label tiếng Việt cho action/actor/entity; tab **Nhật ký** trong Settings ✅
+- **Audit log (Partner):** `GET /partner/audit-logs` (cross-tenant, lọc `tenantId`/action); Partner actions ghi `actor = userId` thật (không còn `'cas_partner'`); FE `/partner/audit-logs` ✅
 - **UI polish:** font **Be Vietnam Pro** (Google Fonts); auth form rộng hơn (`max-w-lg`); Dashboard banner chào user nổi bật (bỏ card Trạng thái ngân hàng — đã có trong Settings) ✅
+- **Hồ sơ tài khoản + avatar Azure Blob:** module `profile` — `GET/PATCH /profile`, `POST /profile/avatar` (multipart, lưu Azure Blob `avatars/{userId}/...`); cột `users.avatar_url`; FE click vùng user ở đáy sidebar → `ProfileDialog` (tab Cá nhân/Doanh nghiệp), cập nhật UI ngay qua `updateUser()` ✅
+- **Đổi mật khẩu (đã đăng nhập):** `POST /auth/change-password/request` (xác thực mật khẩu cũ → gửi OTP email), `POST /auth/change-password/resend`, `POST /auth/change-password/confirm` (OTP → đổi mật khẩu + revoke toàn bộ refresh token); FE nút "Đổi mật khẩu" trong tab Cá nhân của `ProfileDialog` → `ChangePasswordPanel` 2 bước (cùng dialog, không lồng modal); thành công → logout + redirect `/login` ✅
+- **Bulk reclassify:** `POST /transactions/bulk-reclassify` — enqueue AI hàng loạt (tối đa 50 GD, chỉ `pending`); FE `TransactionsPage` checkbox chọn + nút "Định khoản lại hàng loạt" (Admin/Accountant) ✅
 
 **Chưa làm (Sprint 4 — còn lại):**
 - Bổ sung env production đầy đủ vào `docker-compose.yml` (OpenAI, Resend, PayOS, v.v.) + deploy lên VPS
@@ -121,14 +127,15 @@ paypilot-ai/                                   ← tên folder local có thể k
 │   │   │       ├── 20260703120000_add_payment_order_type_and_overage_prices/ ← thêm order_type vào payment_orders + seed overagePricePerTransaction (Starter=800, Pro=600) ✅
 │   │   │       ├── 20260703140000_add_notifications/ ← bảng notifications + enum NotificationType ✅
 │   │   │       ├── 20260703150000_extend_notification_types/ ← thêm quota/billing/suspend types ✅
-│   │   │       └── 20260703160000_add_user_email_verified_at/ ← cột users.email_verified_at + backfill user cũ ✅
+│   │   │       ├── 20260703160000_add_user_email_verified_at/ ← cột users.email_verified_at + backfill user cũ ✅
+│   │   │       └── 20260704100000_add_user_avatar_url/ ← cột users.avatar_url ✅
 │   │   ├── package.json
 │   │   ├── nest-cli.json
 │   │   ├── .swcrc
 │   │   └── src/
 │   │       ├── main.ts
-│   │       ├── app.module.ts                  # imports: Auth, Cas, Health, Onboarding, Banking, Ai, ChartOfAccounts, Classification, Report, Transaction, Settings, Team, Billing, Partner, Notification; + ThrottlerModule + APP_GUARD (TenantThrottlerGuard)
-│   │       ├── config/configuration.ts        # + RATE_LIMIT_PER_MINUTE (default 120)
+│   │       ├── app.module.ts                  # imports: Auth, Cas, Health, Onboarding, Banking, Ai, AuditLog, ChartOfAccounts, Classification, Report, Transaction, Settings, Team, Billing, Partner, Notification, Profile; StorageModule; + ThrottlerModule + APP_GUARD (TenantThrottlerGuard)
+│   │       ├── config/configuration.ts        # + RATE_LIMIT_PER_MINUTE (default 120), AZURE_STORAGE_* (avatar upload)
 │   │       ├── common/
 │   │       │   ├── decorators/                # @Roles, @RequiresPlan, @Public
 │   │       │   ├── guards/auth.guards.ts       # JwtAuthGuard, RolesGuard, PartnerGuard
@@ -141,10 +148,14 @@ paypilot-ai/                                   ← tên folder local có thể k
 │   │       ├── prisma/
 │   │       ├── redis/
 │   │       ├── queue/queue.module.ts
+│   │       ├── storage/                       # AzureBlobService (avatar upload) ✅
+│   │       │   ├── storage.module.ts
+│   │       │   └── azure-blob.service.ts
 │   │       └── modules/
-│   │           ├── auth/                      # register + OTP verify, login (rememberMe), forgot/reset password, refresh, logout, me ✅
+│   │           ├── auth/                      # register + OTP verify, login (rememberMe), forgot/reset password, change-password, refresh, logout, me ✅
 │   │           │   ├── email-verification.service.ts
-│   │           │   └── password-reset.service.ts
+│   │           │   ├── password-reset.service.ts
+│   │           │   └── change-password.service.ts
 │   │           ├── banking/                   # POST /webhook/cas → enqueue ai-classify ✅
 │   │           ├── ai/                        # openai.service, embedding.service, classification.service, classification.processor, copilot.controller ✅
 │   │           │   └── copilot.controller.ts  # POST /ai/copilot — chat, fetch financial context từ Prisma
@@ -168,9 +179,15 @@ paypilot-ai/                                   ← tên folder local có thể k
 │   │           │   ├── settings.service.ts
 │   │           │   ├── settings.module.ts
 │   │           │   └── dto/settings.dto.ts
-│   │           ├── team/                      # Invite/list/remove member ✅
+│   │           ├── audit-log/                 # GET /audit-logs (tenant scope) ✅
+│   │           │   ├── audit-log.controller.ts
+│   │           │   ├── audit-log.service.ts
+│   │           │   ├── audit-log.labels.ts
+│   │           │   └── dto/list-audit-logs.dto.ts
+│   │           ├── team/                      # Invite email / list / remove / resend ✅
 │   │           │   ├── team.controller.ts
 │   │           │   ├── team.service.ts
+│   │           │   ├── team-invite.service.ts
 │   │           │   ├── team.module.ts
 │   │           │   └── dto/team.dto.ts
 │   │           ├── billing/                   # Current plan + usage history + PayOS upgrade ✅
@@ -194,10 +211,15 @@ paypilot-ai/                                   ← tên folder local có thể k
 │   │           │   ├── slack.service.ts        # gửi Slack Incoming Webhook (per-tenant URL từ Settings)
 │   │           │   ├── dto/delete-notifications.dto.ts
 │   │           │   └── notification.service.spec.ts
+│   │           ├── profile/                   # GET/PATCH /profile, POST /profile/avatar ✅
+│   │           │   ├── profile.controller.ts
+│   │           │   ├── profile.service.ts
+│   │           │   ├── profile.module.ts
+│   │           │   └── dto/update-profile.dto.ts
 │   │           ├── cas/
 │   │           ├── health/
 │   │           ├── onboarding/
-│   │           └── transaction/               # GET list (kèm classification) + detail ✅
+│   │           └── transaction/               # GET list + detail + reclassify + bulk-reclassify ✅
 │   └── frontend/
 │       ├── vite.config.ts
 │       ├── package.json
@@ -213,26 +235,30 @@ paypilot-ai/                                   ← tên folder local có thể k
 │           │   ├── dashboard-transactions.ts  # CLASSIFIED (không còn MATCHED), buildDashboardOverviewStats mới
 │           │   └── ...
 │           ├── components/
-│           │   ├── layout/Sidebar.tsx         # 8 nav item, badge review, NotificationBell (align left), collapse PanelLeftOpen ✅
+│           │   ├── layout/Sidebar.tsx         # 8 nav item, badge review, NotificationBell, ProfileDialog (click user footer) ✅
+│           │   ├── profile/ProfileDialog.tsx  # Dialog hồ sơ cá nhân + doanh nghiệp + upload avatar + đổi mật khẩu ✅
+│           │   ├── profile/ChangePasswordPanel.tsx  # Form 2 bước đổi mật khẩu (nhúng trong ProfileDialog) ✅
 │           │   ├── dashboard/                 # stat cards, charts (không còn BankStatusCard trên Dashboard) ✅
-│           │   ├── shared/                    # NotificationBell (portal + select mode), PlanGate, WelcomeTour ✅
+│           │   ├── shared/                    # NotificationBell, PlanGate, WelcomeTour, UserAvatar ✅
 │           │   └── ui/                        # + checkbox.tsx, progress, separator, switch, tabs ✅
 │           ├── pages/
-│           │   ├── auth/                      # LoginPage, RegisterPage, VerifyEmailPage, ForgotPasswordPage, ResetPasswordPage ✅
+│           │   ├── auth/                      # LoginPage, RegisterPage, VerifyEmailPage, AcceptInvitePage, ForgotPasswordPage, ResetPasswordPage ✅
 │           │   ├── onboarding/                # OnboardingPage, OnboardingCallbackPage ✅
 │           │   ├── dashboard/DashboardPage.tsx # stat cards: định khoản hôm nay / chờ AI / chờ review / độ chính xác ✅
-│           │   ├── transactions/              # TransactionsPage (cột TK Nợ/Có) + TransactionDetailSheet (hiển thị định khoản) ✅
+│           │   ├── transactions/              # TransactionsPage (checkbox chọn GD pending + định khoản lại hàng loạt) + TransactionDetailSheet ✅
 │           │   ├── review/ReviewPage.tsx      # Human Review queue (confirm/correct/skip) + SwipeableReviewCard mobile ✅
 │           │   ├── reports/ReportsPage.tsx    # Báo cáo tháng + export Excel ✅
 │           │   ├── analytics/AnalyticsPage.tsx # So sánh tháng, BarChart thu/chi, top 5 danh mục ✅
 │           │   ├── copilot/CopilotPage.tsx    # AI Copilot chat, gợi ý câu hỏi ✅
-│           │   ├── settings/SettingsPage.tsx  # Tabs: Banking/Threshold/Notifications/Team/Billing ✅
+│           │   ├── settings/SettingsPage.tsx  # Tabs: Banking/Threshold/Notifications/Team/Nhật ký/Billing ✅
+│           │   ├── components/audit/AuditLogPanel.tsx  # Bảng nhật ký dùng chung ✅
 │           │   ├── accounts/AccountsPage.tsx  # Danh mục TK TT133 ✅
 │           │   └── partner/
-│   │   ├── PartnerLayout.tsx          # Sidebar layout (logo, collapse/expand, mobile); nav: Dashboard/Doanh nghiệp/Lịch sử thanh toán/Gói dịch vụ ✅
+│   │   ├── PartnerLayout.tsx          # Sidebar: Dashboard/DN/Thanh toán/Nhật ký/Gói dịch vụ ✅
 │   │   ├── PartnerDashboardPage.tsx   # Stat cards (có mô tả) + biểu đồ doanh thu theo gói theo tháng (multi-line) ✅
 │   │   ├── PartnerTenantsPage.tsx     # Danh sách tenant, filter, dialog chi tiết + đổi gói ✅
 │   │   ├── PartnerPaymentsPage.tsx    # Lịch sử thanh toán (bảng payment_orders + filter + summary) ✅
+│   │   ├── PartnerAuditPage.tsx       # /partner/audit-logs — audit log toàn hệ thống ✅
 │   │   └── PartnerPlansPage.tsx       # 4 plan cards, bảng giá, dialog chỉnh giá ✅
 │           ├── components/shared/WelcomeTour.tsx  # Dialog 4 bước, 1 lần/user (localStorage) ✅
 │           ├── hooks/                          # useReviewCount, useNotifications, useDebouncedValue
@@ -260,6 +286,12 @@ paypilot-ai/                                   ← tên folder local có thể k
 | POST | `/auth/refresh` | Cookie | Rotate tokens |
 | POST | `/auth/logout` | Cookie | Revoke refresh |
 | GET | `/auth/me` | Bearer JWT | User hiện tại |
+| POST | `/auth/change-password/request` | Bearer JWT | Xác thực mật khẩu cũ + gửi OTP email |
+| POST | `/auth/change-password/resend` | Bearer JWT | Gửi lại OTP đổi mật khẩu |
+| POST | `/auth/change-password/confirm` | Bearer JWT | Xác nhận OTP → đổi mật khẩu + revoke sessions |
+| GET | `/profile` | Bearer JWT | Hồ sơ cá nhân + doanh nghiệp (mọi role đã login, kể Cas Partner) |
+| PATCH | `/profile` | Bearer JWT | Cập nhật tên cá nhân (mọi role); tên doanh nghiệp (Admin) |
+| POST | `/profile/avatar` | Bearer JWT | Upload avatar multipart → Azure Blob |
 | GET | `/cas/health` | Public | |
 | POST | `/onboarding/banking/grant-token` | Admin, Accountant | |
 | POST | `/onboarding/banking/callback` | Admin, Accountant | |
@@ -268,6 +300,7 @@ paypilot-ai/                                   ← tên folder local có thể k
 | GET | `/transactions` | Bearer JWT | Filter: `status`, `from_date`, `to_date`, `search` (nội dung/mã GD/người gửi), pagination — kèm `classification` nested |
 | GET | `/transactions/:id` | Bearer JWT | Kèm `classification` nested |
 | POST | `/transactions/:id/reclassify` | Admin, Accountant | Đẩy lại job AI cho giao dịch `pending` (enqueue `ai-classify` vào `webhook-processing`) |
+| POST | `/transactions/bulk-reclassify` | Admin, Accountant | Đẩy lại job AI hàng loạt — body `{ ids: string[] }`, tối đa 50 GD/lần, chỉ `pending` |
 | GET | `/transactions/:id/classification` | Bearer JWT | Chi tiết định khoản |
 | POST | `/transactions/:id/classification` | Admin, Accountant | Ghi đè thủ công |
 | GET | `/review/queue` | Bearer JWT | Hàng chờ Human Review |
@@ -299,9 +332,13 @@ paypilot-ai/                                   ← tên folder local có thể k
 | GET | `/settings/notifications` | Admin | Đọc cấu hình notification (Redis) |
 | PUT | `/settings/notifications` | Admin | Cập nhật cấu hình notification |
 | POST | `/settings/notifications/test-slack` | Admin | Gửi thử Slack webhook (Pro+) |
-| GET | `/team/members` | Admin | Danh sách thành viên tenant |
-| POST | `/team/members` | Admin | Mời thành viên mới (tạo trực tiếp, không gửi email) |
+| GET | `/team/members` | Admin | Danh sách thành viên tenant (kèm `emailVerifiedAt`) |
+| POST | `/team/members` | Admin | Mời thành viên — gửi email link kích hoạt |
+| POST | `/team/members/:id/resend-invite` | Admin | Gửi lại email mời (chỉ thành viên chưa kích hoạt) |
 | DELETE | `/team/members/:id` | Admin | Xóa thành viên (chặn tự xóa / xóa admin cuối) |
+| GET | `/auth/invite?token=` | Public | Xem thông tin lời mời (email, DN, vai trò) |
+| POST | `/auth/accept-invite` | Public | Đặt mật khẩu + kích hoạt + cấp JWT |
+| GET | `/audit-logs` | Admin, Accountant | Nhật ký hoạt động tenant — phân trang, lọc `action`, `fromDate`, `toDate` |
 | GET | `/billing/plans` | Admin, Accountant | Danh sách gói từ `plan_pricing` |
 | GET | `/billing/current-plan` | Admin, Accountant | Gói hiện tại |
 | GET | `/billing/usage-history` | Admin | Lịch sử sử dụng quota |
@@ -321,6 +358,7 @@ paypilot-ai/                                   ← tên folder local có thể k
 | GET | `/partner/tenants/:id` | Cas Partner | Chi tiết 1 tenant (plan + GD tháng + AI accuracy + members) |
 | GET | `/partner/plan-pricing` | Cas Partner | Xem giá/quota từng gói |
 | PATCH | `/partner/plan-pricing/:plan` | Cas Partner | Sửa giá/quota/phí vượt (chặn sửa `free`) |
+| GET | `/partner/audit-logs` | Cas Partner | Audit log toàn hệ thống — lọc `tenantId`, `action`, phân trang |
 
 Swagger UI: `http://localhost:3000/api/docs`
 
@@ -424,7 +462,8 @@ postinstall      → prisma generate
 - **Review count badge = polling:** `useReviewCount` dùng `refetchInterval: 20_000` gọi `GET /review/count` qua axios (có Bearer header) — không dùng SSE.
 - **In-app notification realtime = SSE + fallback poll:** `GET /notifications/stream?token=<accessToken>` — verify JWT thủ công trong service vì `EventSource` không gửi được `Authorization` header. FE `useNotifications` invalidate query khi nhận SSE event; giữ `refetchInterval: 60_000` làm fallback.
 - **ShadCN mới (Progress/Separator/Switch/Tabs) dùng `radix-ui` umbrella package**, KHÔNG dùng `@radix-ui/react-progress` v.v. riêng lẻ — dự án chỉ có `radix-ui` (^1.6.1) trong `package.json`, import theo pattern `import { Progress as ProgressPrimitive } from 'radix-ui'` giống `select.tsx` đã có sẵn. Chạy `pnpm dlx shadcn@latest add <name>` có thể ghi nhầm vào thư mục `@/` sai chỗ (alias resolve lỗi) — nếu gặp, viết file thủ công theo pattern của component ShadCN có sẵn trong repo (`select.tsx`) thay vì tin theo output CLI.
-- **Team invite đơn giản hoá:** tạo user trực tiếp với password do Admin nhập, không gửi email thật (chỉ demo).
+- **Team invite:** Admin mời qua email — user pending tự đặt mật khẩu qua link `/accept-invite?token=` (Redis token TTL 7 ngày, env `TEAM_INVITE_TTL_SECONDS`). Login trước khi kích hoạt → `403 INVITE_PENDING`.
+- **Audit log actor:** field `actor` trong DB là string — userId (UUID), `'system'`, `'ai'`, hoặc legacy `'cas_partner'`. API đọc map sang label tiếng Việt; Partner mới ghi `userId` thật.
 - **`dto.role as unknown as import('@prisma/client').Role`** — cast cần thiết trong `team.service.ts` vì `Role` từ `@xcash/shared-types` (dùng cho DTO/RBAC) không trùng type với `Role` enum của Prisma Client dù cùng giá trị string.
 - **Frontend dependencies đáng chú ý:** `qrcode.react` (`QRCodeSVG`) — PayOS v2 trả về raw VietQR string, không phải URL; phải render bằng `QRCodeSVG` thay vì `<img src>`. Import: `import { QRCodeSVG } from 'qrcode.react'`.
 - **Overage billing flow:** (1) webhook banking ghi `usageLog(metric='overage_transaction')` khi Starter/Pro vượt quota; (2) cron `BillingCycleService` 2am daily tìm sub hết `currentCycleEnd` → gọi `createOverageOrder()` nếu có overage → reset `transactionUsedThisCycle=0` và `currentCycleEnd`; (3) tenant thấy banner cam trên BillingTab → click "Thanh toán ngay" → tạo PayOS order `orderType='overage'`; (4) webhook PayOS xác nhận → `confirmPayment()` nhận biết `orderType` → chỉ mark paid + auditLog, không đổi gói. Giá đọc từ `planPricing.overagePricePerTransaction` (không hardcode).

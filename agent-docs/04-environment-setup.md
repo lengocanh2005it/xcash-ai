@@ -40,7 +40,8 @@ cp apps/frontend/.env.example apps/frontend/.env
 | Database | `DATABASE_URL` | PostgreSQL, **phải bật extension `pgvector`** trước khi migrate |
 | Redis | `REDIS_URL` | dùng cho cache + BullMQ + webhook idempotency |
 | JWT | `JWT_ACCESS_SECRET`, `JWT_ACCESS_EXPIRES_IN=15m`, `JWT_REFRESH_SECRET`, `JWT_REFRESH_EXPIRES_IN=7d`, `JWT_REFRESH_SESSION_EXPIRES_IN=12h` | Access ngắn hạn; Refresh cookie 7d khi `rememberMe=true`, session 12h khi `rememberMe=false` |
-| Email (Resend) | `RESEND_API_KEY`, `RESEND_SENDER_EMAIL`, `RESEND_SENDER_NAME`, `EMAIL_OTP_TTL_SECONDS`, `EMAIL_OTP_RESEND_COOLDOWN_SECONDS`, `EMAIL_OTP_MAX_ATTEMPTS` | OTP đăng ký + quên mật khẩu qua BullMQ queue `email-delivery` |
+| Email (Resend) | `RESEND_API_KEY`, `RESEND_SENDER_EMAIL`, `RESEND_SENDER_NAME`, `EMAIL_OTP_TTL_SECONDS`, `EMAIL_OTP_RESEND_COOLDOWN_SECONDS`, `EMAIL_OTP_MAX_ATTEMPTS`, `TEAM_INVITE_TTL_SECONDS` | OTP đăng ký + quên mật khẩu + email mời thành viên qua BullMQ queue `email-delivery` |
+| Azure Blob (avatar) | `AZURE_STORAGE_CONNECTION_STRING`, `AZURE_STORAGE_CONTAINER_NAME`, `AZURE_STORAGE_MAX_FILE_SIZE` | Upload ảnh đại diện qua `POST /profile/avatar`; container mặc định `task-attachments` |
 | OpenAI | `OPENAI_API_KEY`, `OPENAI_EMBEDDING_MODEL`, `OPENAI_CHAT_MODEL` | công ty cấp sẵn key, không tự train model |
 | Cas SDK | `CAS_API_BASE_URL`, `CAS_CLIENT_ID`, `CAS_SECRET_KEY`, `CAS_GRANT_REDIRECT_URI` | sandbox thật, lấy tại `sandbox.console.bankhub.dev/developer/keys` |
 | Cas Webhook | `CAS_WEBHOOK_URL` | URL đăng ký trên Cas Console; dev local dùng **ngrok** → `https://<id>.ngrok-free.app/api/v1/webhook/cas` |

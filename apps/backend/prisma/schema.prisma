@@ -96,6 +96,7 @@ model User {
   tenantId     String?   @map("tenant_id")
   name         String
   email        String    @unique
+  avatarUrl    String?   @map("avatar_url")
   passwordHash String    @map("password_hash")
   role         Role
   invitedById  String?   @map("invited_by")

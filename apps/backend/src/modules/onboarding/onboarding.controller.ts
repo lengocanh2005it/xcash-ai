@@ -27,7 +27,11 @@ export class OnboardingController {
   @Roles(Role.ADMIN, Role.ACCOUNTANT)
   @ApiOperation({ summary: 'Đổi publicToken lấy grantId và lưu cas_grants' })
   handleCallback(@CurrentUser() user: AuthenticatedUser, @Body() dto: BankingCallbackDto) {
-    return this.onboardingService.handleBankingCallback(user.tenantId as string, dto.publicToken);
+    return this.onboardingService.handleBankingCallback(
+      user.tenantId as string,
+      user.id,
+      dto.publicToken,
+    );
   }
 
   @Get('status')

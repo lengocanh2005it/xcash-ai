@@ -148,13 +148,27 @@ describe('NotificationService', () => {
   it('creates billing success notification', async () => {
     prisma.notification.create.mockResolvedValue({ id: 'n1' });
 
-    await service.createBillingSuccess('tenant-1', 'upgrade', 'starter', 299000);
+    await service.createBillingSuccess('tenant-1', 'upgrade', 'starter', 299000, 500);
 
     expect(prisma.notification.create).toHaveBeenCalledWith({
       data: expect.objectContaining({
         type: NotificationType.billing_success,
-        title: 'Nâng cấp gói thành công',
-        body: expect.stringContaining('STARTER'),
+        title: 'Mua gói Starter thành công',
+        body: expect.stringContaining('Starter'),
+      }),
+    });
+  });
+
+  it('creates plan activated notification when partner sets plan', async () => {
+    prisma.notification.create.mockResolvedValue({ id: 'n1' });
+
+    await service.createPlanActivatedByPartner('tenant-1', 'pro', 2000);
+
+    expect(prisma.notification.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        type: NotificationType.billing_success,
+        title: 'Gói Pro đã được kích hoạt',
+        body: expect.stringContaining('2.000'),
       }),
     });
   });

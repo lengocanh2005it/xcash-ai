@@ -15,11 +15,13 @@ import {
   Settings,
   X,
 } from 'lucide-react';
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { Logo } from '@/components/brand/Logo';
+import { ProfileDialog } from '@/components/profile/ProfileDialog';
 import { NotificationBell } from '@/components/shared/NotificationBell';
+import { UserAvatar } from '@/components/shared/UserAvatar';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/hooks/useAuth';
 import { useReviewCount } from '@/hooks/useReviewCount';
@@ -47,19 +49,6 @@ export const navItems: NavItem[] = [
 ];
 
 const primaryNavItems = navItems;
-
-function getInitials(name?: string | null) {
-  if (!name?.trim()) {
-    return 'U';
-  }
-
-  return name
-    .trim()
-    .split(/\s+/)
-    .slice(0, 2)
-    .map((part) => part[0]?.toUpperCase() ?? '')
-    .join('');
-}
 
 interface SidebarContentProps {
   onNavigate?: () => void;
@@ -133,6 +122,7 @@ export function SidebarContent({
 }: SidebarContentProps) {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
+  const [profileOpen, setProfileOpen] = useState(false);
   const { data: reviewCount } = useReviewCount();
   const prevReviewCount = useRef<number | undefined>(undefined);
 
@@ -235,20 +225,27 @@ export function SidebarContent({
         <div
           className={cn(
             'rounded-xl border border-sidebar-border/60 bg-background/70 p-3',
-            collapsed && 'flex justify-center border-0 bg-transparent p-0',
+            collapsed && 'flex flex-col items-center border-0 bg-transparent p-0',
           )}
         >
-          {!collapsed ? (
-            <div className="mb-3 flex items-center gap-3">
-              <div className="flex size-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-semibold text-primary">
-                {getInitials(user?.name)}
-              </div>
+          <button
+            type="button"
+            onClick={() => setProfileOpen(true)}
+            className={cn(
+              'flex w-full items-center rounded-lg text-left transition-colors hover:bg-primary/5',
+              collapsed ? 'justify-center p-1' : 'mb-3 gap-3 p-1',
+            )}
+            aria-label="Xem thông tin tài khoản"
+            title="Thông tin tài khoản"
+          >
+            <UserAvatar name={user?.name} avatarUrl={user?.avatarUrl} />
+            {!collapsed ? (
               <div className="min-w-0">
                 <p className="truncate text-sm font-medium">{user?.name}</p>
                 <p className="truncate text-xs text-muted-foreground">{user?.email}</p>
               </div>
-            </div>
-          ) : null}
+            ) : null}
+          </button>
           <Button
             type="button"
             variant="outline"
@@ -263,6 +260,8 @@ export function SidebarContent({
           </Button>
         </div>
       </div>
+
+      <ProfileDialog open={profileOpen} onOpenChange={setProfileOpen} />
     </div>
   );
 }

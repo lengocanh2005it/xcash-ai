@@ -3,6 +3,7 @@ import { TransactionStatus } from '@prisma/client';
 import * as XLSX from 'xlsx';
 import { PrismaService } from '../../prisma/prisma.service';
 import type { AccountBreakdownQueryDto } from './dto/account-breakdown.dto';
+import { buildExportWorkbook } from './report-excel.util';
 
 export interface AccountSummary {
   accountCode: string;
@@ -29,12 +30,15 @@ export class ReportService {
     tenantId: string,
     from: Date,
     to: Date,
+    inclusiveEnd = false,
   ): Promise<AccountSummary[]> {
     const classifications = await this.prisma.transactionClassification.findMany({
       where: {
         tenantId,
         status: TransactionStatus.classified,
-        transaction: { transactionDate: { gte: from, lt: to } },
+        transaction: {
+          transactionDate: inclusiveEnd ? { gte: from, lte: to } : { gte: from, lt: to },
+        },
       },
       select: { debitAccount: true, creditAccount: true, amount: true },
     });
@@ -178,43 +182,78 @@ export class ReportService {
     const to = new Date(toDate);
     to.setHours(23, 59, 59, 999);
 
-    const classifications = await this.prisma.transactionClassification.findMany({
-      where: {
-        tenantId,
-        status: TransactionStatus.classified,
-        transaction: { transactionDate: { gte: from, lte: to } },
+    const [tenant, classifications, byAccount, reviewCount, totalCount, classifiedCount] =
+      await Promise.all([
+        this.prisma.tenant.findUniqueOrThrow({
+          where: { id: tenantId },
+          select: { businessName: true },
+        }),
+        this.prisma.transactionClassification.findMany({
+          where: {
+            tenantId,
+            status: TransactionStatus.classified,
+            transaction: { transactionDate: { gte: from, lte: to } },
+          },
+          include: {
+            transaction: { select: { transactionDate: true, content: true, amount: true } },
+          },
+          orderBy: { transaction: { transactionDate: 'asc' } },
+        }),
+        this.buildAccountSummaries(tenantId, from, to, true),
+        this.prisma.transactionClassification.count({
+          where: {
+            tenantId,
+            status: TransactionStatus.review,
+            transaction: { transactionDate: { gte: from, lte: to } },
+          },
+        }),
+        this.prisma.transaction.count({
+          where: { tenantId, transactionDate: { gte: from, lte: to } },
+        }),
+        this.prisma.transactionClassification.count({
+          where: {
+            tenantId,
+            status: TransactionStatus.classified,
+            transaction: { transactionDate: { gte: from, lte: to } },
+          },
+        }),
+      ]);
+
+    const totalRevenue = byAccount
+      .filter((a) => a.accountType === 'revenue')
+      .reduce((s, a) => s + a.totalCredit - a.totalDebit, 0);
+
+    const totalExpense = byAccount
+      .filter((a) => a.accountType === 'expense')
+      .reduce((s, a) => s + a.totalDebit - a.totalCredit, 0);
+
+    const aiAccuracy = totalCount > 0 ? Math.round((classifiedCount / totalCount) * 100) : 0;
+
+    const wb = buildExportWorkbook({
+      businessName: tenant.businessName,
+      fromDate,
+      toDate,
+      exportedAt: new Date(),
+      summary: {
+        totalRevenue,
+        totalExpense,
+        net: totalRevenue - totalExpense,
+        classifiedCount,
+        reviewCount,
+        totalCount,
+        aiAccuracy,
       },
-      include: {
-        transaction: { select: { transactionDate: true, content: true, amount: true } },
-      },
-      orderBy: { transaction: { transactionDate: 'asc' } },
+      accounts: byAccount,
+      details: classifications.map((c) => ({
+        transactionDate: c.transaction.transactionDate,
+        content: c.transaction.content ?? '',
+        amount: Number(c.amount),
+        debitAccount: c.debitAccount,
+        creditAccount: c.creditAccount,
+        classificationType: c.classificationType,
+        reason: c.reason,
+      })),
     });
-
-    const rows = classifications.map((c, i) => ({
-      STT: i + 1,
-      'Ngày GD': c.transaction.transactionDate.toLocaleDateString('vi-VN'),
-      'Nội dung': c.transaction.content ?? '',
-      'Số tiền': Number(c.amount),
-      'TK Nợ': c.debitAccount,
-      'TK Có': c.creditAccount,
-      'Phân loại': c.classificationType === 'auto' ? 'Tự động (AI)' : 'Thủ công',
-      'Lý do AI': c.reason ?? '',
-    }));
-
-    const ws = XLSX.utils.json_to_sheet(rows);
-    ws['!cols'] = [
-      { wch: 5 },
-      { wch: 12 },
-      { wch: 50 },
-      { wch: 15 },
-      { wch: 8 },
-      { wch: 8 },
-      { wch: 15 },
-      { wch: 50 },
-    ];
-
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, 'Định khoản');
 
     const buffer = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' }) as Buffer;
     return new StreamableFile(buffer, {

@@ -1,7 +1,11 @@
 import { Body, Controller, Get, Param, Patch, Query, UseGuards } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import type { SubscriptionPlan } from '@prisma/client';
+import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { JwtAuthGuard, PartnerGuard } from '../../common/guards/auth.guards';
+import type { AuthenticatedUser } from '../../common/types/authenticated-user.type';
+import { AuditLogService } from '../audit-log/audit-log.service';
+import { ListAuditLogsQueryDto } from '../audit-log/dto/list-audit-logs.dto';
 import { SetTenantPlanDto, UpdatePlanPricingDto } from './dto/plan-pricing.dto';
 import { PartnerService } from './partner.service';
 
@@ -9,7 +13,10 @@ import { PartnerService } from './partner.service';
 @Controller('partner')
 @UseGuards(JwtAuthGuard, PartnerGuard)
 export class PartnerController {
-  constructor(private readonly service: PartnerService) {}
+  constructor(
+    private readonly service: PartnerService,
+    private readonly auditLogService: AuditLogService,
+  ) {}
 
   @Get('tenants')
   listTenants(
@@ -56,19 +63,28 @@ export class PartnerController {
     });
   }
 
+  @Get('audit-logs')
+  listAuditLogs(@Query() query: ListAuditLogsQueryDto) {
+    return this.auditLogService.listForPartner(query);
+  }
+
   @Patch('tenants/:id/plan')
-  setTenantPlan(@Param('id') id: string, @Body() dto: SetTenantPlanDto) {
-    return this.service.setTenantPlan(id, dto.targetPlan as SubscriptionPlan);
+  setTenantPlan(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id') id: string,
+    @Body() dto: SetTenantPlanDto,
+  ) {
+    return this.service.setTenantPlan(id, dto.targetPlan as SubscriptionPlan, user.id);
   }
 
   @Patch('tenants/:id/suspend')
-  suspend(@Param('id') id: string) {
-    return this.service.suspendTenant(id);
+  suspend(@CurrentUser() user: AuthenticatedUser, @Param('id') id: string) {
+    return this.service.suspendTenant(id, user.id);
   }
 
   @Patch('tenants/:id/activate')
-  activate(@Param('id') id: string) {
-    return this.service.activateTenant(id);
+  activate(@CurrentUser() user: AuthenticatedUser, @Param('id') id: string) {
+    return this.service.activateTenant(id, user.id);
   }
 
   @Get('plan-pricing')
@@ -77,7 +93,11 @@ export class PartnerController {
   }
 
   @Patch('plan-pricing/:plan')
-  updatePlanPricing(@Param('plan') plan: SubscriptionPlan, @Body() dto: UpdatePlanPricingDto) {
-    return this.service.updatePlanPricing(plan, dto);
+  updatePlanPricing(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('plan') plan: SubscriptionPlan,
+    @Body() dto: UpdatePlanPricingDto,
+  ) {
+    return this.service.updatePlanPricing(plan, dto, user.id);
   }
 }

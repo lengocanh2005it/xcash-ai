@@ -16,7 +16,12 @@ import type { AuthenticatedUser, AuthJwtPayload } from '../../common/types/authe
 import { PrismaService } from '../../prisma/prisma.service';
 import { RedisService } from '../../redis/redis.service';
 import { ChartOfAccountsService } from '../chart-of-accounts/chart-of-accounts.service';
+import { TeamInviteService } from '../team/team-invite.service';
+import { ChangePasswordService } from './change-password.service';
 import type {
+  AcceptInviteDto,
+  ChangePasswordConfirmDto,
+  ChangePasswordRequestDto,
   ForgotPasswordDto,
   LoginDto,
   RegisterDto,
@@ -54,6 +59,8 @@ export class AuthService {
     private readonly chartOfAccountsService: ChartOfAccountsService,
     private readonly emailVerificationService: EmailVerificationService,
     private readonly passwordResetService: PasswordResetService,
+    private readonly changePasswordService: ChangePasswordService,
+    private readonly teamInviteService: TeamInviteService,
   ) {
     this.refreshTtlSeconds = this.parseDurationToSeconds(
       this.configService.get<string>('JWT_REFRESH_EXPIRES_IN', '7d'),
@@ -292,6 +299,125 @@ export class AuthService {
     return { message: 'Đặt lại mật khẩu thành công. Bạn có thể đăng nhập ngay.' };
   }
 
+  async requestChangePassword(
+    user: AuthenticatedUser,
+    dto: ChangePasswordRequestDto,
+  ): Promise<{ message: string; otpExpiresInSeconds: number }> {
+    const dbUser = await this.prisma.user.findUnique({ where: { id: user.id } });
+    if (!dbUser) {
+      throw new NotFoundException('Người dùng không tồn tại');
+    }
+
+    const isCurrentValid = await bcrypt.compare(dto.currentPassword, dbUser.passwordHash);
+    if (!isCurrentValid) {
+      throw new UnauthorizedException('Mật khẩu hiện tại không đúng');
+    }
+
+    const isSamePassword = await bcrypt.compare(dto.newPassword, dbUser.passwordHash);
+    if (isSamePassword) {
+      throw new BadRequestException('Mật khẩu mới phải khác mật khẩu hiện tại');
+    }
+
+    const newPasswordHash = await bcrypt.hash(dto.newPassword, 12);
+    const otpExpiresInSeconds = await this.changePasswordService.initiate(
+      dbUser.id,
+      dbUser.email,
+      dbUser.name,
+      newPasswordHash,
+    );
+
+    return {
+      message: 'Mã OTP đã được gửi đến email của bạn. Vui lòng nhập mã để hoàn tất đổi mật khẩu.',
+      otpExpiresInSeconds,
+    };
+  }
+
+  async resendChangePasswordOtp(
+    user: AuthenticatedUser,
+  ): Promise<{ message: string; otpExpiresInSeconds: number }> {
+    const otpExpiresInSeconds = await this.changePasswordService.resend(user.id);
+
+    return {
+      message: 'Đã gửi lại mã OTP đến email của bạn.',
+      otpExpiresInSeconds,
+    };
+  }
+
+  async confirmChangePassword(
+    user: AuthenticatedUser,
+    dto: ChangePasswordConfirmDto,
+  ): Promise<{ message: string }> {
+    const newPasswordHash = await this.changePasswordService.verifyAndConsume(user.id, dto.otp);
+
+    await this.prisma.user.update({
+      where: { id: user.id },
+      data: { passwordHash: newPasswordHash },
+    });
+
+    await this.revokeAllRefreshTokens(user.id);
+
+    return {
+      message: 'Đổi mật khẩu thành công. Vui lòng đăng nhập lại với mật khẩu mới.',
+    };
+  }
+
+  getInviteInfo(token: string) {
+    if (!token?.trim()) {
+      throw new BadRequestException('Link mời không hợp lệ');
+    }
+    return this.teamInviteService.getInvitePreview(token.trim());
+  }
+
+  async acceptInvite(dto: AcceptInviteDto): Promise<AuthSession> {
+    const payload = await this.teamInviteService.consumeToken(dto.token.trim());
+
+    const user = await this.prisma.user.findUnique({
+      where: { id: payload.userId },
+      include: { tenant: { select: { businessName: true } } },
+    });
+
+    if (
+      !user ||
+      user.email.toLowerCase() !== payload.email.toLowerCase() ||
+      user.tenantId !== payload.tenantId
+    ) {
+      throw new NotFoundException('Người dùng không tồn tại');
+    }
+
+    if (user.emailVerifiedAt) {
+      throw new BadRequestException('Tài khoản đã được kích hoạt. Vui lòng đăng nhập.');
+    }
+
+    const passwordHash = await bcrypt.hash(dto.password, 12);
+    await this.prisma.user.update({
+      where: { id: user.id },
+      data: {
+        passwordHash,
+        emailVerifiedAt: new Date(),
+      },
+    });
+
+    if (user.tenantId) {
+      const subscription = await this.prisma.subscription.findFirst({
+        where: { tenantId: user.tenantId },
+        orderBy: { startedAt: 'desc' },
+      });
+      if (subscription?.status === 'suspended') {
+        throw new UnauthorizedException(
+          'Tài khoản doanh nghiệp đã bị tạm khóa. Vui lòng liên hệ hỗ trợ.',
+        );
+      }
+    }
+
+    const plan = await this.getActivePlan(user.tenantId);
+    const verifiedUser = { ...user, emailVerifiedAt: new Date() };
+
+    return this.issueTokens(
+      this.toAuthenticatedUser(verifiedUser, user.tenant?.businessName ?? null, plan),
+      true,
+    );
+  }
+
   async login(dto: LoginDto): Promise<AuthSession> {
     const user = await this.prisma.user.findUnique({
       where: { email: dto.email.toLowerCase() },
@@ -308,6 +434,14 @@ export class AuthService {
     }
 
     if (!user.emailVerifiedAt && user.role !== PrismaRole.cas_partner) {
+      if (user.invitedById) {
+        throw new ForbiddenException({
+          code: 'INVITE_PENDING',
+          message:
+            'Tài khoản chưa được kích hoạt. Vui lòng mở link trong email mời hoặc liên hệ Admin gửi lại.',
+        });
+      }
+
       throw new ForbiddenException({
         code: 'EMAIL_NOT_VERIFIED',
         message: 'Email chưa được xác thực. Vui lòng nhập mã OTP đã gửi đến hộp thư.',
@@ -442,6 +576,7 @@ export class AuthService {
       sub: user.id,
       email: user.email,
       name: user.name,
+      avatarUrl: user.avatarUrl,
       role: user.role,
       tenantId: user.tenantId,
       businessName: user.businessName,
@@ -518,6 +653,7 @@ export class AuthService {
       id: string;
       email: string;
       name: string;
+      avatarUrl?: string | null;
       role: PrismaRole;
       tenantId: string | null;
     },
@@ -528,11 +664,16 @@ export class AuthService {
       id: user.id,
       email: user.email,
       name: user.name,
+      avatarUrl: user.avatarUrl ?? null,
       role: user.role as Role,
       tenantId: user.tenantId,
       businessName,
       plan,
     };
+  }
+
+  async getActivePlanForUser(tenantId: string | null): Promise<SubscriptionPlan | null> {
+    return this.getActivePlan(tenantId);
   }
 
   private async getActivePlan(tenantId: string | null): Promise<SubscriptionPlan | null> {

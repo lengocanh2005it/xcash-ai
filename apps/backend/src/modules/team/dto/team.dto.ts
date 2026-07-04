@@ -3,6 +3,7 @@ import { IsEmail, IsEnum, IsString, MinLength } from 'class-validator';
 
 export class InviteMemberDto {
   @IsString()
+  @MinLength(2)
   name: string;
 
   @IsEmail()
@@ -10,8 +11,4 @@ export class InviteMemberDto {
 
   @IsEnum([Role.ACCOUNTANT, Role.VIEWER])
   role: Role.ACCOUNTANT | Role.VIEWER;
-
-  @IsString()
-  @MinLength(8)
-  password: string;
 }

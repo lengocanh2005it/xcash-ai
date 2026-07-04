@@ -70,6 +70,12 @@ export interface ResetPasswordResult {
   message: string;
 }
 
+interface AcceptInviteInput {
+  token: string;
+  password: string;
+  confirmPassword: string;
+}
+
 interface AuthContextValue {
   user: AuthenticatedUser | null;
   isLoading: boolean;
@@ -83,8 +89,10 @@ interface AuthContextValue {
   forgotPassword: (input: ForgotPasswordInput) => Promise<ForgotPasswordResult>;
   resetPassword: (input: ResetPasswordInput) => Promise<ResetPasswordResult>;
   resendPasswordReset: (input: ResendPasswordResetInput) => Promise<void>;
+  acceptInvite: (input: AcceptInviteInput) => Promise<void>;
   logout: () => Promise<void>;
   refreshSession: () => Promise<AuthenticatedUser | null>;
+  updateUser: (patch: Partial<AuthenticatedUser>) => void;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -206,6 +214,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       ),
   });
 
+  const acceptInviteMutation = useMutation({
+    mutationFn: (input: AcceptInviteInput) =>
+      postApiData<AuthSessionData>('/auth/accept-invite', input),
+    onSuccess: (session) => {
+      applySession(session, setUser);
+      queryClient.invalidateQueries({ queryKey: ['onboarding'] });
+    },
+  });
+
   const logoutMutation = useMutation({
     mutationFn: async () => {
       await api.post('/auth/logout');
@@ -216,6 +233,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       queryClient.clear();
     },
   });
+
+  const updateUser = useCallback((patch: Partial<AuthenticatedUser>) => {
+    setUser((current) => (current ? { ...current, ...patch } : current));
+  }, []);
 
   const value = useMemo<AuthContextValue>(
     () => ({
@@ -229,6 +250,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         forgotPasswordMutation.isPending ||
         resetPasswordMutation.isPending ||
         resendPasswordResetMutation.isPending ||
+        acceptInviteMutation.isPending ||
         logoutMutation.isPending,
       isAuthenticated: Boolean(user),
       onboardingStatus,
@@ -254,10 +276,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       resendPasswordReset: async (input) => {
         await resendPasswordResetMutation.mutateAsync(input);
       },
+      acceptInvite: async (input) => {
+        await acceptInviteMutation.mutateAsync(input);
+      },
       logout: async () => {
         await logoutMutation.mutateAsync();
       },
       refreshSession,
+      updateUser,
     }),
     [
       user,
@@ -269,10 +295,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       forgotPasswordMutation,
       resetPasswordMutation,
       resendPasswordResetMutation,
+      acceptInviteMutation,
       logoutMutation,
       onboardingStatus,
       isOnboardingLoading,
       refreshSession,
+      updateUser,
     ],
   );
 

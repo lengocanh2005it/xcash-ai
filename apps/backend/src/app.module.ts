@@ -8,6 +8,7 @@ import { ResponseInterceptor } from './common/interceptors/response.interceptor'
 import { RequestIdMiddleware } from './common/middleware/request-id.middleware';
 import configuration from './config/configuration';
 import { AiModule } from './modules/ai/ai.module';
+import { AuditLogModule } from './modules/audit-log/audit-log.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { BankingModule } from './modules/banking/banking.module';
 import { BillingModule } from './modules/billing/billing.module';
@@ -18,6 +19,7 @@ import { HealthModule } from './modules/health/health.module';
 import { NotificationModule } from './modules/notification/notification.module';
 import { OnboardingModule } from './modules/onboarding/onboarding.module';
 import { PartnerModule } from './modules/partner/partner.module';
+import { ProfileModule } from './modules/profile/profile.module';
 import { ReportModule } from './modules/report/report.module';
 import { SettingsModule } from './modules/settings/settings.module';
 import { TeamModule } from './modules/team/team.module';
@@ -25,6 +27,7 @@ import { TransactionModule } from './modules/transaction/transaction.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { QueueModule } from './queue/queue.module';
 import { RedisModule } from './redis/redis.module';
+import { StorageModule } from './storage/storage.module';
 
 @Module({
   imports: [
@@ -45,6 +48,7 @@ import { RedisModule } from './redis/redis.module';
       }),
     }),
     PrismaModule,
+    StorageModule,
     RedisModule,
     QueueModule,
     AuthModule,
@@ -53,6 +57,7 @@ import { RedisModule } from './redis/redis.module';
     OnboardingModule,
     BankingModule,
     AiModule,
+    AuditLogModule,
     ChartOfAccountsModule,
     ClassificationModule,
     ReportModule,
@@ -62,6 +67,7 @@ import { RedisModule } from './redis/redis.module';
     BillingModule,
     PartnerModule,
     NotificationModule,
+    ProfileModule,
   ],
   providers: [
     {

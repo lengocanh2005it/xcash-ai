@@ -118,7 +118,7 @@ export class PartnerService {
     };
   }
 
-  async suspendTenant(tenantId: string) {
+  async suspendTenant(tenantId: string, partnerUserId: string) {
     const subscription = await this.getLatestSubscription(tenantId);
     if (subscription.status === 'suspended') {
       throw new BadRequestException('Doanh nghiệp đã bị khóa');
@@ -135,7 +135,7 @@ export class PartnerService {
         entityType: 'tenant',
         entityId: tenantId,
         action: 'tenant_suspended',
-        actor: 'cas_partner',
+        actor: partnerUserId,
       },
     });
 
@@ -148,7 +148,7 @@ export class PartnerService {
     return { success: true };
   }
 
-  async activateTenant(tenantId: string) {
+  async activateTenant(tenantId: string, partnerUserId: string) {
     const subscription = await this.getLatestSubscription(tenantId);
     if (subscription.status === 'active') {
       throw new BadRequestException('Doanh nghiệp đang hoạt động');
@@ -165,7 +165,7 @@ export class PartnerService {
         entityType: 'tenant',
         entityId: tenantId,
         action: 'tenant_activated',
-        actor: 'cas_partner',
+        actor: partnerUserId,
       },
     });
 
@@ -357,7 +357,11 @@ export class PartnerService {
     }));
   }
 
-  async updatePlanPricing(plan: SubscriptionPlan, dto: UpdatePlanPricingDto) {
+  async updatePlanPricing(
+    plan: SubscriptionPlan,
+    dto: UpdatePlanPricingDto,
+    partnerUserId: string,
+  ) {
     if (plan === 'free') {
       throw new BadRequestException('Không thể chỉnh giá gói Free');
     }
@@ -379,7 +383,7 @@ export class PartnerService {
         entityType: 'plan_pricing',
         entityId: plan,
         action: 'plan_pricing_updated',
-        actor: 'cas_partner',
+        actor: partnerUserId,
         beforeState: {
           pricePerMonth: Number(existing.pricePerMonth),
           transactionQuota: existing.transactionQuota,
@@ -412,7 +416,7 @@ export class PartnerService {
     };
   }
 
-  async setTenantPlan(tenantId: string, targetPlan: SubscriptionPlan) {
+  async setTenantPlan(tenantId: string, targetPlan: SubscriptionPlan, partnerUserId: string) {
     const tenant = await this.prisma.tenant.findUnique({ where: { id: tenantId } });
     if (!tenant) throw new NotFoundException('Không tìm thấy doanh nghiệp');
 
@@ -460,12 +464,18 @@ export class PartnerService {
           entityType: 'subscription',
           entityId: tenantId,
           action: 'partner_set_plan',
-          actor: 'cas_partner',
+          actor: partnerUserId,
           beforeState: { plan: prevPlan },
           afterState: { plan: targetPlan },
         },
       }),
     ]);
+
+    void this.notificationService
+      .createPlanActivatedByPartner(tenantId, targetPlan, pricing.transactionQuota)
+      .catch((err: unknown) =>
+        this.logger.warn(`Plan change notification failed for tenant ${tenantId}`, err),
+      );
 
     return { success: true, plan: targetPlan };
   }

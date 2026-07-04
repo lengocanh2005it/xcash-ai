@@ -6,6 +6,8 @@ import {
   Building2,
   CreditCard,
   Lock,
+  Mail,
+  ScrollText,
   Sliders,
   Trash2,
   UserPlus,
@@ -15,6 +17,7 @@ import { QRCodeSVG } from 'qrcode.react';
 import { useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
+import { AuditLogPanel } from '@/components/audit/AuditLogPanel';
 import { Header } from '@/components/layout/Header';
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog';
 import { Badge } from '@/components/ui/badge';
@@ -23,6 +26,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
@@ -293,6 +297,7 @@ interface Member {
   email: string;
   role: string;
   createdAt: string;
+  emailVerifiedAt: string | null;
   invitedBy: { name: string } | null;
 }
 
@@ -301,7 +306,7 @@ function TeamTab() {
   const { user } = useAuth();
   const [inviteOpen, setInviteOpen] = useState(false);
   const [memberToRemove, setMemberToRemove] = useState<Member | null>(null);
-  const [form, setForm] = useState({ name: '', email: '', role: 'accountant', password: '' });
+  const [form, setForm] = useState({ name: '', email: '', role: 'accountant' });
 
   const { data: members, isLoading } = useQuery({
     queryKey: ['team', 'members'],
@@ -310,13 +315,26 @@ function TeamTab() {
 
   const { mutate: invite, isPending: inviting } = useMutation({
     mutationFn: () => api.post('/team/members', form),
-    onSuccess: () => {
-      toast.success('Đã thêm thành viên');
+    onSuccess: (response) => {
+      const message =
+        (response.data as { data?: { message?: string } }).data?.message ??
+        'Đã gửi email mời thành công';
+      toast.success(message);
       qc.invalidateQueries({ queryKey: ['team', 'members'] });
       setInviteOpen(false);
-      setForm({ name: '', email: '', role: 'accountant', password: '' });
+      setForm({ name: '', email: '', role: 'accountant' });
     },
-    onError: () => toast.error('Không thể thêm thành viên'),
+    onError: () => toast.error('Không thể gửi lời mời'),
+  });
+
+  const { mutate: resendInvite, isPending: isResending } = useMutation({
+    mutationFn: (id: string) => api.post(`/team/members/${id}/resend-invite`),
+    onSuccess: (response) => {
+      const message =
+        (response.data as { data?: { message?: string } }).data?.message ?? 'Đã gửi lại email mời';
+      toast.success(message);
+    },
+    onError: () => toast.error('Không thể gửi lại email mời'),
   });
 
   const { mutate: remove, isPending: removing } = useMutation({
@@ -357,32 +375,51 @@ function TeamTab() {
             </div>
           ) : (
             <div className="space-y-1">
-              {members?.map((m) => (
-                <div
-                  key={m.id}
-                  className="flex items-center justify-between py-2 border-b last:border-0"
-                >
-                  <div>
-                    <p className="text-sm font-medium">{m.name}</p>
-                    <p className="text-xs text-muted-foreground">{m.email}</p>
+              {members?.map((m) => {
+                const isPending = !m.emailVerifiedAt && m.invitedBy;
+                return (
+                  <div
+                    key={m.id}
+                    className="flex items-center justify-between py-2 border-b last:border-0"
+                  >
+                    <div>
+                      <p className="text-sm font-medium">{m.name}</p>
+                      <p className="text-xs text-muted-foreground">{m.email}</p>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      {isPending && (
+                        <Badge variant="outline" className="text-amber-600 border-amber-300">
+                          Chờ kích hoạt
+                        </Badge>
+                      )}
+                      <Badge variant={m.role === 'admin' ? 'default' : 'secondary'}>
+                        {roleLabel[m.role] ?? m.role}
+                      </Badge>
+                      {isPending && (
+                        <Button
+                          size="icon-sm"
+                          variant="ghost"
+                          title="Gửi lại email mời"
+                          disabled={isResending}
+                          onClick={() => resendInvite(m.id)}
+                        >
+                          <Mail className="size-4" />
+                        </Button>
+                      )}
+                      {m.id !== user?.id && (
+                        <Button
+                          size="icon-sm"
+                          variant="ghost"
+                          onClick={() => setMemberToRemove(m)}
+                          className="text-destructive hover:text-destructive"
+                        >
+                          <Trash2 className="size-4" />
+                        </Button>
+                      )}
+                    </div>
                   </div>
-                  <div className="flex items-center gap-3">
-                    <Badge variant={m.role === 'admin' ? 'default' : 'secondary'}>
-                      {roleLabel[m.role] ?? m.role}
-                    </Badge>
-                    {m.id !== user?.id && (
-                      <Button
-                        size="icon-sm"
-                        variant="ghost"
-                        onClick={() => setMemberToRemove(m)}
-                        className="text-destructive hover:text-destructive"
-                      >
-                        <Trash2 className="size-4" />
-                      </Button>
-                    )}
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </CardContent>
@@ -391,7 +428,11 @@ function TeamTab() {
       <Dialog open={inviteOpen} onOpenChange={setInviteOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Thêm thành viên mới</DialogTitle>
+            <DialogTitle>Mời thành viên mới</DialogTitle>
+            <DialogDescription>
+              Hệ thống sẽ gửi email chứa link kích hoạt. Thành viên tự đặt mật khẩu — Admin không
+              biết mật khẩu của họ.
+            </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-2">
             <div className="space-y-1.5">
@@ -422,25 +463,13 @@ function TeamTab() {
                 </SelectContent>
               </Select>
             </div>
-            <div className="space-y-1.5">
-              <Label>Mật khẩu tạm thời</Label>
-              <Input
-                type="password"
-                value={form.password}
-                onChange={(e) => setForm((f) => ({ ...f, password: e.target.value }))}
-                placeholder="Ít nhất 8 ký tự"
-              />
-            </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setInviteOpen(false)}>
               Hủy
             </Button>
-            <Button
-              onClick={() => invite()}
-              disabled={inviting || !form.name || !form.email || !form.password}
-            >
-              Thêm thành viên
+            <Button onClick={() => invite()} disabled={inviting || !form.name || !form.email}>
+              {inviting ? 'Đang gửi...' : 'Gửi lời mời'}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -611,6 +640,7 @@ function BillingTab() {
       setOveragePaymentOpen(false);
       setOverageResult(null);
       qc.invalidateQueries({ queryKey: ['billing', 'overage-orders'] });
+      qc.invalidateQueries({ queryKey: ['notifications'] });
       toast.success('Demo: Đã thanh toán phí vượt quota!');
     },
     onError: () => toast.error('Không thể xác nhận mock'),
@@ -629,6 +659,7 @@ function BillingTab() {
         `Nâng cấp lên gói ${PLAN_LABEL[data.plan as SubscriptionPlan] ?? data.plan} thành công!`,
       );
       qc.invalidateQueries({ queryKey: ['billing', 'current-plan'] });
+      qc.invalidateQueries({ queryKey: ['notifications'] });
       void refreshSession();
     }
     prevPlanRef.current = data.plan;
@@ -656,6 +687,7 @@ function BillingTab() {
     mutationFn: (orderCode: string) => api.post(`/billing/upgrade/${orderCode}/mock-confirm`),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['billing', 'current-plan'] });
+      qc.invalidateQueries({ queryKey: ['notifications'] });
       setPaymentOpen(false);
       setUpgradeResult(null);
       setSelectedPlan(null);
@@ -1098,11 +1130,32 @@ function BankingTab() {
   );
 }
 
+// ─── Tab Audit Log ────────────────────────────────────────────────
+function AuditLogTab() {
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-base flex items-center gap-2">
+          <ScrollText className="size-4" />
+          Nhật ký hoạt động
+        </CardTitle>
+        <CardDescription>
+          Lịch sử thao tác trong doanh nghiệp — định khoản, liên kết ngân hàng, thanh toán...
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        <AuditLogPanel endpoint="/audit-logs" />
+      </CardContent>
+    </Card>
+  );
+}
+
 // ─── Main ─────────────────────────────────────────────────────────
 export default function SettingsPage() {
   const { user } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
   const isAdmin = user?.role === 'admin';
+  const canViewAudit = user?.role === 'admin' || user?.role === 'accountant';
   const activeTab = searchParams.get('tab') ?? 'banking';
 
   const tabs = [
@@ -1122,6 +1175,13 @@ export default function SettingsPage() {
       component: <NotificationsTab />,
     },
     { value: 'team', label: 'Thành viên', icon: Users, adminOnly: true, component: <TeamTab /> },
+    {
+      value: 'audit',
+      label: 'Nhật ký',
+      icon: ScrollText,
+      auditOnly: true,
+      component: <AuditLogTab />,
+    },
     { value: 'billing', label: 'Gói dịch vụ', icon: CreditCard, component: <BillingTab /> },
   ];
 
@@ -1136,7 +1196,7 @@ export default function SettingsPage() {
           <TabsList className="w-full justify-start gap-1 overflow-x-auto">
             {tabs.map((tab) => {
               const Icon = tab.icon;
-              const locked = tab.adminOnly && !isAdmin;
+              const locked = (tab.adminOnly && !isAdmin) || (tab.auditOnly && !canViewAudit);
               return (
                 <TabsTrigger
                   key={tab.value}

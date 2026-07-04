@@ -57,4 +57,11 @@ export default () => ({
     10,
   ),
   EMAIL_OTP_MAX_ATTEMPTS: Number.parseInt(process.env.EMAIL_OTP_MAX_ATTEMPTS ?? '5', 10),
+  TEAM_INVITE_TTL_SECONDS: Number.parseInt(process.env.TEAM_INVITE_TTL_SECONDS ?? '604800', 10),
+  AZURE_STORAGE_CONNECTION_STRING: process.env.AZURE_STORAGE_CONNECTION_STRING ?? '',
+  AZURE_STORAGE_CONTAINER_NAME: process.env.AZURE_STORAGE_CONTAINER_NAME ?? 'task-attachments',
+  AZURE_STORAGE_MAX_FILE_SIZE: Number.parseInt(
+    process.env.AZURE_STORAGE_MAX_FILE_SIZE ?? '5242880',
+    10,
+  ),
 });

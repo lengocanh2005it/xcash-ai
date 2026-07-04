@@ -236,18 +236,33 @@ export class NotificationService {
     kind: 'upgrade' | 'overage',
     plan: string,
     amount: number,
+    quota?: number,
   ): Promise<void> {
-    const planLabel = plan.toUpperCase();
-    const title =
-      kind === 'upgrade' ? 'Nâng cấp gói thành công' : 'Thanh toán phí vượt quota thành công';
-    const body =
-      kind === 'upgrade'
-        ? `Gói ${planLabel} đã được kích hoạt. Số tiền: ${this.formatVnd(amount)}.`
-        : `Đã thanh toán ${this.formatVnd(amount)} cho phí vượt quota gói ${planLabel}.`;
+    const planLabel = this.getPlanLabel(plan);
+
+    if (kind === 'upgrade') {
+      const quotaPart =
+        quota != null ? ` Quota ${quota.toLocaleString('vi-VN')} giao dịch/tháng.` : '';
+      await this.publish(tenantId, NotificationType.billing_success, {
+        title: `Mua gói ${planLabel} thành công`,
+        body: `Doanh nghiệp của bạn đã kích hoạt gói ${planLabel}.${quotaPart} Số tiền thanh toán: ${this.formatVnd(amount)}.`,
+        link: '/settings?tab=billing',
+      });
+      return;
+    }
 
     await this.publish(tenantId, NotificationType.billing_success, {
-      title,
-      body,
+      title: 'Thanh toán phí vượt quota thành công',
+      body: `Đã thanh toán ${this.formatVnd(amount)} cho phí vượt quota gói ${planLabel}.`,
+      link: '/settings?tab=billing',
+    });
+  }
+
+  async createPlanActivatedByPartner(tenantId: string, plan: string, quota: number): Promise<void> {
+    const planLabel = this.getPlanLabel(plan);
+    await this.publish(tenantId, NotificationType.billing_success, {
+      title: `Gói ${planLabel} đã được kích hoạt`,
+      body: `Gói dịch vụ của doanh nghiệp đã được cập nhật thành ${planLabel} (${quota.toLocaleString('vi-VN')} giao dịch/tháng).`,
       link: '/settings?tab=billing',
     });
   }
@@ -328,6 +343,16 @@ export class NotificationService {
 
   private formatVnd(amount: number): string {
     return `${amount.toLocaleString('vi-VN')}đ`;
+  }
+
+  private getPlanLabel(plan: string): string {
+    const labels: Record<string, string> = {
+      free: 'Free',
+      starter: 'Starter',
+      pro: 'Pro',
+      enterprise: 'Enterprise',
+    };
+    return labels[plan.toLowerCase()] ?? plan;
   }
 
   private buildContentPreview(content: string | null): string {

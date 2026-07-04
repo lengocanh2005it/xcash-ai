@@ -214,7 +214,7 @@ export class BillingService {
     ]);
 
     void this.notificationService
-      .createBillingSuccess(tenantId, 'upgrade', targetPlan, amount)
+      .createBillingSuccess(tenantId, 'upgrade', targetPlan, amount, quota)
       .catch((err: unknown) =>
         this.logger.warn(`Billing notification failed for tenant ${tenantId}`, err),
       );

@@ -38,7 +38,7 @@ export class OnboardingService {
     };
   }
 
-  async handleBankingCallback(tenantId: string, publicToken: string) {
+  async handleBankingCallback(tenantId: string, userId: string, publicToken: string) {
     const exchange = await this.casClient.exchangeGrant(publicToken);
 
     let accountNumber: string | null = null;
@@ -94,7 +94,7 @@ export class OnboardingService {
         entityType: 'cas_grant',
         entityId: grant.id,
         action: 'banking_linked',
-        actor: tenantId,
+        actor: userId,
         afterState: {
           grantId: grant.grantId,
           accountNumber: grant.accountNumber,

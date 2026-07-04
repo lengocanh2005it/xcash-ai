@@ -105,3 +105,47 @@ export class ResendPasswordResetDto {
   @IsEmail()
   email!: string;
 }
+
+export class AcceptInviteDto {
+  @ApiProperty({ example: 'abc123token' })
+  @IsString()
+  @MinLength(16)
+  token!: string;
+
+  @ApiProperty({ example: 'MatKhauManh123!' })
+  @IsString()
+  @MinLength(8)
+  password!: string;
+
+  @ApiProperty({ example: 'MatKhauManh123!' })
+  @IsString()
+  @MinLength(8)
+  @Match('password', { message: 'Mật khẩu xác nhận không khớp' })
+  confirmPassword!: string;
+}
+
+export class ChangePasswordRequestDto {
+  @ApiProperty({ example: 'MatKhauCu123!' })
+  @IsString()
+  @MinLength(8)
+  currentPassword!: string;
+
+  @ApiProperty({ example: 'MatKhauMoi123!' })
+  @IsString()
+  @MinLength(8)
+  newPassword!: string;
+
+  @ApiProperty({ example: 'MatKhauMoi123!' })
+  @IsString()
+  @MinLength(8)
+  @Match('newPassword', { message: 'Mật khẩu xác nhận không khớp' })
+  confirmPassword!: string;
+}
+
+export class ChangePasswordConfirmDto {
+  @ApiProperty({ example: '123456' })
+  @IsString()
+  @Length(6, 6)
+  @Matches(/^\d{6}$/, { message: 'Mã OTP phải gồm 6 chữ số' })
+  otp!: string;
+}

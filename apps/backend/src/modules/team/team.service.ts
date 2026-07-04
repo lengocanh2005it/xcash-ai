@@ -1,3 +1,4 @@
+import { randomBytes } from 'node:crypto';
 import {
   BadRequestException,
   ConflictException,
@@ -7,10 +8,19 @@ import {
 import * as bcrypt from 'bcryptjs';
 import { PrismaService } from '../../prisma/prisma.service';
 import type { InviteMemberDto } from './dto/team.dto';
+import { TeamInviteService } from './team-invite.service';
+
+export interface InviteMemberResult {
+  email: string;
+  message: string;
+}
 
 @Injectable()
 export class TeamService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly teamInviteService: TeamInviteService,
+  ) {}
 
   async getMembers(tenantId: string) {
     return this.prisma.user.findMany({
@@ -22,33 +32,94 @@ export class TeamService {
         role: true,
         createdAt: true,
         invitedAt: true,
+        emailVerifiedAt: true,
         invitedBy: { select: { name: true } },
       },
       orderBy: { createdAt: 'asc' },
     });
   }
 
-  async invite(tenantId: string, inviterId: string, dto: InviteMemberDto) {
+  async invite(
+    tenantId: string,
+    inviterId: string,
+    dto: InviteMemberDto,
+  ): Promise<InviteMemberResult> {
+    const normalizedEmail = dto.email.toLowerCase();
     const existing = await this.prisma.user.findUnique({
-      where: { email: dto.email.toLowerCase() },
+      where: { email: normalizedEmail },
     });
-    if (existing) throw new ConflictException('Email đã được sử dụng');
 
-    const passwordHash = await bcrypt.hash(dto.password, 12);
+    if (existing) {
+      if (existing.tenantId !== tenantId) {
+        throw new ConflictException('Email đã được sử dụng');
+      }
+      if (existing.emailVerifiedAt) {
+        throw new ConflictException('Email đã được sử dụng');
+      }
 
-    return this.prisma.user.create({
+      await this.prisma.user.update({
+        where: { id: existing.id },
+        data: {
+          name: dto.name,
+          role: dto.role as unknown as import('@prisma/client').Role,
+          invitedById: inviterId,
+          invitedAt: new Date(),
+        },
+      });
+
+      await this.teamInviteService.sendInvite(existing.id, inviterId);
+
+      return {
+        email: normalizedEmail,
+        message: 'Đã gửi lại email mời. Thành viên cần mở link trong email để đặt mật khẩu.',
+      };
+    }
+
+    const passwordHash = await bcrypt.hash(randomBytes(32).toString('hex'), 12);
+
+    const user = await this.prisma.user.create({
       data: {
         tenantId,
         name: dto.name,
-        email: dto.email.toLowerCase(),
+        email: normalizedEmail,
         passwordHash,
         role: dto.role as unknown as import('@prisma/client').Role,
         invitedById: inviterId,
         invitedAt: new Date(),
-        emailVerifiedAt: new Date(),
       },
-      select: { id: true, name: true, email: true, role: true, createdAt: true },
     });
+
+    await this.teamInviteService.sendInvite(user.id, inviterId);
+
+    return {
+      email: normalizedEmail,
+      message: 'Đã gửi email mời. Thành viên cần mở link trong email để đặt mật khẩu.',
+    };
+  }
+
+  async resendInvite(tenantId: string, memberId: string, inviterId: string) {
+    const member = await this.prisma.user.findFirst({
+      where: { id: memberId, tenantId },
+    });
+
+    if (!member) {
+      throw new NotFoundException('Thành viên không tồn tại');
+    }
+
+    if (member.emailVerifiedAt) {
+      throw new BadRequestException('Thành viên đã kích hoạt tài khoản');
+    }
+
+    if (!member.invitedById) {
+      throw new BadRequestException('Không thể gửi lại lời mời cho tài khoản này');
+    }
+
+    await this.teamInviteService.sendInvite(member.id, inviterId);
+
+    return {
+      email: member.email,
+      message: 'Đã gửi lại email mời.',
+    };
   }
 
   async removeMember(tenantId: string, requesterId: string, memberId: string) {
@@ -61,7 +132,6 @@ export class TeamService {
     });
     if (!member) throw new NotFoundException('Thành viên không tồn tại');
 
-    // Prevent removing the last admin
     if (member.role === 'admin') {
       const adminCount = await this.prisma.user.count({
         where: { tenantId, role: 'admin' },

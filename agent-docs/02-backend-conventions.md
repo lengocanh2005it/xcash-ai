@@ -32,7 +32,8 @@ src/modules/
 ├── report/               # báo cáo thu/chi, export Excel, comparison, top-accounts
 ├── ai/                   # AI Classification pipeline (BullMQ ai-classify) + copilot.controller
 ├── settings/             # threshold (Prisma) + notifications (Redis)
-├── team/                 # invite/list/remove member
+├── team/                 # invite email / list / remove / resend
+├── audit-log/            # GET /audit-logs (tenant scope, admin + accountant)
 ├── billing/              # plans, current-plan, usage-history, PayOS upgrade + overage, webhook
 ├── partner/              # /partner/* — tenants, stats, payments, plan-pricing, suspend/activate/plan
 ├── notification/         # in-app (SSE stream), email Resend (BullMQ), Slack webhook per-tenant
@@ -40,7 +41,7 @@ src/modules/
 └── health/               # health check
 ```
 
-Module chưa có (không chặn go-live): `audit-log` API đọc riêng (bảng `audit_logs` đã ghi khi upgrade/suspend/overage). Partner endpoints phụ: `/partner/revenue`, `/partner/audit-logs`, `/partner/system-health` — xem `reference/rbac.md`.
+Module chưa có (không chặn go-live): Partner endpoints phụ: `/partner/revenue`, `/partner/system-health` — xem `reference/rbac.md`. (`audit-log` module + `/partner/audit-logs` đã có.)
 
 **Plan gating:** `PlanGuard` + `@RequiresPlan` — Copilot/comparison/top-accounts cần Starter+; export Excel cần Pro+; Email/Slack notification validate trong `settings.service` (Starter+/Pro+).
 

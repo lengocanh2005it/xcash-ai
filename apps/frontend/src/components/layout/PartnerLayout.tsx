@@ -7,13 +7,16 @@ import {
   PanelLeft,
   PanelLeftClose,
   Receipt,
+  ScrollText,
   X,
 } from 'lucide-react';
 import { useState } from 'react';
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { Logo, LogoMark } from '@/components/brand/Logo';
+import { ProfileDialog } from '@/components/profile/ProfileDialog';
 import { ThemeToggle } from '@/components/shared/ThemeToggle';
+import { UserAvatar } from '@/components/shared/UserAvatar';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/hooks/useAuth';
 import { cn } from '@/lib/utils';
@@ -22,18 +25,9 @@ const partnerNavItems = [
   { to: '/partner/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { to: '/partner/tenants', label: 'Doanh nghiệp', icon: Building2 },
   { to: '/partner/payments', label: 'Lịch sử thanh toán', icon: Receipt },
+  { to: '/partner/audit-logs', label: 'Nhật ký', icon: ScrollText },
   { to: '/partner/plans', label: 'Gói dịch vụ', icon: Layers },
 ];
-
-function getInitials(name?: string | null) {
-  if (!name?.trim()) return 'P';
-  return name
-    .trim()
-    .split(/\s+/)
-    .slice(0, 2)
-    .map((part) => part[0]?.toUpperCase() ?? '')
-    .join('');
-}
 
 interface PartnerSidebarContentProps {
   onNavigate?: () => void;
@@ -54,6 +48,7 @@ function PartnerSidebarContent({
 }: PartnerSidebarContentProps) {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
+  const [profileOpen, setProfileOpen] = useState(false);
 
   const handleLogout = async () => {
     try {
@@ -157,17 +152,24 @@ function PartnerSidebarContent({
             collapsed && 'flex justify-center border-0 bg-transparent p-0',
           )}
         >
-          {!collapsed ? (
-            <div className="mb-3 flex items-center gap-3">
-              <div className="flex size-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-semibold text-primary">
-                {getInitials(user?.name)}
-              </div>
+          <button
+            type="button"
+            onClick={() => setProfileOpen(true)}
+            className={cn(
+              'flex w-full items-center rounded-lg text-left transition-colors hover:bg-primary/5',
+              collapsed ? 'mb-2 justify-center p-1' : 'mb-3 gap-3 p-1',
+            )}
+            aria-label="Xem thông tin tài khoản"
+            title="Thông tin tài khoản"
+          >
+            <UserAvatar name={user?.name} avatarUrl={user?.avatarUrl} />
+            {!collapsed ? (
               <div className="min-w-0">
                 <p className="truncate text-sm font-medium">{user?.name}</p>
                 <p className="truncate text-xs text-muted-foreground">{user?.email}</p>
               </div>
-            </div>
-          ) : null}
+            ) : null}
+          </button>
           <div className={cn('flex gap-2', collapsed ? 'flex-col items-center' : 'items-center')}>
             <ThemeToggle />
             <Button
@@ -185,6 +187,8 @@ function PartnerSidebarContent({
           </div>
         </div>
       </div>
+
+      <ProfileDialog open={profileOpen} onOpenChange={setProfileOpen} />
     </div>
   );
 }

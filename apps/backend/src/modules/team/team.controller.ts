@@ -26,6 +26,12 @@ export class TeamController {
     return this.service.invite(user.tenantId!, user.id, dto);
   }
 
+  @Post('members/:id/resend-invite')
+  @Roles(Role.ADMIN)
+  resendInvite(@CurrentUser() user: AuthenticatedUser, @Param('id') id: string) {
+    return this.service.resendInvite(user.tenantId!, id, user.id);
+  }
+
   @Delete('members/:id')
   @Roles(Role.ADMIN)
   remove(@CurrentUser() user: AuthenticatedUser, @Param('id') id: string) {

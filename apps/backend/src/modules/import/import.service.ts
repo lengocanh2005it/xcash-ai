@@ -1,7 +1,11 @@
 import { createHash } from 'node:crypto';
 import { InjectQueue } from '@nestjs/bullmq';
 import { ForbiddenException, Injectable, Logger } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
+import {
+  Prisma,
+  TransactionDirection as PrismaTransactionDirection,
+  TransactionSource,
+} from '@prisma/client';
 import type { TransactionDirection } from '@xcash/shared-types';
 import type { Queue } from 'bullmq';
 import * as XLSX from 'xlsx';
@@ -316,8 +320,11 @@ export class ImportService {
             content: row.description,
             transactionDate: row.date,
             status: 'pending',
-            source: 'import',
-            direction: row.direction,
+            source: TransactionSource.import,
+            direction:
+              row.direction === 'in'
+                ? PrismaTransactionDirection.in
+                : PrismaTransactionDirection.out,
             importBatchId: batch.id,
           },
         });

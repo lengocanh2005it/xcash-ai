@@ -9,7 +9,7 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { Prisma, SubscriptionPlan } from '@prisma/client';
+import { Prisma, SubscriptionPlan, TransactionDirection, TransactionSource } from '@prisma/client';
 import type { Queue } from 'bullmq';
 import { PrismaService } from '../../prisma/prisma.service';
 import { WEBHOOK_QUEUE } from '../../queue/queue.module';
@@ -179,8 +179,8 @@ export class BankingService {
           receiverAccount: null,
           transactionDate: new Date(txn.transactionDateTime),
           status: 'pending',
-          source: 'cas',
-          direction: casDirection,
+          source: TransactionSource.cas,
+          direction: casDirection === 'in' ? TransactionDirection.in : TransactionDirection.out,
         },
       });
 

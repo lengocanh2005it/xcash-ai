@@ -68,7 +68,7 @@ export class TransactionService {
             },
           },
         },
-        orderBy: { transactionDate: 'desc' },
+        orderBy: { createdAt: 'desc' },
         skip,
         take: limit,
       }),

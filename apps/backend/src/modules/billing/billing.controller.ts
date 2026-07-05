@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Query, UseGuards } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { ApiTags } from '@nestjs/swagger';
 import { Role } from '@xcash/shared-types';
@@ -38,8 +38,13 @@ export class BillingController {
 
   @Get('cycle-transactions')
   @Roles(Role.ADMIN, Role.ACCOUNTANT)
-  getCycleTransactions(@CurrentUser() user: AuthenticatedUser) {
-    return this.service.getCycleTransactions(user.tenantId!);
+  getCycleTransactions(
+    @CurrentUser() user: AuthenticatedUser,
+    @Query('source') source?: string,
+    @Query('direction') direction?: string,
+    @Query('search') search?: string,
+  ) {
+    return this.service.getCycleTransactions(user.tenantId!, { source, direction, search });
   }
 
   @Post('upgrade')

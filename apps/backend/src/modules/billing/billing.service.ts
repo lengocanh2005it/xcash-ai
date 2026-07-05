@@ -6,7 +6,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { type SubscriptionPlan, TransactionSource } from '@prisma/client';
+import { type SubscriptionPlan, TransactionDirection, TransactionSource } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { NotificationService } from '../notification/notification.service';
 import { PayosService } from './payos.service';
@@ -96,7 +96,10 @@ export class BillingService {
     };
   }
 
-  async getCycleTransactions(tenantId: string) {
+  async getCycleTransactions(
+    tenantId: string,
+    filters: { source?: string; direction?: string; search?: string } = {},
+  ) {
     const sub = await this.prisma.subscription.findFirst({
       where: { tenantId, status: 'active' },
       orderBy: { startedAt: 'desc' },
@@ -109,6 +112,11 @@ export class BillingService {
       where: {
         tenantId,
         createdAt: { gte: sub.currentCycleStart, lte: sub.currentCycleEnd },
+        ...(filters.source ? { source: filters.source as TransactionSource } : {}),
+        ...(filters.direction ? { direction: filters.direction as TransactionDirection } : {}),
+        ...(filters.search
+          ? { content: { contains: filters.search, mode: 'insensitive' as const } }
+          : {}),
       },
       select: {
         id: true,

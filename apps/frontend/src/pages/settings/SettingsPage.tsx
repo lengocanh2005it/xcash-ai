@@ -611,13 +611,21 @@ function BillingTab() {
   const [overagePaymentOpen, setOveragePaymentOpen] = useState(false);
   const [overageResult, setOverageResult] = useState<OveragePaymentResult | null>(null);
   const [cycleDetailOpen, setCycleDetailOpen] = useState(false);
+  const [cycleFilters, setCycleFilters] = useState({ source: '', direction: '', search: '' });
+  const [cycleSearch, setCycleSearch] = useState('');
 
   const { data: cycleData, isLoading: isCycleLoading } = useQuery({
-    queryKey: ['billing', 'cycle-transactions'],
-    queryFn: () =>
-      api
-        .get<{ data: CycleTransactionsData }>('/billing/cycle-transactions')
-        .then((r) => r.data.data),
+    queryKey: ['billing', 'cycle-transactions', cycleFilters],
+    queryFn: () => {
+      const params = new URLSearchParams();
+      if (cycleFilters.source) params.set('source', cycleFilters.source);
+      if (cycleFilters.direction) params.set('direction', cycleFilters.direction);
+      if (cycleFilters.search) params.set('search', cycleFilters.search);
+      const qs = params.toString();
+      return api
+        .get<{ data: CycleTransactionsData }>(`/billing/cycle-transactions${qs ? `?${qs}` : ''}`)
+        .then((r) => r.data.data);
+    },
     enabled: cycleDetailOpen,
   });
 
@@ -819,7 +827,7 @@ function BillingTab() {
                     onClick={() => setCycleDetailOpen(true)}
                     className="pt-0.5 text-xs text-primary underline-offset-2 hover:underline"
                   >
-                    Xem chi tiết {data.transactionUsed.toLocaleString()} giao dịch trong chu kỳ →
+                    Xem chi tiết giao dịch trong chu kỳ →
                   </button>
                 )}
               </div>
@@ -829,7 +837,16 @@ function BillingTab() {
       </Card>
 
       {/* Dialog xem giao dịch trong chu kỳ */}
-      <Dialog open={cycleDetailOpen} onOpenChange={setCycleDetailOpen}>
+      <Dialog
+        open={cycleDetailOpen}
+        onOpenChange={(open) => {
+          setCycleDetailOpen(open);
+          if (!open) {
+            setCycleFilters({ source: '', direction: '', search: '' });
+            setCycleSearch('');
+          }
+        }}
+      >
         <DialogContent className="max-h-[80vh] max-w-3xl overflow-hidden flex flex-col">
           <DialogHeader>
             <DialogTitle>Giao dịch trong chu kỳ hiện tại</DialogTitle>
@@ -839,6 +856,63 @@ function BillingTab() {
                 : 'Đang tải...'}
             </DialogDescription>
           </DialogHeader>
+          {/* Filter bar */}
+          <div className="flex flex-wrap items-center gap-2 pb-1">
+            <Input
+              placeholder="Tìm theo nội dung..."
+              value={cycleSearch}
+              onChange={(e) => setCycleSearch(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter')
+                  setCycleFilters((f) => ({ ...f, search: cycleSearch.trim() }));
+              }}
+              onBlur={() => setCycleFilters((f) => ({ ...f, search: cycleSearch.trim() }))}
+              className="h-8 w-48 text-sm"
+            />
+            <Select
+              value={cycleFilters.source || 'all'}
+              onValueChange={(v) =>
+                setCycleFilters((f) => ({ ...f, source: v === 'all' ? '' : v }))
+              }
+            >
+              <SelectTrigger className="h-8 w-36 text-sm">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Tất cả nguồn</SelectItem>
+                <SelectItem value="cas">Ngân hàng</SelectItem>
+                <SelectItem value="import">Excel</SelectItem>
+              </SelectContent>
+            </Select>
+            <Select
+              value={cycleFilters.direction || 'all'}
+              onValueChange={(v) =>
+                setCycleFilters((f) => ({ ...f, direction: v === 'all' ? '' : v }))
+              }
+            >
+              <SelectTrigger className="h-8 w-28 text-sm">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Tất cả</SelectItem>
+                <SelectItem value="in">Thu</SelectItem>
+                <SelectItem value="out">Chi</SelectItem>
+              </SelectContent>
+            </Select>
+            {(cycleFilters.source || cycleFilters.direction || cycleFilters.search) && (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-8 px-2 text-xs text-muted-foreground"
+                onClick={() => {
+                  setCycleFilters({ source: '', direction: '', search: '' });
+                  setCycleSearch('');
+                }}
+              >
+                Xóa filter
+              </Button>
+            )}
+          </div>
           <div className="overflow-y-auto flex-1 -mx-6 px-6">
             {isCycleLoading ? (
               <div className="space-y-2 py-4">

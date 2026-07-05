@@ -103,13 +103,12 @@ export class BillingService {
     });
     if (!sub) throw new NotFoundException('Không tìm thấy gói dịch vụ');
 
-    const cycleFrom = startOfDayUTC(sub.currentCycleStart);
-    const cycleTo = endOfDayUTC(sub.currentCycleEnd);
-
+    // Dùng createdAt (thời điểm nhận webhook) để khớp với cách quota counter đếm,
+    // vì transactionDate là ngày trên sao kê ngân hàng và có thể trước ngày bắt đầu chu kỳ.
     const transactions = await this.prisma.transaction.findMany({
       where: {
         tenantId,
-        transactionDate: { gte: cycleFrom, lte: cycleTo },
+        createdAt: { gte: sub.currentCycleStart, lte: sub.currentCycleEnd },
       },
       select: {
         id: true,
@@ -120,13 +119,13 @@ export class BillingService {
         source: true,
         status: true,
       },
-      orderBy: { transactionDate: 'desc' },
+      orderBy: { createdAt: 'desc' },
       take: 500,
     });
 
     return {
-      cycleStart: cycleFrom,
-      cycleEnd: cycleTo,
+      cycleStart: sub.currentCycleStart,
+      cycleEnd: sub.currentCycleEnd,
       total: transactions.length,
       transactions,
     };

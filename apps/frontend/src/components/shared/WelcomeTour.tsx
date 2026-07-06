@@ -65,16 +65,20 @@ export function WelcomeTour({ userId }: { userId: string }) {
           <div className="mb-2 flex size-10 items-center justify-center rounded-lg bg-primary/10 text-primary">
             <current.icon className="size-5" />
           </div>
+          <p className="text-xs font-medium text-muted-foreground">
+            Bước {step + 1}/{STEPS.length}
+          </p>
           <DialogTitle>{current.title}</DialogTitle>
           <DialogDescription>{current.description}</DialogDescription>
         </DialogHeader>
-        <div className="flex items-center justify-center gap-1.5">
+        <div className="flex items-center justify-center gap-2">
           {STEPS.map((s, i) => (
             <span
               key={s.title}
-              className={`h-1.5 rounded-full transition-all ${
-                i === step ? 'w-6 bg-primary' : 'w-1.5 bg-muted'
+              className={`h-2 rounded-full transition-all ${
+                i === step ? 'w-8 bg-primary' : 'w-2 bg-muted-foreground/30'
               }`}
+              aria-hidden
             />
           ))}
         </div>

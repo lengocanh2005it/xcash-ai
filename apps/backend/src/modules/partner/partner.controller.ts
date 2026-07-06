@@ -23,8 +23,16 @@ export class PartnerController {
     @Query('search') search?: string,
     @Query('status') status?: string,
     @Query('plan') plan?: string,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
   ) {
-    return this.service.listTenants({ search, status, plan });
+    return this.service.listTenants({
+      search,
+      status,
+      plan,
+      page: page ? Number(page) : undefined,
+      limit: limit ? Number(limit) : undefined,
+    });
   }
 
   @Get('stats')

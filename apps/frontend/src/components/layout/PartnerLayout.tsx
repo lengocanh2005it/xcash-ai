@@ -19,6 +19,7 @@ import { ThemeToggle } from '@/components/shared/ThemeToggle';
 import { UserAvatar } from '@/components/shared/UserAvatar';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/hooks/useAuth';
+import { useSidebarCollapsed } from '@/hooks/useSidebarCollapsed';
 import { cn } from '@/lib/utils';
 
 const partnerNavItems = [
@@ -235,13 +236,15 @@ function MobilePartnerSidebar({ open, onClose }: { open: boolean; onClose: () =>
 
 export function PartnerLayout() {
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [sidebarCollapsed, toggleSidebarCollapsed] = useSidebarCollapsed(
+    'xcash_partner_sidebar_collapsed',
+  );
 
   return (
     <div className="flex h-svh items-stretch overflow-hidden bg-muted">
       <DesktopPartnerSidebar
         collapsed={sidebarCollapsed}
-        onToggleCollapsed={() => setSidebarCollapsed((v) => !v)}
+        onToggleCollapsed={toggleSidebarCollapsed}
       />
       <MobilePartnerSidebar open={mobileNavOpen} onClose={() => setMobileNavOpen(false)} />
 
@@ -258,9 +261,6 @@ export function PartnerLayout() {
           </Button>
           <LogoMark size={28} className="rounded-lg" />
           <p className="truncate font-semibold text-primary">X-Cash AI</p>
-          <div className="ml-auto">
-            <ThemeToggle />
-          </div>
         </div>
 
         <main className="min-w-0 flex-1 overflow-y-auto">

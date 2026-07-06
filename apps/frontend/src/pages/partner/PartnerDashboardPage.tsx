@@ -22,6 +22,8 @@ import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
 import { api } from '@/lib/api';
 import { formatVND, formatVNDAxis } from '@/lib/format-vnd';
+import { PLAN_LABELS, PLAN_ORDER } from '@/lib/plan-labels';
+import type { PartnerTenant } from '@/types/partner';
 
 interface PartnerStats {
   totalTenants: number;
@@ -44,24 +46,6 @@ interface RevenueTrendPoint {
   enterprise: number;
 }
 
-interface PartnerTenant {
-  id: string;
-  businessName: string;
-  createdAt: string;
-  plan: string | null;
-  status: string;
-  transactionsThisMonth: number;
-  revenuePerMonth: number;
-}
-
-const PLAN_LABELS: Record<string, string> = {
-  free: 'Free',
-  starter: 'Starter',
-  pro: 'Pro',
-  enterprise: 'Enterprise',
-};
-
-const PLAN_ORDER = ['free', 'starter', 'pro', 'enterprise'];
 const PLAN_COLORS: Record<string, string> = {
   free: 'var(--chart-4)',
   starter: 'var(--chart-2)',
@@ -191,7 +175,10 @@ export default function PartnerDashboardPage() {
 
   const { data: tenants, isLoading: loadingTenants } = useQuery({
     queryKey: ['partner', 'tenants'],
-    queryFn: () => api.get<{ data: PartnerTenant[] }>('/partner/tenants').then((r) => r.data.data),
+    queryFn: () =>
+      api
+        .get<{ data: { items: PartnerTenant[] } }>('/partner/tenants')
+        .then((r) => r.data.data.items),
   });
 
   const { data: revenueTrend, isLoading: loadingTrend } = useQuery({
@@ -319,7 +306,11 @@ export default function PartnerDashboardPage() {
             icon={Wallet}
             label="Doanh thu định kỳ (MRR)"
             value={loadingTenants ? '—' : formatVND(mrr)}
-            hint="Giá gói/tháng của DN đang hoạt động · số dự kiến, chưa gồm phí vượt"
+            hint={
+              hasDateFilter
+                ? 'Tính tại thời điểm hiện tại — không theo kỳ lọc ngày'
+                : 'Giá gói/tháng của DN đang hoạt động · số dự kiến, chưa gồm phí vượt'
+            }
           />
           <StatCard
             icon={Percent}
@@ -414,7 +405,10 @@ export default function PartnerDashboardPage() {
           <Card>
             <CardHeader className="pb-2">
               <CardTitle className="text-base">Phân bố gói dịch vụ</CardTitle>
-              <CardDescription>Số lượng doanh nghiệp theo từng gói</CardDescription>
+              <CardDescription>
+                Số lượng doanh nghiệp theo từng gói
+                {hasDateFilter ? ' · snapshot hiện tại, không theo kỳ lọc' : ''}
+              </CardDescription>
             </CardHeader>
             <CardContent>
               {loadingTenants ? (

@@ -7,6 +7,7 @@ import { SubscriptionPlan, TransactionStatus } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { WEBHOOK_QUEUE } from '../../queue/queue.module';
 import { RedisService } from '../../redis/redis.service';
+import { TransactionQuotaService } from '../billing/transaction-quota.service';
 import { NotificationService } from '../notification/notification.service';
 import { BankingService } from './banking.service';
 
@@ -76,6 +77,7 @@ describe('BankingService', () => {
         },
         { provide: getQueueToken(WEBHOOK_QUEUE), useValue: webhookQueue },
         { provide: NotificationService, useValue: notificationService },
+        { provide: TransactionQuotaService, useValue: {} },
       ],
     }).compile();
 

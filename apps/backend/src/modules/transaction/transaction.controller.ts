@@ -1,10 +1,23 @@
-import { Body, Controller, Get, Param, Post, Query, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  MessageEvent,
+  Param,
+  Post,
+  Query,
+  Sse,
+  UseGuards,
+} from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { Role } from '@xcash/shared-types';
+import type { Observable } from 'rxjs';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
+import { Public } from '../../common/decorators/public.decorator';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { JwtAuthGuard, RolesGuard } from '../../common/guards/auth.guards';
 import type { AuthenticatedUser } from '../../common/types/authenticated-user.type';
+import { NotificationService } from '../notification/notification.service';
 import { BulkReclassifyDto } from './dto/bulk-reclassify.dto';
 import { ListTransactionsQueryDto } from './dto/list-transactions.dto';
 import { TransactionService } from './transaction.service';
@@ -14,7 +27,18 @@ import { TransactionService } from './transaction.service';
 @Controller('transactions')
 @UseGuards(JwtAuthGuard, RolesGuard)
 export class TransactionController {
-  constructor(private readonly transactionService: TransactionService) {}
+  constructor(
+    private readonly transactionService: TransactionService,
+    private readonly notificationService: NotificationService,
+  ) {}
+
+  @Public()
+  @Sse('events')
+  streamEvents(@Query('token') token: string): Observable<MessageEvent> {
+    return this.notificationService.streamTransactionEventsForToken(
+      token,
+    ) as Observable<MessageEvent>;
+  }
 
   @Get()
   @ApiOperation({ summary: 'Danh sách giao dịch (filter + pagination)' })

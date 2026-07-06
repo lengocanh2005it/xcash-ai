@@ -89,6 +89,10 @@ Sau bước này, kế toán **không cần làm gì thêm** ở phía Cas nữa
 
 **Thêm ở X-Cash AI:** Sau khi liên kết tài khoản ngân hàng, hệ thống **tự động seed danh mục tài khoản TT133** (~60 tài khoản) cho tenant. Kế toán có thể thêm tài khoản con ngay sau đó.
 
+**Lần đầu vào Dashboard (sau onboarding):** `WelcomeTour` hiện dialog 4 bước (Liên kết NH → AI định khoản → Human Review → Báo cáo/Copilot) — chỉ 1 lần/user (`localStorage`).
+
+**Chưa liên kết NH:** Dashboard hiện banner CTA “Liên kết ngân hàng ngay” → `/onboarding`; stat cards và charts chưa fetch dữ liệu.
+
 ---
 
 ## Giai đoạn 3 — Sử dụng hàng ngày
@@ -121,8 +125,10 @@ X-Cash AI chạy AI Classification Pipeline:
         │
         ▼
 Kế toán mở Dashboard
-→ thấy giao dịch đã "Định khoản: Nợ 334 / Có 112" ✅
-→ không cần làm gì
+→ stat cards: "Định khoản hôm nay", "Chờ định khoản", "Chờ Human Review", "Độ chính xác AI" (tháng)
+→ click card → điều hướng /transactions hoặc /review
+→ thấy giao dịch đã "Định khoản: Nợ 334 / Có 112" trong feed gần đây ✅
+→ không cần làm gì thêm
 ```
 
 ### Trường hợp 2 — Giao dịch không rõ ràng (cần xác nhận)
@@ -137,7 +143,7 @@ Confidence 65% < 85% threshold
 Giao dịch vào "Hàng chờ xét duyệt" (Human Review Queue)
         │
         ▼
-Kế toán mở Review Queue:
+Kế toán mở Review Queue (sidebar badge đỏ, poll ~15–20s):
 → thấy: "AI gợi ý: Nợ 331 / Có 112 (Trả tiền mua hàng) — 65%"
 → lý do: "Nội dung 'CK CONG TY' gợi ý trả tiền nhà cung cấp"
         │
@@ -149,6 +155,21 @@ Kế toán mở Review Queue:
         │
         ▼
 AI học từ correction → lần sau GD tương tự sẽ chính xác hơn
+```
+
+### Trường hợp 3 — Hỏi AI Copilot (tùy chọn, gói Starter+)
+
+```
+Kế toán vào AI Copilot → hỏi "Tháng này chi phí lớn nhất là gì?"
+        │
+        ▼
+Copilot gọi tools nội bộ (runTools): get_month_summary, get_top_accounts, …
+        │
+        ▼
+Trả lời kèm chip nguồn (dữ liệu nội bộ / knowledge base / casso.vn nếu bật)
+        │
+        ▼
+Streaming SSE hiện activity khi tool đang chạy; fallback JSON nếu stream lỗi
 ```
 
 ### Cuối tháng — Export Excel báo cáo
@@ -179,6 +200,31 @@ Không cần gõ tay 1 con số nào
 | GD nội dung mơ hồ | Phải nghĩ, tra sổ, có thể sai | Xem gợi ý AI, xác nhận 2 giây |
 | Tổng hợp cuối tháng | Vài giờ gom số liệu từ sao kê | Export Excel 1 click |
 | Sai sót khi nhập liệu | Cao (manual = dễ nhầm số) | Thấp (AI + human verify) |
+
+---
+
+## Giai đoạn phụ — Cas Partner (vận hành hệ thống)
+
+Nhân sự Cas/CASSO đăng nhập bằng tài khoản `cas_partner` (tenant_id = NULL) — **không** đi luồng onboarding Cas Link của SME.
+
+```
+Cas Partner đăng nhập → redirect `/partner/dashboard`
+        │
+        ▼
+Xem tổng quan: tổng DN, active/suspended, MRR, thực thu PayOS, biểu đồ doanh thu theo gói
+(lọc ngày ảnh hưởng GD/thực thu; MRR + pie gói = snapshot hiện tại)
+        │
+        ▼
+Vào "Doanh nghiệp" (`/partner/tenants`) — bảng phân trang 20 DN/trang
+→ tìm/lọc theo tên, trạng thái, gói
+→ Xem chi tiết / Khóa / Mở khóa / Đổi gói (confirm 2 bước)
+        │
+        ▼
+Khi cần: xem lịch sử thanh toán (`/partner/payments`), audit log (`/partner/audit-logs`),
+chỉnh giá gói (`/partner/plans`)
+```
+
+> Partner **không** gọi API nghiệp vụ của tenant (`/transactions`, `/reports`, …) — chỉ `/partner/*`.
 
 ---
 
@@ -228,7 +274,7 @@ Admin thấy thông báo "Nâng cấp thành công!" — tiếp tục dùng bìn
 | **Cas** | Hạ tầng nền — đọc biến động số dư ngân hàng, tự động bắn webhook về X-Cash AI | Chạy ngầm, không ai thấy |
 | **X-Cash AI** | Lớp ứng dụng trung gian — nhận giao dịch từ Cas, dùng AI định khoản TT133, hiển thị cho kế toán xác nhận | Real-time |
 | **PayOS** | Cổng thanh toán cho riêng việc thu phí dịch vụ (X-Cash AI là bên bán, doanh nghiệp là bên mua gói) | Khi doanh nghiệp nâng cấp/gia hạn gói |
-| **Cas Partner** (nhân sự Cas/CASSO) | Theo dõi tổng quan các doanh nghiệp đang dùng X-Cash AI, xem doanh thu, khóa/mở tài khoản vi phạm, hỗ trợ kỹ thuật | Khi cần hỗ trợ hoặc theo dõi vận hành |
+| **Cas Partner** (nhân sự Cas/CASSO) | Theo dõi tổng quan DN, MRR/thực thu, khóa/mở/đổi gói, audit log, chỉnh giá gói | Khi cần hỗ trợ hoặc theo dõi vận hành |
 
 ---
 
@@ -252,5 +298,5 @@ Kiến trúc tách bạch 2 cơ chế (đăng nhập X-Cash AI ≠ liên kết n
 - Chi tiết bảng giá, cách tính phí, flow PayOS billing — xem `rbac.md` mục Pricing Model
 - Chi tiết giao diện từng màn hình — xem `ui-design.md`
 - Chuẩn kế toán TT133, AI Classification Pipeline — xem `business-overview.md`
-- Kế hoạch triển khai theo sprint — xem `SPRINT_PLAN.md`
+- Kế hoạch triển khai theo sprint — xem [`sprint-plan.md`](./sprint-plan.md)
 - Toàn bộ schema database, ERD — xem `DATABASE_SCHEMA.md`

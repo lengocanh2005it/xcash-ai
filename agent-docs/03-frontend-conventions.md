@@ -29,7 +29,7 @@ Chỉ compose wrapper mỏng ở `components/layout/` (app shell) hoặc `compon
 
 **Đã cài trong repo (`components/ui/`):** `button`, `card`, `badge`, `input`, `skeleton`, `table`, `label`, `dialog`, `sheet`, `tabs`, `checkbox`, `progress`, `separator`, `switch`.
 
-**Dashboard charts (Recharts):** aggregate client-side từ `GET /transactions?limit=100` (max BE cho phép) — `TransactionTrendChart` (AreaChart 7 ngày), `TransactionStatusChart` (Donut trạng thái), helper tại `lib/dashboard-transactions.ts`. Màu chart dùng CSS variables `--chart-1`…`--chart-5` trong `index.css` (hỗ trợ dark mode). Sprint 2+ sẽ chuyển doanh thu / AI stats sang `/analytics/*` khi backend có endpoint.
+**Dashboard:** stat cards lấy từ `GET /reports/summary` (độ chính xác AI tháng), `GET /review/count`, và count API giao dịch `pending`/`classified` hôm nay — không derive từ 100 GD đầu. **Charts (Recharts)** vẫn aggregate client-side từ `GET /transactions?limit=100` (max BE cho phép) — `TransactionTrendChart` (AreaChart 7 ngày), `TransactionStatusChart` (Donut trạng thái), helper tại `lib/dashboard-transactions.ts`. Màu chart dùng CSS variables `--chart-1`…`--chart-5` trong `index.css` (hỗ trợ dark mode).
 
 ## Dark / Light mode
 

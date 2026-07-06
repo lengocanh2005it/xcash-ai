@@ -64,4 +64,11 @@ export default () => ({
     process.env.AZURE_STORAGE_MAX_FILE_SIZE ?? '5242880',
     10,
   ),
+  COPILOT_USE_FUNCTION_CALLING: process.env.COPILOT_USE_FUNCTION_CALLING === '1',
+  COPILOT_CONTEXT_CACHE_TTL_SECONDS: Number.parseInt(
+    process.env.COPILOT_CONTEXT_CACHE_TTL_SECONDS ?? '300',
+    10,
+  ),
+  COPILOT_CASSO_SEARCH_ENABLED: process.env.COPILOT_CASSO_SEARCH_ENABLED === '1',
+  TAVILY_API_KEY: process.env.TAVILY_API_KEY ?? '',
 });

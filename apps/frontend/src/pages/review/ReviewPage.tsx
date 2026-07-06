@@ -208,6 +208,8 @@ function SwipeableReviewCard({
   );
 }
 
+const ACCOUNT_CODE_PATTERN = /^\d{3,4}$/;
+
 export default function ReviewPage() {
   const queryClient = useQueryClient();
   const [page, setPage] = useState(1);
@@ -234,6 +236,7 @@ export default function ReviewPage() {
     queryKey: ['review-queue', page, debouncedSearch, confidence],
     queryFn: () => fetchReviewQueue(queryUrl),
     placeholderData: keepPreviousData,
+    refetchInterval: 15_000,
   });
 
   const totalPages = data ? Math.max(1, Math.ceil(data.total / PAGE_SIZE)) : 1;
@@ -536,14 +539,21 @@ export default function ReviewPage() {
                 Huỷ
               </Button>
               <Button
-                onClick={() =>
-                  correctDialog &&
+                onClick={() => {
+                  if (!correctDialog) return;
+                  if (
+                    !ACCOUNT_CODE_PATTERN.test(debitAccount) ||
+                    !ACCOUNT_CODE_PATTERN.test(creditAccount)
+                  ) {
+                    toast.error('Mã tài khoản phải có 3–4 chữ số');
+                    return;
+                  }
                   correctMutation.mutate({
                     id: correctDialog.id,
                     d: debitAccount,
                     c: creditAccount,
-                  })
-                }
+                  });
+                }}
                 disabled={correctMutation.isPending || !debitAccount || !creditAccount}
               >
                 Xác nhận sửa

@@ -2,11 +2,18 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { AppNotification, NotificationListResult } from '@xcash/shared-types';
 import { useEffect } from 'react';
 import { toast } from 'sonner';
-import { API_BASE_URL, deleteApiData, getAccessToken, getApiData, patchApiData } from '@/lib/api';
+import {
+  API_BASE_URL,
+  deleteApiData,
+  getApiData,
+  getValidAccessToken,
+  markLogoutInitiated,
+  patchApiData,
+} from '@/lib/api';
 import { useAuth } from './useAuth';
 
 export function useNotifications() {
-  const { user } = useAuth();
+  const { user, logout } = useAuth();
   const qc = useQueryClient();
 
   useEffect(() => {
@@ -16,13 +23,20 @@ export function useNotifications() {
     let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
     let closed = false;
 
-    const connect = () => {
-      const token = getAccessToken();
+    const connect = async () => {
+      if (closed) return;
+
+      // Đảm bảo token hợp lệ trước khi mở EventSource
+      const token = await getValidAccessToken();
       if (!token) {
-        // Chưa có token (vd. đang refresh) — thử lại sau
-        reconnectTimer = setTimeout(connect, 3_000);
+        // Refresh thất bại — session hết hạn, force logout.
+        // markLogoutInitiated() trước để ngăn axios interceptor gọi /auth/logout thêm lần nữa.
+        markLogoutInitiated();
+        toast.error('Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.');
+        await logout();
         return;
       }
+      if (closed) return;
 
       es = new EventSource(`${API_BASE_URL}/notifications/stream?token=${token}`);
 
@@ -31,17 +45,16 @@ export function useNotifications() {
       };
 
       es.onerror = () => {
-        // Access token hết hạn (~15p) hoặc mất kết nối → đóng và tự mở lại
-        // với token mới nhất (interceptor đã refresh vào storage).
         es?.close();
         es = null;
         if (!closed) {
-          reconnectTimer = setTimeout(connect, 5_000);
+          // Chờ rồi reconnect với token mới (getValidAccessToken tự refresh nếu cần)
+          reconnectTimer = setTimeout(() => void connect(), 5_000);
         }
       };
     };
 
-    connect();
+    void connect();
 
     return () => {
       closed = true;

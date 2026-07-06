@@ -18,4 +18,9 @@ export class UpdatePlanPricingDto {
   @IsNumber()
   @Min(0)
   overagePricePerTransaction?: number;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(-1)
+  copilotQuota?: number;
 }

@@ -3,6 +3,7 @@ import { Loader2, Sparkles } from 'lucide-react';
 import { toast } from 'sonner';
 import { ConfidenceBadge } from '@/components/shared/ConfidenceBadge';
 import { SignedTransactionAmount } from '@/components/shared/SignedTransactionAmount';
+import { TransactionSourceBadge } from '@/components/shared/TransactionSourceBadge';
 import { TransactionStatusBadge } from '@/components/shared/TransactionStatusBadge';
 import { Button } from '@/components/ui/button';
 import {
@@ -62,7 +63,10 @@ export function TransactionDetailSheet({
         <SheetHeader>
           <SheetTitle>Chi tiết giao dịch</SheetTitle>
           {displayTxn ? (
-            <SheetDescription className="font-mono text-xs">
+            <SheetDescription
+              className="truncate font-mono text-xs"
+              title={displayTxn.transactionId}
+            >
               {displayTxn.transactionId}
             </SheetDescription>
           ) : null}
@@ -86,8 +90,9 @@ export function TransactionDetailSheet({
               {displayTxn.senderAccount ? (
                 <p className="mt-1 text-sm">{displayTxn.senderAccount}</p>
               ) : null}
-              <div className="mt-2">
+              <div className="mt-2 flex items-center gap-2 flex-wrap">
                 <TransactionStatusBadge status={displayTxn.status} />
+                <TransactionSourceBadge source={displayTxn.source} size="md" />
               </div>
             </div>
 

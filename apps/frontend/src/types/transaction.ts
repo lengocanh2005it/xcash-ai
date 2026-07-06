@@ -18,6 +18,8 @@ export interface TransactionSummary {
   status: TransactionStatus | string;
   confidenceScore: number | null;
   transactionDate: string;
+  source?: 'cas' | 'import';
+  direction?: 'in' | 'out';
   classification?: TransactionClassificationSummary | null;
 }
 

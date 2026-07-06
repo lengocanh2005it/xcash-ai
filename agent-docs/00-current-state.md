@@ -2,13 +2,13 @@
 
 > Mục đích: cho biết **chính xác** cái gì đã tồn tại trong repo ngay lúc này, để agent không cần `find`/`grep`/`ls` lại từ đầu mỗi session mới. File này phải được cập nhật mỗi khi có thay đổi cấu trúc đáng kể (thêm module, thêm page, đổi dependency lớn, thêm service hạ tầng). Nếu file này và thực tế code lệch nhau, **tin thực tế code**, và sửa lại file này ngay sau đó.
 
-Cập nhật lần cuối: **Docs đồng bộ Sprint 4** — toàn bộ feature code hoàn tất (notification, billing PayOS, auth OTP, partner). **Còn lại:** deploy production thật (Docker env đầy đủ, SSL/nginx, VPS), E2E QA thủ công, test Slack/Resend với key thật trên staging.
+Cập nhật lần cuối: **Copilot Quota (Phase 1–4 hoàn thành)** — Schema (2 enum values + 2 cột), guard `CopilotQuotaGuard`, increment/notify fire-and-forget, reset quota theo billing cycle, expose trong API + Partner DTO, UI progress bar BillingTab + PartnerPlansPage input field. Branch `feat/copilot-function-calling`.
 
 ---
 
 ## Repo đang ở giai đoạn nào
 
-**Trạng thái: Sprint 1–3 HOÀN THÀNH. Sprint 4 code feature HOÀN THÀNH** (Partner, billing, notification, auth security). **Còn lại:** deploy VPS + SSL/nginx, docker-compose env production đầy đủ, final E2E QA thủ công, test notification Slack/Resend với credential thật.
+**Trạng thái: Sprint 1–3 HOÀN THÀNH. Sprint 4 code feature HOÀN THÀNH** (Partner, billing, notification, auth security). **Branch `feat/excel-import`:** Excel Import hoàn tất (Phase 1–3). **Còn lại:** deploy VPS + SSL/nginx, docker-compose env production đầy đủ, final E2E QA thủ công, test notification Slack/Resend với credential thật.
 
 **Đã xong (Sprint 1–2):**
 - Auth, Onboarding (Cas Link), Banking webhook, Transaction module ✅
@@ -35,7 +35,7 @@ Cập nhật lần cuối: **Docs đồng bộ Sprint 4** — toàn bộ feature
 - Sidebar: bật đủ 8 nav items (`/analytics`, `/copilot`, `/settings`), bỏ block "Sắp ra mắt" ✅
 
 **Đã xong (Sprint 4 — phần code):**
-- Backend: `partner` module — `GET /partner/tenants` (danh sách + plan/status/GD tháng/doanh thu), `GET /partner/stats` (tổng DN/active/suspended/GD tháng/doanh thu/AI accuracy toàn hệ thống), `GET /partner/revenue-trend` (doanh thu 6 tháng, đọc từ `payment_orders` status=paid), `PATCH /partner/tenants/:id/suspend`, `PATCH /partner/tenants/:id/activate` — dùng `PartnerGuard` có sẵn ✅
+- Backend: `partner` module — `GET /partner/tenants` (danh sách paginated `{ items, page, limit, total, totalPages }` — `?page=&limit=`; không truyền = full list), `GET /partner/stats` (tổng DN/active/suspended/GD tháng/doanh thu/AI accuracy toàn hệ thống), `GET /partner/revenue-trend` (doanh thu 6 tháng, đọc từ `payment_orders` status=paid), `PATCH /partner/tenants/:id/suspend`, `PATCH /partner/tenants/:id/activate` — dùng `PartnerGuard` có sẵn ✅
 - Backend: bảng `plan_pricing` (mới) + `GET /partner/plan-pricing`, `PATCH /partner/plan-pricing/:plan` — Cas Partner chỉnh giá/quota Starter trở lên, Free luôn cố định 0đ/50GD. Đây là giá áp dụng cho lần nâng cấp tiếp theo, không hồi tố `subscriptions` đang active (snapshot giá riêng) ✅
 - Backend: chặn login nếu subscription của tenant đang `suspended` (`auth.service.ts`) — hoàn thiện edge case đã ghi trong `rbac.md` ✅
 - Backend: rate limiting per-tenant/per-phút bằng `@nestjs/throttler` — `TenantThrottlerGuard` (tracker = `tenantId`, fallback `userId`/IP), áp dụng global qua `APP_GUARD`, giới hạn cấu hình qua env `RATE_LIMIT_PER_MINUTE` (default 120) ✅
@@ -68,6 +68,61 @@ Cập nhật lần cuối: **Docs đồng bộ Sprint 4** — toàn bộ feature
 - **Hồ sơ tài khoản + avatar Azure Blob:** module `profile` — `GET/PATCH /profile`, `POST /profile/avatar` (multipart, lưu Azure Blob `avatars/{userId}/...`); cột `users.avatar_url`; FE click vùng user ở đáy sidebar → `ProfileDialog` (tab Cá nhân/Doanh nghiệp), cập nhật UI ngay qua `updateUser()` ✅
 - **Đổi mật khẩu (đã đăng nhập):** `POST /auth/change-password/request` (xác thực mật khẩu cũ → gửi OTP email), `POST /auth/change-password/resend`, `POST /auth/change-password/confirm` (OTP → đổi mật khẩu + revoke toàn bộ refresh token); FE nút "Đổi mật khẩu" trong tab Cá nhân của `ProfileDialog` → `ChangePasswordPanel` 2 bước (cùng dialog, không lồng modal); thành công → logout + redirect `/login` ✅
 - **Bulk reclassify:** `POST /transactions/bulk-reclassify` — enqueue AI hàng loạt (tối đa 50 GD, chỉ `pending`); FE `TransactionsPage` checkbox chọn + nút "Định khoản lại hàng loạt" (Admin/Accountant) ✅
+- **Excel Import (Phase 1–3):** migration `add_transaction_source_direction_import_batch` — thêm enum `TransactionSource { cas, import }`, `TransactionDirection { in, out }`, cột `transactions.source`/`direction`/`importBatchId`; `import` module backend (`POST /transactions/import/validate`, `POST /transactions/import`, `GET /transactions/import/template`); `GET /transactions` thêm filter `source`; `GET /billing/current-plan` thêm `usageBreakdown { fromBank, fromImport }`; audit label `transaction_import`; FE `ImportTransactionsDialog` (3 bước: upload → validate/preview → kết quả), nút "Nhập từ Excel" trên `TransactionsPage` (Admin/Accountant), badge amber "Import Excel" trên card/bảng/detail sheet, source filter trên filter bar, breakdown dots trên BillingTab ✅
+- **Fix RolesGuard @Public():** `RolesGuard.canActivate` giờ kiểm tra `IS_PUBLIC_KEY` trước — route `@Public()` bypass hoàn toàn, sửa lỗi SSE stream `/notifications/stream?token=` trả 401 ✅
+
+**Đã xong (Copilot Function Calling — Phase 1a–1d):**
+- Backend: migrate `POST /ai/copilot` sang OpenAI `runTools` — 7 tools ban đầu (thay `get_cas_integration_help` bằng `search_knowledge_base` + pgvector sau); hiện factory có 8 tool cố định + `search_casso_public` tùy chọn ✅
+- Backend: `CopilotToolService` (execute + Redis cache per-tool), `buildCopilotTools` factory, `copilot-cas-faq.ts` (FAQ tĩnh Cas Link), `CopilotContextService` sửa lỗi `formatFinancialContext` không tồn tại ✅
+- Backend: `OpenAiService.chatCopilotWithTools()` trả `{ reply, activities }` — track tool calls qua `runner.on('functionToolCall')`, map sang `CopilotActivity[]` với nhãn tiếng Việt ✅
+- Backend: Feature flag `COPILOT_USE_FUNCTION_CALLING=1` — khi bật dùng `runTools`, khi tắt fallback về `CopilotContextService` + `chatCopilot()` cũ ✅
+- Backend: `ReportModule` export `ReportService` (cần thiết cho `CopilotToolService`); `AiModule` import `ReportModule` + `OnboardingModule` ✅
+- Frontend: `CopilotSourceChips.tsx` — chip nguồn (`internal_data`/`knowledge`/`web_search`) với icon Lucide + link `rel=noopener` cho web chip ✅
+- Frontend: `CopilotPage.tsx` — handle `meta.activities` từ response, thêm 2 gợi ý câu hỏi Casso, greeting message cập nhật ✅
+- Env mới: `COPILOT_USE_FUNCTION_CALLING`, `COPILOT_CONTEXT_CACHE_TTL_SECONDS` (cả `configuration.ts` lẫn `.env.example`) ✅
+
+**Đã xong (Copilot Function Calling — Phase 2):**
+- Backend: `POST /ai/copilot/stream` — SSE endpoint, `@Res()` bypass `ResponseInterceptor`, stream `activity`/`delta`/`done` events; fallback về `chatCopilot()` khi flag=0 ✅
+- Backend: tool thứ 8 `search_transactions` — Prisma trực tiếp (tránh circular dep), filter keyword (content/senderAccount), source (cas=grantId not null | import=grantId null), limit 1–20 ✅
+- Backend: `OpenAiService.buildCopilotSystemPrompt()` + `createCopilotRunner()` (stream=true) + export `buildActivities()` dùng chung cho cả 2 endpoint ✅
+- Frontend: `CopilotLoadingStatus.tsx` — dots bounce khi chưa có activity; icon + label khi tool đang chạy ✅
+- Frontend: `CopilotPage.tsx` rewrite — `sendViaStream()` dùng `fetch`+`ReadableStream`+`getAccessToken()`; `sendViaJson()` axios fallback; `streamingContent` state cho streaming bubble; `AbortController` để cleanup ✅
+
+**Đã xong (Copilot Function Calling — Phase 3):**
+- Backend: tool `search_casso_public` — Tavily API (`@tavily/core`), search `site:casso.vn`, cache Redis 24h theo query hash ✅
+- Backend: `COPILOT_CASSO_SEARCH_ENABLED=0` mặc định tắt; chỉ bật khi có `TAVILY_API_KEY` ✅
+- Backend: `buildCopilotTools()` nhận `configService` để kiểm tra flag, thêm tool vào danh sách có điều kiện ✅
+- Backend: `buildCopilotSystemPrompt(cassoSearchEnabled)` — khi bật thêm quy tắc gọi `search_casso_public` + disclaimer; khi tắt hướng user vào casso.vn ✅
+- Env mới: `COPILOT_CASSO_SEARCH_ENABLED`, `TAVILY_API_KEY` (`.env.example` + `configuration.ts`) ✅
+
+**Đã xong (Copilot hardening — reliability):**
+- Backend: `streamChat` bọc toàn bộ logic sau `flushHeaders()` trong `try/catch` — lỗi Prisma/Redis vẫn emit SSE `done` với message lỗi (không đóng stream im lặng) ✅
+- Backend: `chatCopilotWithTools()` truyền `resultsCapture` Map → `buildActivities()` có snippet + knowledge chips trên cả JSON path (khớp stream path) ✅
+- Backend: `TOOL_ACTIVITIES` + `getStreamingActivityMeta()` — một nguồn label streaming vs chip cuối (gồm `search_knowledge_base`) ✅
+- Backend: `search_transactions` schema — `source` optional + enum `all`; handler vẫn lọc `cas`/`import`/tất cả ✅
+- Backend: `CopilotToolService` inject `OpenAiService.createEmbedding()` (bỏ `import('openai')` mỗi lần); Tavily client singleton trong constructor ✅
+- Frontend: `CopilotPage` — SSE buffer giữ frame cắt TCP; throw nếu stream kết thúc không có `done` → fallback `sendViaJson` ✅
+
+**Đã xong (UX polish — tenant + partner):**
+- Frontend: `DashboardPage` — stat cards từ `/reports/summary` (AI accuracy tháng), `GET /review/count`, count API `pending`/`classified` hôm nay; charts vẫn `limit=100`; stat cards clickable (`/review`, `/transactions?status=...`); banner CTA liên kết NH khi `bankingLinked=false` ✅
+- Frontend: `AccountsPage` — input tìm mã/tên TK; `TransactionsPage` đọc `?status=` từ URL + badge status tiếng Việt; cột "Độ tin cậy" ✅
+- Frontend: `ReviewPage` `refetchInterval: 15_000`; validate TK Nợ/Có `^\d{3,4}$` khi sửa định khoản ✅
+- Frontend: `SettingsPage` NotificationsTab sync form qua `useEffect`; tab `title` trên mobile ✅
+- Frontend: `LoginPage` bỏ `htmlFor` trên Label bọc Checkbox (tránh double-toggle `rememberMe`) ✅
+- Frontend: `NotificationBell` ConfirmDialog trước "Xóa tất cả"; `WelcomeTour` text "Bước n/4" + dot lớn hơn ✅
+- Frontend: `ErrorBoundary` bọc `<Routes>`; `useSidebarCollapsed` persist `localStorage` (tenant + partner key riêng) ✅
+- Frontend: `ProfileDialog` — báo lỗi riêng khi PATCH ok nhưng upload avatar fail ✅
+- Frontend: `lib/plan-labels.ts` + `types/partner.ts` — dùng chung 4 Partner pages ✅
+- Frontend: `ReportsPage` dropdown năm động `[year-1, year]` ✅
+- Backend + FE: `GET /partner/tenants` trả `{ items, page, limit, total, totalPages }` — query `?page=&limit=` (không truyền = full list cho Partner Dashboard); `PartnerTenantsPage` paginate 20/trang ✅
+- Frontend: `PartnerDashboardPage` hint MRR/plan pie "snapshot hiện tại, không theo kỳ lọc ngày"; `PartnerPlansPage` fix confirm khi đóng dialog edit; skeleton dùng `<Skeleton>` ✅
+- Frontend: `PartnerLayout` bỏ `ThemeToggle` trùng trên mobile top bar (giữ sidebar footer) ✅
+
+**Đã xong (Copilot Quota — Phase 1–4):**
+- **Phase 1 — Schema:** migration `20260706143059_add_copilot_quota` — thêm `NotificationType.copilot_quota_warning` + `copilot_quota_exceeded`; cột `subscriptions.copilot_used_this_cycle` (Int, default 0); cột `plan_pricing.copilot_quota` (Int, default -1 = unlimited); seed `plan_pricing` copilotQuota (Free=0, Starter=200, Pro=1000, Enterprise=-1) ✅
+- **Phase 2 — Guard + increment:** `CopilotQuotaGuard` (`common/guards/copilot-quota.guard.ts`) — đọc subscription + planPricing từ DB (no cache), skip nếu quota=-1 (Enterprise), throw 429 nếu đã vượt, store `{ id }` vào `request[COPILOT_SUBSCRIPTION_KEY]`; guard chain trên `CopilotController`: `JwtAuthGuard → RolesGuard → PlanGuard → CopilotQuotaGuard`; `incrementAndNotify()` fire-and-forget sau `writeEvent('done')` — `$increment copilotUsedThisCycle` + gọi `checkCopilotQuotaNotifications()`; `NotificationService.checkCopilotQuotaNotifications()` dedup `copilot_quota_warning` (≥80%) và `copilot_quota_exceeded` (≥100%) mỗi chu kỳ bằng `createOncePerCycle()` ✅
+- **Phase 3 — Billing cycle reset + expose:** `BillingCycleService` reset `copilotUsedThisCycle=0` khi hết cycle; `BillingService.getCurrentPlan()` trả thêm `copilotQuota` + `copilotUsed`; `UpdatePlanPricingDto` thêm optional `copilotQuota` (Min -1); `PartnerService.updatePlanPricing()` + `listPlanPricing()` lưu và trả `copilotQuota` ✅
+- **Phase 4 — Frontend:** `SettingsPage` BillingTab — progress bar "Lượt chat Copilot" (ẩn khi quota=-1, màu primary/<80%, orange/≥80%, destructive/≥100%); `PartnerPlansPage` — hiện `copilotQuota` trong card + bảng tổng hợp, thêm input field trong dialog với helper text "Nhập -1 để không giới hạn" ✅
 
 **Chưa làm (Sprint 4 — còn lại):**
 - Bổ sung env production đầy đủ vào `docker-compose.yml` (OpenAI, Resend, PayOS, v.v.) + deploy lên VPS
@@ -112,7 +167,8 @@ paypilot-ai/                                   ← tên folder local có thể k
 │       ├── ui-design.md                       ← X-Cash AI ✅
 │       ├── sprint-plan.md                     ← X-Cash AI ✅
 │       ├── payos-billing-plan.md              ← PayOS billing (đã hoàn thành) ✅
-│       └── tt133-accounting.md                ← giải thích TT133 theo góc nhìn dev ✅
+│       ├── tt133-accounting.md                ← giải thích TT133 theo góc nhìn dev ✅
+│       └── copilot-function-calling-migration.md ← spec migrate Copilot → runTools (Phase 1 ✅; Phase 2 ✅; Phase 3 ✅)
 ├── apps/
 │   ├── backend/
 │   │   ├── .env.example
@@ -128,18 +184,21 @@ paypilot-ai/                                   ← tên folder local có thể k
 │   │   │       ├── 20260703140000_add_notifications/ ← bảng notifications + enum NotificationType ✅
 │   │   │       ├── 20260703150000_extend_notification_types/ ← thêm quota/billing/suspend types ✅
 │   │   │       ├── 20260703160000_add_user_email_verified_at/ ← cột users.email_verified_at + backfill user cũ ✅
-│   │   │       └── 20260704100000_add_user_avatar_url/ ← cột users.avatar_url ✅
+│   │   │       ├── 20260704100000_add_user_avatar_url/ ← cột users.avatar_url ✅
+│   │   │       ├── 20260704162813_add_transaction_source_direction_import_batch/ ← enum TransactionSource/Direction, cột source/direction/importBatchId trên transactions ✅
+│   │   │       └── 20260706143059_add_copilot_quota/ ← NotificationType enum thêm copilot_quota_warning/exceeded; subscriptions.copilot_used_this_cycle; plan_pricing.copilot_quota ✅
 │   │   ├── package.json
 │   │   ├── nest-cli.json
 │   │   ├── .swcrc
 │   │   └── src/
 │   │       ├── main.ts
 │   │       ├── app.module.ts                  # imports: Auth, Cas, Health, Onboarding, Banking, Ai, AuditLog, ChartOfAccounts, Classification, Report, Transaction, Settings, Team, Billing, Partner, Notification, Profile; StorageModule; + ThrottlerModule + APP_GUARD (TenantThrottlerGuard)
-│   │       ├── config/configuration.ts        # + RATE_LIMIT_PER_MINUTE (default 120), AZURE_STORAGE_* (avatar upload)
+│   │       ├── config/configuration.ts        # + RATE_LIMIT_PER_MINUTE, AZURE_STORAGE_*, COPILOT_USE_FUNCTION_CALLING, COPILOT_CONTEXT_CACHE_TTL_SECONDS
 │   │       ├── common/
 │   │       │   ├── decorators/                # @Roles, @RequiresPlan, @Public
 │   │       │   ├── guards/auth.guards.ts       # JwtAuthGuard, RolesGuard, PartnerGuard
 │   │       │   ├── guards/plan.guard.ts
+│   │       │   ├── guards/copilot-quota.guard.ts  # CopilotQuotaGuard — đọc DB, skip quota=-1, throw 429, store subscription id ✅
 │   │       │   ├── guards/tenant-throttler.guard.ts
 │   │       │   ├── filters/all-exceptions.filter.ts
 │   │       │   ├── interceptors/response.interceptor.ts
@@ -158,7 +217,11 @@ paypilot-ai/                                   ← tên folder local có thể k
 │   │           │   └── change-password.service.ts
 │   │           ├── banking/                   # POST /webhook/cas → enqueue ai-classify ✅
 │   │           ├── ai/                        # openai.service, embedding.service, classification.service, classification.processor, copilot.controller ✅
-│   │           │   └── copilot.controller.ts  # POST /ai/copilot — chat, fetch financial context từ Prisma
+│   │           │   ├── copilot.controller.ts      # POST /ai/copilot + POST /ai/copilot/stream (SSE) — guard chain JwtAuth→Roles→Plan→CopilotQuota; incrementAndNotify() fire-and-forget
+│   │           │   ├── copilot-context.service.ts # Fallback: preload summary tháng hiện tại (dùng khi flag=0)
+│   │           │   ├── copilot-tool.service.ts    # execute(tenantId, name, args) — 8 tools + Redis cache (+ search_casso_public khi bật)
+│   │           │   ├── copilot-tools.factory.ts   # buildCopilotTools() → 8 Tool[] (+ search_casso_public optional)
+│   │           │   └── copilot-cas-faq.ts         # FAQ tĩnh Casso/Cas Link (4 topics)
 │   │           ├── chart-of-accounts/         # CRUD + seedTt133() ✅
 │   │           │   ├── chart-of-accounts.controller.ts
 │   │           │   ├── chart-of-accounts.service.ts
@@ -219,7 +282,13 @@ paypilot-ai/                                   ← tên folder local có thể k
 │   │           ├── cas/
 │   │           ├── health/
 │   │           ├── onboarding/
-│   │           └── transaction/               # GET list + detail + reclassify + bulk-reclassify ✅
+│   │           ├── import/                    # Excel Import — validate, import, download template ✅
+│   │           │   ├── import.controller.ts   # POST /transactions/import/validate, /import, GET /import/template
+│   │           │   ├── import.service.ts
+│   │           │   ├── import.module.ts
+│   │           │   ├── import.service.spec.ts
+│   │           │   └── dto/import.dto.ts
+│   │           └── transaction/               # GET list (+ filter source) + detail + reclassify + bulk-reclassify ✅
 │   └── frontend/
 │       ├── vite.config.ts
 │       ├── package.json
@@ -232,37 +301,46 @@ paypilot-ai/                                   ← tên folder local có thể k
 │           ├── lib/
 │           │   ├── api.ts                     # export: api, getApiData, postApiData, patchApiData, deleteApiData
 │           │   ├── remember-me.ts             # localStorage rememberMe + email
-│           │   ├── dashboard-transactions.ts  # CLASSIFIED (không còn MATCHED), buildDashboardOverviewStats mới
+│           │   ├── plan-labels.ts           # PLAN_LABELS + PLAN_ORDER dùng chung Partner pages ✅
+│           │   ├── date-range.ts            # dayIsoRange() cho query theo ngày ✅
+│           │   ├── dashboard-transactions.ts  # chart helpers (status breakdown, revenue trend 7 ngày)
 │           │   └── ...
+│           ├── types/
+│           │   ├── transaction.ts
+│           │   └── partner.ts               # PartnerTenant, PartnerTenantsResponse ✅
+│           ├── hooks/
+│           │   ├── useReviewCount.ts
+│           │   ├── useSidebarCollapsed.ts   # persist collapse sidebar localStorage ✅
+│           │   └── useNotifications.ts, useDebouncedValue
 │           ├── components/
+│           │   ├── copilot/
+│           │   │   ├── CopilotSourceChips.tsx    # Chip nguồn tham khảo (internal_data/knowledge/web_search) ✅
+│           │   │   └── CopilotLoadingStatus.tsx  # Loading dots / tool activity indicator khi SSE streaming ✅
 │           │   ├── layout/Sidebar.tsx         # 8 nav item, badge review, NotificationBell, ProfileDialog (click user footer) ✅
 │           │   ├── profile/ProfileDialog.tsx  # Dialog hồ sơ cá nhân + doanh nghiệp + upload avatar + đổi mật khẩu ✅
 │           │   ├── profile/ChangePasswordPanel.tsx  # Form 2 bước đổi mật khẩu (nhúng trong ProfileDialog) ✅
 │           │   ├── dashboard/                 # stat cards, charts (không còn BankStatusCard trên Dashboard) ✅
-│           │   ├── shared/                    # NotificationBell, PlanGate, WelcomeTour, UserAvatar ✅
+│           │   ├── shared/                    # NotificationBell, PlanGate, WelcomeTour, UserAvatar, ErrorBoundary ✅
 │           │   └── ui/                        # + checkbox.tsx, progress, separator, switch, tabs ✅
 │           ├── pages/
 │           │   ├── auth/                      # LoginPage, RegisterPage, VerifyEmailPage, AcceptInvitePage, ForgotPasswordPage, ResetPasswordPage ✅
 │           │   ├── onboarding/                # OnboardingPage, OnboardingCallbackPage ✅
-│           │   ├── dashboard/DashboardPage.tsx # stat cards: định khoản hôm nay / chờ AI / chờ review / độ chính xác ✅
-│           │   ├── transactions/              # TransactionsPage (checkbox chọn GD pending + định khoản lại hàng loạt) + TransactionDetailSheet ✅
+│           │   ├── dashboard/DashboardPage.tsx # summary API + stat cards clickable + CTA onboarding ✅
+│           │   ├── accounts/AccountsPage.tsx  # Danh mục TK TT133 + tìm mã/tên ✅
+│           │   ├── transactions/              # TransactionsPage (filter source, nút Import Excel, badge amber, bulk-reclassify) + TransactionDetailSheet + ImportTransactionsDialog ✅
 │           │   ├── review/ReviewPage.tsx      # Human Review queue (confirm/correct/skip) + SwipeableReviewCard mobile ✅
 │           │   ├── reports/ReportsPage.tsx    # Báo cáo tháng + export Excel ✅
 │           │   ├── analytics/AnalyticsPage.tsx # So sánh tháng, BarChart thu/chi, top 5 danh mục ✅
 │           │   ├── copilot/CopilotPage.tsx    # AI Copilot chat, gợi ý câu hỏi ✅
 │           │   ├── settings/SettingsPage.tsx  # Tabs: Banking/Threshold/Notifications/Team/Nhật ký/Billing ✅
 │           │   ├── components/audit/AuditLogPanel.tsx  # Bảng nhật ký dùng chung ✅
-│           │   ├── accounts/AccountsPage.tsx  # Danh mục TK TT133 ✅
 │           │   └── partner/
-│   │   ├── PartnerLayout.tsx          # Sidebar: Dashboard/DN/Thanh toán/Nhật ký/Gói dịch vụ ✅
-│   │   ├── PartnerDashboardPage.tsx   # Stat cards (có mô tả) + biểu đồ doanh thu theo gói theo tháng (multi-line) ✅
-│   │   ├── PartnerTenantsPage.tsx     # Danh sách tenant, filter, dialog chi tiết + đổi gói ✅
-│   │   ├── PartnerPaymentsPage.tsx    # Lịch sử thanh toán (bảng payment_orders + filter + summary) ✅
-│   │   ├── PartnerAuditPage.tsx       # /partner/audit-logs — audit log toàn hệ thống ✅
-│   │   └── PartnerPlansPage.tsx       # 4 plan cards, bảng giá, dialog chỉnh giá ✅
-│           ├── components/shared/WelcomeTour.tsx  # Dialog 4 bước, 1 lần/user (localStorage) ✅
-│           ├── hooks/                          # useReviewCount, useNotifications, useDebouncedValue
-│           └── types/transaction.ts           # thêm TransactionClassificationSummary, bỏ MatchCandidate ✅
+│           │       ├── PartnerLayout.tsx          # Sidebar: Dashboard/DN/Thanh toán/Nhật ký/Gói dịch vụ ✅
+│           │       ├── PartnerDashboardPage.tsx   # Stat cards + biểu đồ doanh thu theo gói (hint MRR/plan khi lọc ngày) ✅
+│           │       ├── PartnerTenantsPage.tsx     # Danh sách tenant paginate 20/trang, filter, dialog chi tiết + đổi gói ✅
+│           │       ├── PartnerPaymentsPage.tsx    # Lịch sử thanh toán (bảng payment_orders + filter + summary) ✅
+│           │       ├── PartnerAuditPage.tsx       # /partner/audit-logs — audit log toàn hệ thống ✅
+│           │       └── PartnerPlansPage.tsx       # 4 plan cards, bảng giá, dialog chỉnh giá ✅
 ├── packages/shared-types/src/index.ts        # TransactionStatus.CLASSIFIED (bỏ MATCHED), ClassificationType, AccountType ✅
 ├── biome.json, package.json, turbo.json, pnpm-workspace.yaml
 ```
@@ -297,7 +375,10 @@ paypilot-ai/                                   ← tên folder local có thể k
 | POST | `/onboarding/banking/callback` | Admin, Accountant | |
 | GET | `/onboarding/status` | Bearer JWT | |
 | POST | `/webhook/cas` | Public (signature) | → enqueue `ai-classify` |
-| GET | `/transactions` | Bearer JWT | Filter: `status`, `from_date`, `to_date`, `search` (nội dung/mã GD/người gửi), pagination — kèm `classification` nested |
+| GET | `/transactions` | Bearer JWT | Filter: `status`, `source` (cas\|import), `from_date`, `to_date`, `search` (nội dung/mã GD/người gửi), pagination — kèm `classification` nested |
+| GET | `/transactions/import/template` | Admin, Accountant | Download file Excel template (.xlsx) |
+| POST | `/transactions/import/validate` | Admin, Accountant | Validate file Excel (multipart) — trả lỗi hoặc preview rows |
+| POST | `/transactions/import` | Admin, Accountant | Import giao dịch từ Excel (multipart) — trả `{ imported, skipped, errors }`, ghi audit log |
 | GET | `/transactions/:id` | Bearer JWT | Kèm `classification` nested |
 | POST | `/transactions/:id/reclassify` | Admin, Accountant | Đẩy lại job AI cho giao dịch `pending` (enqueue `ai-classify` vào `webhook-processing`) |
 | POST | `/transactions/bulk-reclassify` | Admin, Accountant | Đẩy lại job AI hàng loạt — body `{ ids: string[] }`, tối đa 50 GD/lần, chỉ `pending` |
@@ -318,7 +399,8 @@ paypilot-ai/                                   ← tên folder local có thể k
 | GET | `/reports/export` | Bearer JWT | Export Excel (.xlsx) |
 | GET | `/reports/comparison` | Bearer JWT | So sánh tháng này vs tháng trước |
 | GET | `/reports/top-accounts` | Bearer JWT | Top 5 TK chi/thu nhiều nhất |
-| POST | `/ai/copilot` | Bearer JWT | AI Copilot chat, kèm financial context |
+| POST | `/ai/copilot` | Bearer JWT | AI Copilot chat — `COPILOT_USE_FUNCTION_CALLING=1`: `runTools` 8 tools (+ `search_casso_public` khi bật) + trả `meta.activities`; =0: prompt stuffing cũ |
+| POST | `/ai/copilot/stream` | Bearer JWT | SSE streaming copilot — emit `activity`/`delta`/`done`; `try/catch` sau flushHeaders; flag=0 fallback `chatCopilot()`; `@Res()` bypass ResponseInterceptor |
 | GET | `/notifications` | Bearer JWT (mọi role tenant) | Danh sách thông báo in-app (kèm unreadCount) |
 | GET | `/notifications/stream` | Public (JWT qua `?token=`) | SSE push thông báo mới — EventSource không gửi được Authorization header |
 | GET | `/notifications/unread-count` | Bearer JWT | Số thông báo chưa đọc |
@@ -340,7 +422,7 @@ paypilot-ai/                                   ← tên folder local có thể k
 | POST | `/auth/accept-invite` | Public | Đặt mật khẩu + kích hoạt + cấp JWT |
 | GET | `/audit-logs` | Admin, Accountant | Nhật ký hoạt động tenant — phân trang, lọc `action`, `fromDate`, `toDate` |
 | GET | `/billing/plans` | Admin, Accountant | Danh sách gói từ `plan_pricing` |
-| GET | `/billing/current-plan` | Admin, Accountant | Gói hiện tại |
+| GET | `/billing/current-plan` | Admin, Accountant | Gói hiện tại — kèm `usageBreakdown { fromBank, fromImport }`, `copilotQuota`, `copilotUsed` |
 | GET | `/billing/usage-history` | Admin | Lịch sử sử dụng quota |
 | POST | `/billing/upgrade` | Admin | Tạo PaymentOrder + link PayOS (mock fallback khi chưa có keys) |
 | POST | `/billing/upgrade/:orderCode/mock-confirm` | Admin | Dev-only — giả lập xác nhận thanh toán upgrade |
@@ -348,7 +430,7 @@ paypilot-ai/                                   ← tên folder local có thể k
 | POST | `/billing/overage-order` | Admin | Tạo đơn overage + PayOS link |
 | POST | `/billing/overage-order/:orderCode/mock-confirm` | Admin | Dev-only — giả lập thanh toán overage |
 | POST | `/webhook/payos-billing` | Public (PayOS signature) | Callback thanh toán PayOS → `confirmPayment()` |
-| GET | `/partner/tenants` | Cas Partner | Danh sách toàn bộ tenant — filter `search`, `status`, `plan` |
+| GET | `/partner/tenants` | Cas Partner | Danh sách tenant — filter `search`, `status`, `plan`; `?page=&limit=` → `{ items, page, limit, total, totalPages }` (không truyền page/limit = trả full list) |
 | GET | `/partner/stats` | Cas Partner | Tổng DN/active/suspended/GD tháng/doanh thu/AI accuracy toàn hệ thống — `?fromDate=&toDate=` lọc chỉ số theo thời gian (GD, thực thu PayOS, AI accuracy); DN/MRR vẫn snapshot hiện tại |
 | GET | `/partner/revenue-trend` | Cas Partner | Doanh thu theo tháng (từ `payment_orders` status=paid) — kèm breakdown theo gói (`free/starter/pro/enterprise`); mặc định 6 tháng, `?fromDate=&toDate=` lọc khoảng (tối đa 24 tháng) |
 | GET | `/partner/payments` | Cas Partner | Lịch sử thanh toán toàn hệ thống (`payment_orders` + tên DN) — phân trang server-side (`?page=&limit=&status=&plan=&search=&fromDate=&toDate=`, lọc ngày theo `createdAt`), trả `{ items, page, limit, total, totalPages, summary }` — `summary` cũng tính theo cùng bộ lọc |
@@ -357,7 +439,7 @@ paypilot-ai/                                   ← tên folder local có thể k
 | PATCH | `/partner/tenants/:id/plan` | Cas Partner | Đặt gói cho tenant (không chặn downgrade) |
 | GET | `/partner/tenants/:id` | Cas Partner | Chi tiết 1 tenant (plan + GD tháng + AI accuracy + members) |
 | GET | `/partner/plan-pricing` | Cas Partner | Xem giá/quota từng gói |
-| PATCH | `/partner/plan-pricing/:plan` | Cas Partner | Sửa giá/quota/phí vượt (chặn sửa `free`) |
+| PATCH | `/partner/plan-pricing/:plan` | Cas Partner | Sửa giá/quota/phí vượt/copilotQuota (chặn sửa `free`) |
 | GET | `/partner/audit-logs` | Cas Partner | Audit log toàn hệ thống — lọc `tenantId`, `action`, phân trang |
 
 Swagger UI: `http://localhost:3000/api/docs`
@@ -388,7 +470,12 @@ transaction_classifications
 **Đổi:**
 - `tenants.matching_threshold` → `tenants.classification_threshold` (default 85)
 - `TransactionStatus` enum: `matched` → `classified`
-- `transactions`: bỏ cột `confidence_score`, thêm relation `classification`
+- `transactions`: bỏ cột `confidence_score`, thêm relation `classification`; thêm `source (TransactionSource)`, `direction (TransactionDirection)`, `importBatchId (String?)`
+- `subscriptions`: thêm `copilot_used_this_cycle (Int, default 0)` — đếm lượt chat Copilot trong chu kỳ hiện tại, reset cùng `transactionUsedThisCycle` khi hết chu kỳ
+- `plan_pricing`: thêm `copilot_quota (Int, default -1)` — số lượt Copilot/tháng; -1 = unlimited (Enterprise), 0 = blocked (Free)
+- `NotificationType` enum: thêm `copilot_quota_warning`, `copilot_quota_exceeded`
+- `TransactionSource` enum: `cas` (từ webhook Cas Balance Hook), `import` (nhập tay từ Excel)
+- `TransactionDirection` enum: `in` (thu), `out` (chi)
 
 ---
 
@@ -466,8 +553,17 @@ postinstall      → prisma generate
 - **Audit log actor:** field `actor` trong DB là string — userId (UUID), `'system'`, `'ai'`, hoặc legacy `'cas_partner'`. API đọc map sang label tiếng Việt; Partner mới ghi `userId` thật.
 - **`dto.role as unknown as import('@prisma/client').Role`** — cast cần thiết trong `team.service.ts` vì `Role` từ `@xcash/shared-types` (dùng cho DTO/RBAC) không trùng type với `Role` enum của Prisma Client dù cùng giá trị string.
 - **Frontend dependencies đáng chú ý:** `qrcode.react` (`QRCodeSVG`) — PayOS v2 trả về raw VietQR string, không phải URL; phải render bằng `QRCodeSVG` thay vì `<img src>`. Import: `import { QRCodeSVG } from 'qrcode.react'`.
+- **Copilot function calling:** `COPILOT_USE_FUNCTION_CALLING=1` bật `runTools` — model gọi đúng tool khi cần, không preload context cố định. `tenantId` chỉ từ JWT closure (không expose trong tool schema). Tránh circular dep: `CopilotToolService` dùng Prisma trực tiếp cho `review_count` và `search_transactions`, không import `ClassificationModule`/`TransactionModule`. `AiModule` import `OnboardingModule` (không import `BankingModule`). `maxChatCompletions: 5`, `temperature: 0.3`. Response: `{ reply, meta?: { activities: CopilotActivity[] } }` — FE hiện chip nguồn bằng `CopilotSourceChips`.
+- **Copilot SSE streaming (Phase 2 + hardening):** `POST /ai/copilot/stream` dùng `@Res()` bypass `ResponseInterceptor`. Activity label từ `getStreamingActivityMeta()` / `TOOL_ACTIVITIES` (một nguồn với chip cuối). Runner emit `functionToolCall` → SSE `activity`; `content` → `delta`; sau `finalContent()` → `done` (`{ reply, meta }`). Controller bọc logic sau `flushHeaders()` trong `try/catch` — lỗi vẫn emit `done` với message lỗi. FE: `fetch` + `ReadableStream` + SSE buffer (`feedSseChunk`/`flushSsePending`) xử lý frame cắt TCP; throw nếu không nhận `done` → fallback axios `/ai/copilot`.
+- **`search_transactions` tool:** Prisma trực tiếp — `content`+`senderAccount` ILIKE keyword; `source` optional (`cas` → `grantId: { not: null }`, `import` → `grantId: null`, `all`/bỏ trống = không lọc source); limit 1–20 (required trong schema).
+- **`search_casso_public` tool (Phase 3):** Tavily `@tavily/core` singleton trong `CopilotToolService`, query thêm `site:casso.vn`, cache 24h theo base64(query) key. Chỉ active khi `COPILOT_CASSO_SEARCH_ENABLED=1` + `TAVILY_API_KEY` set. `buildCopilotTools()` nhận `configService?` để kiểm tra flag — nếu không truyền (backward compat) thì tool không xuất hiện. `TOOL_ACTIVITIES` có entry `web_search` cho tool này.
+- **Copilot tools cache keys:** `copilot:tool:summary:{tenantId}:{y}-{m}` TTL=300s; `copilot:tool:banking:{tenantId}` TTL=60s. Key cũ `copilot:context:{tenantId}:{y}-{m}` còn dùng khi flag=0 (fallback).
+- **Copilot Quota guard chain:** `JwtAuthGuard → RolesGuard → PlanGuard → CopilotQuotaGuard` — thứ tự này quan trọng. `CopilotQuotaGuard` luôn đọc DB (no cache) để tránh race condition khi nhiều request đến cùng lúc. Sentinel `-1` (Enterprise) bypass hoàn toàn check quota. Guard store `{ id: subscription.id }` vào `request[COPILOT_SUBSCRIPTION_KEY]` để controller dùng cho `$increment`. Increment là fire-and-forget sau `writeEvent('done')` — lỗi increment không fail request.
+- **Copilot Quota notification dedup:** `checkCopilotQuotaNotifications()` trong `NotificationService` dùng `createOncePerCycle(tenantId, type, cycleStart)` để chỉ gửi notification 1 lần/chu kỳ per loại (`copilot_quota_warning` ≥80%, `copilot_quota_exceeded` ≥100%). Nếu quota=-1 (unlimited) thì không gửi gì.
 - **Overage billing flow:** (1) webhook banking ghi `usageLog(metric='overage_transaction')` khi Starter/Pro vượt quota; (2) cron `BillingCycleService` 2am daily tìm sub hết `currentCycleEnd` → gọi `createOverageOrder()` nếu có overage → reset `transactionUsedThisCycle=0` và `currentCycleEnd`; (3) tenant thấy banner cam trên BillingTab → click "Thanh toán ngay" → tạo PayOS order `orderType='overage'`; (4) webhook PayOS xác nhận → `confirmPayment()` nhận biết `orderType` → chỉ mark paid + auditLog, không đổi gói. Giá đọc từ `planPricing.overagePricePerTransaction` (không hardcode).
 - **`payment_orders.order_type`:** field `orderType` (default `'upgrade'`) — Prisma client typed bình thường, không cần `as any`.
+- **Excel Import:** `POST /transactions/import` và `/validate` nhận `multipart/form-data` với field `file`. Backend dùng `xlsx` package đọc file, validate từng row, tạo transaction với `source = TransactionSource.import` và `importBatchId` chung cho cả batch. Template download từ `GET /transactions/import/template` (buffer xlsx trả về).
+- **`RolesGuard` + `@Public()`:** `RolesGuard.canActivate` kiểm tra `IS_PUBLIC_KEY` trước — nếu route đánh dấu `@Public()` thì bỏ qua toàn bộ auth check (kể cả cas_partner block). Điều này cho phép `/notifications/stream?token=` (đã `@Public()`) hoạt động bình thường dù `request.user` là undefined.
 - **Rate limiting per-tenant:** `TenantThrottlerGuard` override `getTracker()` để dùng `tenantId` (fallback `userId` rồi IP) làm key thay vì mặc định theo IP — vì nhiều user cùng tenant có thể gọi API từ IP khác nhau, và Cas Partner (không có `tenantId`) vẫn cần giới hạn theo user. Áp dụng global qua `APP_GUARD`, bỏ qua `/health`. Giới hạn: `RATE_LIMIT_PER_MINUTE` (default 120 request/phút/tenant).
 - **Tenant suspend chặn login:** `auth.service.ts` → `login()` tra `subscription` mới nhất theo `tenantId`, nếu `status === 'suspended'` thì từ chối đăng nhập luôn (không cho vào hệ thống dù JWT hợp lệ) — khớp edge case đã ghi trong `rbac.md`.
 

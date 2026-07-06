@@ -17,23 +17,19 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Skeleton } from '@/components/ui/skeleton';
 import { api } from '@/lib/api';
 import { formatVND } from '@/lib/format-vnd';
+import { PLAN_LABELS } from '@/lib/plan-labels';
 
 interface PlanPricing {
   plan: string;
   pricePerMonth: number;
   transactionQuota: number;
+  copilotQuota: number;
   overagePricePerTransaction: number | null;
   editable: boolean;
 }
-
-const PLAN_LABELS: Record<string, string> = {
-  free: 'Free',
-  starter: 'Starter',
-  pro: 'Pro',
-  enterprise: 'Enterprise',
-};
 
 const PLAN_DESCRIPTIONS: Record<string, string> = {
   free: 'Dùng thử — định khoản AI, Dashboard, Human Review',
@@ -55,6 +51,7 @@ export default function PartnerPlansPage() {
   const [priceInput, setPriceInput] = useState('');
   const [quotaInput, setQuotaInput] = useState('');
   const [overageInput, setOverageInput] = useState('');
+  const [copilotQuotaInput, setCopilotQuotaInput] = useState('');
   const [confirmOpen, setConfirmOpen] = useState(false);
 
   const { data: planPricing, isLoading: loadingPricing } = useQuery({
@@ -68,17 +65,18 @@ export default function PartnerPlansPage() {
       plan: string;
       pricePerMonth: number;
       transactionQuota: number;
+      copilotQuota: number;
       overagePricePerTransaction: number | null;
     }) =>
       api.patch(`/partner/plan-pricing/${payload.plan}`, {
         pricePerMonth: payload.pricePerMonth,
         transactionQuota: payload.transactionQuota,
+        copilotQuota: payload.copilotQuota,
         overagePricePerTransaction: payload.overagePricePerTransaction ?? undefined,
       }),
     onSuccess: () => {
       toast.success('Đã cập nhật giá gói');
-      setEditingPlan(null);
-      setConfirmOpen(false);
+      closeEditDialog();
       queryClient.invalidateQueries({ queryKey: ['partner', 'plan-pricing'] });
     },
     onError: () => toast.error('Không thể cập nhật giá gói'),
@@ -88,6 +86,7 @@ export default function PartnerPlansPage() {
     setEditingPlan(plan);
     setPriceInput(String(plan.pricePerMonth));
     setQuotaInput(String(plan.transactionQuota));
+    setCopilotQuotaInput(String(plan.copilotQuota ?? -1));
     setOverageInput(
       plan.overagePricePerTransaction != null ? String(plan.overagePricePerTransaction) : '',
     );
@@ -102,12 +101,18 @@ export default function PartnerPlansPage() {
     setConfirmOpen(true);
   };
 
+  const closeEditDialog = () => {
+    setEditingPlan(null);
+    setConfirmOpen(false);
+  };
+
   const handleConfirm = () => {
     if (!editingPlan) return;
     updatePricingMutation.mutate({
       plan: editingPlan.plan,
       pricePerMonth: Number(priceInput),
       transactionQuota: Number(quotaInput),
+      copilotQuota: copilotQuotaInput.trim() ? Number(copilotQuotaInput) : -1,
       overagePricePerTransaction: overageInput.trim() ? Number(overageInput) : null,
     });
   };
@@ -127,12 +132,12 @@ export default function PartnerPlansPage() {
                 // biome-ignore lint/suspicious/noArrayIndexKey: skeleton placeholder
                 <Card key={i}>
                   <CardHeader className="pb-2">
-                    <div className="h-5 w-20 animate-pulse rounded bg-muted" />
+                    <Skeleton className="h-5 w-20" />
                   </CardHeader>
                   <CardContent className="space-y-2">
-                    <div className="h-8 w-32 animate-pulse rounded bg-muted" />
-                    <div className="h-4 w-full animate-pulse rounded bg-muted" />
-                    <div className="h-4 w-3/4 animate-pulse rounded bg-muted" />
+                    <Skeleton className="h-8 w-32" />
+                    <Skeleton className="h-4 w-full" />
+                    <Skeleton className="h-4 w-3/4" />
                   </CardContent>
                 </Card>
               ))
@@ -172,6 +177,16 @@ export default function PartnerPlansPage() {
                             {p.plan === 'enterprise'
                               ? 'Không giới hạn'
                               : `${p.transactionQuota} GD/tháng`}
+                          </span>
+                        </p>
+                        <p>
+                          Copilot:{' '}
+                          <span className="font-medium text-foreground">
+                            {p.copilotQuota === -1
+                              ? 'Không giới hạn'
+                              : p.copilotQuota === 0
+                                ? 'Không có'
+                                : `${p.copilotQuota} lượt/tháng`}
                           </span>
                         </p>
                         <p>
@@ -216,6 +231,7 @@ export default function PartnerPlansPage() {
                       <th className="pb-2 pr-6 font-medium">Gói</th>
                       <th className="pb-2 pr-6 font-medium">Giá/tháng</th>
                       <th className="pb-2 pr-6 font-medium">Quota GD/tháng</th>
+                      <th className="pb-2 pr-6 font-medium">Copilot/tháng</th>
                       <th className="pb-2 pr-6 font-medium">Phí vượt/GD</th>
                       <th className="pb-2 font-medium">Thao tác</th>
                     </tr>
@@ -227,6 +243,13 @@ export default function PartnerPlansPage() {
                         <td className="py-2 pr-6">{formatVND(p.pricePerMonth)}</td>
                         <td className="py-2 pr-6">
                           {p.plan === 'enterprise' ? 'Không giới hạn' : p.transactionQuota}
+                        </td>
+                        <td className="py-2 pr-6">
+                          {p.copilotQuota === -1
+                            ? 'Không giới hạn'
+                            : p.copilotQuota === 0
+                              ? 'Không có'
+                              : p.copilotQuota}
                         </td>
                         <td className="py-2 pr-6">
                           {p.overagePricePerTransaction != null
@@ -253,7 +276,7 @@ export default function PartnerPlansPage() {
         </Card>
 
         {/* Edit dialog */}
-        <Dialog open={editingPlan !== null} onOpenChange={(open) => !open && setEditingPlan(null)}>
+        <Dialog open={editingPlan !== null} onOpenChange={(open) => !open && closeEditDialog()}>
           <DialogContent>
             <DialogHeader>
               <DialogTitle>
@@ -283,6 +306,19 @@ export default function PartnerPlansPage() {
                 />
               </div>
               <div className="space-y-1.5">
+                <Label htmlFor="copilot-quota">Lượt chat Copilot/tháng</Label>
+                <Input
+                  id="copilot-quota"
+                  type="number"
+                  min={-1}
+                  value={copilotQuotaInput}
+                  onChange={(e) => setCopilotQuotaInput(e.target.value)}
+                />
+                <p className="text-xs text-muted-foreground">
+                  Nhập -1 để không giới hạn lượt chat (dành cho Enterprise).
+                </p>
+              </div>
+              <div className="space-y-1.5">
                 <Label htmlFor="overage">
                   Phí vượt/giao dịch (đ) — để trống nếu không tính phí vượt
                 </Label>
@@ -296,7 +332,7 @@ export default function PartnerPlansPage() {
               </div>
             </div>
             <DialogFooter>
-              <Button variant="ghost" onClick={() => setEditingPlan(null)}>
+              <Button variant="ghost" onClick={closeEditDialog}>
                 Hủy
               </Button>
               <Button onClick={handleSubmit} disabled={updatePricingMutation.isPending}>

@@ -16,6 +16,7 @@ import { CasModule } from './modules/cas/cas.module';
 import { ChartOfAccountsModule } from './modules/chart-of-accounts/chart-of-accounts.module';
 import { ClassificationModule } from './modules/classification/classification.module';
 import { HealthModule } from './modules/health/health.module';
+import { ImportModule } from './modules/import/import.module';
 import { NotificationModule } from './modules/notification/notification.module';
 import { OnboardingModule } from './modules/onboarding/onboarding.module';
 import { PartnerModule } from './modules/partner/partner.module';
@@ -65,6 +66,7 @@ import { StorageModule } from './storage/storage.module';
     SettingsModule,
     TeamModule,
     BillingModule,
+    ImportModule,
     PartnerModule,
     NotificationModule,
     ProfileModule,

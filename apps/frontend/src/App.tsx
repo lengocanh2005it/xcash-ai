@@ -2,6 +2,7 @@ import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 import { Toaster } from 'sonner';
 import { PartnerLayout } from '@/components/layout/PartnerLayout';
 import { TenantLayout } from '@/components/layout/TenantLayout';
+import { ErrorBoundary } from '@/components/shared/ErrorBoundary';
 import { AuthProvider } from '@/contexts/auth-context';
 import { ThemeProvider } from '@/contexts/theme-context';
 import AccountsPage from '@/pages/accounts/AccountsPage';
@@ -39,105 +40,107 @@ function App() {
   return (
     <BrowserRouter>
       <ThemeProvider>
-        <AuthProvider>
-          <Routes>
-            <Route
-              path="/"
-              element={
-                <LandingRoute>
-                  <LandingPage />
-                </LandingRoute>
-              }
-            />
+        <ErrorBoundary>
+          <AuthProvider>
+            <Routes>
+              <Route
+                path="/"
+                element={
+                  <LandingRoute>
+                    <LandingPage />
+                  </LandingRoute>
+                }
+              />
 
-            <Route
-              path="/login"
-              element={
-                <GuestRoute>
-                  <LoginPage />
-                </GuestRoute>
-              }
-            />
-            <Route
-              path="/register"
-              element={
-                <GuestRoute>
-                  <RegisterPage />
-                </GuestRoute>
-              }
-            />
-            <Route path="/verify-email" element={<VerifyEmailPage />} />
-            <Route path="/accept-invite" element={<AcceptInvitePage />} />
-            <Route
-              path="/forgot-password"
-              element={
-                <GuestRoute>
-                  <ForgotPasswordPage />
-                </GuestRoute>
-              }
-            />
-            <Route
-              path="/reset-password"
-              element={
-                <GuestRoute>
-                  <ResetPasswordPage />
-                </GuestRoute>
-              }
-            />
+              <Route
+                path="/login"
+                element={
+                  <GuestRoute>
+                    <LoginPage />
+                  </GuestRoute>
+                }
+              />
+              <Route
+                path="/register"
+                element={
+                  <GuestRoute>
+                    <RegisterPage />
+                  </GuestRoute>
+                }
+              />
+              <Route path="/verify-email" element={<VerifyEmailPage />} />
+              <Route path="/accept-invite" element={<AcceptInvitePage />} />
+              <Route
+                path="/forgot-password"
+                element={
+                  <GuestRoute>
+                    <ForgotPasswordPage />
+                  </GuestRoute>
+                }
+              />
+              <Route
+                path="/reset-password"
+                element={
+                  <GuestRoute>
+                    <ResetPasswordPage />
+                  </GuestRoute>
+                }
+              />
 
-            <Route
-              path="/onboarding"
-              element={
-                <TenantAuthRoute>
-                  <OnboardingPage />
-                </TenantAuthRoute>
-              }
-            />
-            <Route
-              path="/onboarding/callback"
-              element={
-                <TenantAuthRoute>
-                  <OnboardingCallbackPage />
-                </TenantAuthRoute>
-              }
-            />
+              <Route
+                path="/onboarding"
+                element={
+                  <TenantAuthRoute>
+                    <OnboardingPage />
+                  </TenantAuthRoute>
+                }
+              />
+              <Route
+                path="/onboarding/callback"
+                element={
+                  <TenantAuthRoute>
+                    <OnboardingCallbackPage />
+                  </TenantAuthRoute>
+                }
+              />
 
-            <Route
-              element={
-                <PartnerRoute>
-                  <PartnerLayout />
-                </PartnerRoute>
-              }
-            >
-              <Route path="/partner" element={<Navigate to="/partner/dashboard" replace />} />
-              <Route path="/partner/dashboard" element={<PartnerDashboardPage />} />
-              <Route path="/partner/tenants" element={<PartnerTenantsPage />} />
-              <Route path="/partner/payments" element={<PartnerPaymentsPage />} />
-              <Route path="/partner/audit-logs" element={<PartnerAuditPage />} />
-              <Route path="/partner/plans" element={<PartnerPlansPage />} />
-            </Route>
+              <Route
+                element={
+                  <PartnerRoute>
+                    <PartnerLayout />
+                  </PartnerRoute>
+                }
+              >
+                <Route path="/partner" element={<Navigate to="/partner/dashboard" replace />} />
+                <Route path="/partner/dashboard" element={<PartnerDashboardPage />} />
+                <Route path="/partner/tenants" element={<PartnerTenantsPage />} />
+                <Route path="/partner/payments" element={<PartnerPaymentsPage />} />
+                <Route path="/partner/audit-logs" element={<PartnerAuditPage />} />
+                <Route path="/partner/plans" element={<PartnerPlansPage />} />
+              </Route>
 
-            <Route
-              element={
-                <ProtectedRoute requireOnboarding>
-                  <TenantLayout />
-                </ProtectedRoute>
-              }
-            >
-              <Route path="/dashboard" element={<DashboardPage />} />
-              <Route path="/transactions" element={<TransactionsPage />} />
-              <Route path="/review" element={<ReviewPage />} />
-              <Route path="/reports" element={<ReportsPage />} />
-              <Route path="/analytics" element={<AnalyticsPage />} />
-              <Route path="/accounts" element={<AccountsPage />} />
-              <Route path="/copilot" element={<CopilotPage />} />
-              <Route path="/settings" element={<SettingsPage />} />
-            </Route>
+              <Route
+                element={
+                  <ProtectedRoute requireOnboarding>
+                    <TenantLayout />
+                  </ProtectedRoute>
+                }
+              >
+                <Route path="/dashboard" element={<DashboardPage />} />
+                <Route path="/transactions" element={<TransactionsPage />} />
+                <Route path="/review" element={<ReviewPage />} />
+                <Route path="/reports" element={<ReportsPage />} />
+                <Route path="/analytics" element={<AnalyticsPage />} />
+                <Route path="/accounts" element={<AccountsPage />} />
+                <Route path="/copilot" element={<CopilotPage />} />
+                <Route path="/settings" element={<SettingsPage />} />
+              </Route>
 
-            <Route path="*" element={<NotFoundPage />} />
-          </Routes>
-          <Toaster richColors position="top-right" />
-        </AuthProvider>
+              <Route path="*" element={<NotFoundPage />} />
+            </Routes>
+            <Toaster richColors position="top-right" />
+          </AuthProvider>
+        </ErrorBoundary>
       </ThemeProvider>
     </BrowserRouter>
   );

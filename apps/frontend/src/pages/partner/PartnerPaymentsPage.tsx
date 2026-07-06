@@ -18,6 +18,7 @@ import {
 import { useDebouncedValue } from '@/hooks/useDebouncedValue';
 import { api } from '@/lib/api';
 import { formatVND } from '@/lib/format-vnd';
+import { PLAN_LABELS } from '@/lib/plan-labels';
 
 interface PartnerPayment {
   id: string;
@@ -43,13 +44,6 @@ interface PaymentsResponse {
 
 const PAGE_SIZE = 20;
 const SEARCH_DEBOUNCE_MS = 350;
-
-const PLAN_LABELS: Record<string, string> = {
-  free: 'Free',
-  starter: 'Starter',
-  pro: 'Pro',
-  enterprise: 'Enterprise',
-};
 
 const STATUS_LABELS: Record<PartnerPayment['status'], string> = {
   paid: 'Đã thanh toán',

@@ -7,6 +7,17 @@ import { EmbeddingService } from './embedding.service';
 import { OpenAiService } from './openai.service';
 import { preprocessTransactionContent } from './utils/text-preprocessing';
 
+function resolveDirection(transaction: {
+  source: string;
+  direction: string;
+  amount: unknown;
+}): 'in' | 'out' {
+  if (transaction.source === 'import') {
+    return transaction.direction as 'in' | 'out';
+  }
+  return Number(transaction.amount) >= 0 ? 'in' : 'out';
+}
+
 export interface ClassificationOutput {
   transactionId: string;
   debitAccount: string;
@@ -46,7 +57,7 @@ export class ClassificationService {
     const content = transaction.content ?? '';
     const normalizedContent = preprocessTransactionContent(content);
     const amount = Number(transaction.amount);
-    const direction: 'in' | 'out' = amount >= 0 ? 'in' : 'out';
+    const direction = resolveDirection(transaction);
 
     const fewShotExamples = await this.embeddingService.findSimilarClassifications(
       transaction.tenantId,
@@ -107,6 +118,12 @@ export class ClassificationService {
 
       return created;
     });
+
+    this.notificationService.emitTransactionClassified(
+      transaction.tenantId,
+      transaction.id,
+      status as 'classified' | 'review',
+    );
 
     if (status === TransactionStatus.review) {
       await this.notificationService

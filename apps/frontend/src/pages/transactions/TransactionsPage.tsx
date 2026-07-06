@@ -1,7 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Role } from '@xcash/shared-types';
-import { Loader2, Receipt, Sparkles } from 'lucide-react';
+import { FileSpreadsheet, Loader2, Receipt, Sparkles } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import { Header } from '@/components/layout/Header';
 import { ConfidenceBadge } from '@/components/shared/ConfidenceBadge';
@@ -9,6 +10,7 @@ import { ConfirmDialog } from '@/components/shared/ConfirmDialog';
 import { EmptyState } from '@/components/shared/EmptyState';
 import { SignedTransactionAmount } from '@/components/shared/SignedTransactionAmount';
 import { TableSkeleton } from '@/components/shared/TableSkeleton';
+import { TransactionSourceBadge } from '@/components/shared/TransactionSourceBadge';
 import { TransactionStatusBadge } from '@/components/shared/TransactionStatusBadge';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -33,10 +35,12 @@ import {
 } from '@/components/ui/table';
 import { useAuth } from '@/hooks/useAuth';
 import { useDebouncedValue } from '@/hooks/useDebouncedValue';
+import { useTransactionEvents } from '@/hooks/useTransactionEvents';
 import { getApiData, postApiData } from '@/lib/api';
 import { formatTransactionTime } from '@/lib/dashboard-transactions';
 import { getErrorMessage } from '@/lib/errors';
 import type { TransactionListResponse, TransactionSummary } from '@/types/transaction';
+import { ImportTransactionsDialog } from './ImportTransactionsDialog';
 import { TransactionDetailSheet } from './TransactionDetailSheet';
 
 const PAGE_SIZE = 20;
@@ -50,9 +54,16 @@ const STATUS_OPTIONS = [
   { value: 'skipped', label: 'Bỏ qua' },
 ];
 
+const SOURCE_OPTIONS = [
+  { value: '', label: 'Tất cả nguồn' },
+  { value: 'cas', label: 'Ngân hàng' },
+  { value: 'import', label: 'Import Excel' },
+];
+
 function buildTransactionsUrl(params: {
   page: number;
   status: string;
+  source: string;
   fromDate: string;
   toDate: string;
   search: string;
@@ -64,6 +75,9 @@ function buildTransactionsUrl(params: {
 
   if (params.status) {
     search.set('status', params.status);
+  }
+  if (params.source) {
+    search.set('source', params.source);
   }
   if (params.fromDate) {
     search.set('from_date', new Date(params.fromDate).toISOString());
@@ -92,12 +106,17 @@ function isPendingTransaction(status: string) {
 export default function TransactionsPage() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
+  const [searchParams] = useSearchParams();
+  useTransactionEvents();
   const canBulkReclassify = user?.role === Role.ADMIN || user?.role === Role.ACCOUNTANT;
+  const canImport = user?.role === Role.ADMIN || user?.role === Role.ACCOUNTANT;
   const [page, setPage] = useState(1);
-  const [status, setStatus] = useState('');
+  const [status, setStatus] = useState(() => searchParams.get('status') ?? '');
+  const [source, setSource] = useState('');
   const [fromDate, setFromDate] = useState('');
   const [toDate, setToDate] = useState('');
   const [searchText, setSearchText] = useState('');
+  const [importDialogOpen, setImportDialogOpen] = useState(false);
   const debouncedSearch = useDebouncedValue(
     searchText,
     SEARCH_DEBOUNCE_MS,
@@ -113,16 +132,22 @@ export default function TransactionsPage() {
   const queryUrl = buildTransactionsUrl({
     page,
     status,
+    source,
     fromDate,
     toDate,
     search: debouncedSearch,
   });
-  const hasActiveFilters = Boolean(status || fromDate || toDate || debouncedSearch.trim());
+  const hasActiveFilters = Boolean(
+    status || source || fromDate || toDate || debouncedSearch.trim(),
+  );
+  const statusLabel = STATUS_OPTIONS.find((option) => option.value === status)?.label;
 
   const { data, isLoading, isError, refetch, isFetching } = useQuery({
-    queryKey: ['transactions', page, status, fromDate, toDate, debouncedSearch],
+    queryKey: ['transactions', page, status, source, fromDate, toDate, debouncedSearch],
     queryFn: () => getApiData<TransactionListResponse>(queryUrl),
-    refetchInterval: 10_000,
+    // Fallback polling nếu SSE disconnect; SSE thường invalidate trước 30s này
+    refetchInterval: 30_000,
+    refetchIntervalInBackground: false,
   });
 
   const items = data?.items ?? [];
@@ -142,7 +167,7 @@ export default function TransactionsPage() {
 
   useEffect(() => {
     setSelectedIds(new Set());
-  }, [page, status, fromDate, toDate, debouncedSearch]);
+  }, [page, status, source, fromDate, toDate, debouncedSearch]);
 
   const bulkReclassifyMutation = useMutation({
     mutationFn: (ids: string[]) =>
@@ -209,6 +234,7 @@ export default function TransactionsPage() {
 
   function clearFilters() {
     setStatus('');
+    setSource('');
     setFromDate('');
     setToDate('');
     setSearchText('');
@@ -221,16 +247,24 @@ export default function TransactionsPage() {
         title="Giao dịch"
         description="Danh sách giao dịch ngân hàng nhận qua Cas Balance Hook"
         actions={
-          <Button variant="link" size="sm" onClick={() => refetch()} disabled={isFetching}>
-            {isFetching ? 'Đang tải...' : 'Làm mới'}
-          </Button>
+          <div className="flex items-center gap-2">
+            {canImport && (
+              <Button size="sm" onClick={() => setImportDialogOpen(true)}>
+                <FileSpreadsheet className="mr-2 size-4" />
+                Nhập từ Excel
+              </Button>
+            )}
+            <Button variant="link" size="sm" onClick={() => refetch()} disabled={isFetching}>
+              Làm mới
+            </Button>
+          </div>
         }
       />
 
       <div className="space-y-4 p-4 sm:p-6">
         <Card className="py-4">
           <CardContent className="space-y-4">
-            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
               <div className="space-y-1.5 xl:col-span-2">
                 <Label htmlFor="txn-search">Tìm nội dung</Label>
                 <Input
@@ -254,6 +288,27 @@ export default function TransactionsPage() {
                   </SelectTrigger>
                   <SelectContent>
                     {STATUS_OPTIONS.map((option) => (
+                      <SelectItem key={option.value || 'all'} value={option.value || 'all'}>
+                        {option.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="txn-source">Nguồn</Label>
+                <Select
+                  value={source || 'all'}
+                  onValueChange={(value) => {
+                    setSource(value === 'all' ? '' : value);
+                    setPage(1);
+                  }}
+                >
+                  <SelectTrigger id="txn-source" className="w-full">
+                    <SelectValue placeholder="Tất cả nguồn" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {SOURCE_OPTIONS.map((option) => (
                       <SelectItem key={option.value || 'all'} value={option.value || 'all'}>
                         {option.label}
                       </SelectItem>
@@ -292,7 +347,14 @@ export default function TransactionsPage() {
             {hasActiveFilters ? (
               <div className="flex flex-wrap items-center gap-2">
                 <span className="text-xs text-muted-foreground">Đang lọc:</span>
-                {status ? <Badge variant="secondary">Trạng thái: {status}</Badge> : null}
+                {status ? (
+                  <Badge variant="secondary">Trạng thái: {statusLabel ?? status}</Badge>
+                ) : null}
+                {source ? (
+                  <Badge variant="secondary">
+                    Nguồn: {source === 'cas' ? 'Ngân hàng' : 'Import Excel'}
+                  </Badge>
+                ) : null}
                 {fromDate ? <Badge variant="secondary">Từ {fromDate}</Badge> : null}
                 {toDate ? <Badge variant="secondary">Đến {toDate}</Badge> : null}
                 {searchText ? <Badge variant="secondary">"{searchText}"</Badge> : null}
@@ -409,9 +471,12 @@ export default function TransactionsPage() {
                           onClick={() => openDetail(txn)}
                         >
                           <div className="flex items-start justify-between gap-3">
-                            <p className="text-xs text-muted-foreground">
-                              {formatTransactionTime(txn.transactionDate)}
-                            </p>
+                            <div className="flex flex-wrap items-center gap-1.5">
+                              <p className="text-xs text-muted-foreground">
+                                {formatTransactionTime(txn.transactionDate)}
+                              </p>
+                              <TransactionSourceBadge source={txn.source} />
+                            </div>
                             <TransactionStatusBadge status={txn.status} />
                           </div>
                           <p className="mt-2 font-semibold">
@@ -447,11 +512,12 @@ export default function TransactionsPage() {
                       </TableHead>
                     ) : null}
                     <TableHead className="py-3">Thời gian</TableHead>
+                    <TableHead className="py-3">Nguồn</TableHead>
                     <TableHead className="py-3 text-right">Số tiền</TableHead>
                     <TableHead className="py-3">Nội dung</TableHead>
                     <TableHead className="py-3">Người gửi</TableHead>
                     <TableHead className="py-3 text-center">TK Nợ/Có</TableHead>
-                    <TableHead className="py-3 text-center">Confidence</TableHead>
+                    <TableHead className="py-3 text-center">Độ tin cậy</TableHead>
                     <TableHead className="py-3 text-right">Trạng thái</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -473,10 +539,13 @@ export default function TransactionsPage() {
                           </TableCell>
                         ) : null}
                         <TableCell
-                          className="text-sm text-muted-foreground"
+                          className="text-sm text-muted-foreground whitespace-nowrap"
                           onClick={() => openDetail(txn)}
                         >
                           {formatTransactionTime(txn.transactionDate)}
+                        </TableCell>
+                        <TableCell onClick={() => openDetail(txn)}>
+                          <TransactionSourceBadge source={txn.source} />
                         </TableCell>
                         <TableCell
                           className="text-right font-semibold"
@@ -560,6 +629,18 @@ export default function TransactionsPage() {
         transaction={selectedTxn}
         open={sheetOpen}
         onOpenChange={setSheetOpen}
+      />
+
+      <ImportTransactionsDialog
+        open={importDialogOpen}
+        onOpenChange={(open) => {
+          setImportDialogOpen(open);
+          if (!open) refetch();
+        }}
+        onImported={() => {
+          setSource('import');
+          setPage(1);
+        }}
       />
 
       <ConfirmDialog

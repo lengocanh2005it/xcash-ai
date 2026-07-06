@@ -13,6 +13,7 @@ export const AUDIT_ACTION_LABELS: Record<string, string> = {
   tenant_activated: 'Mở khóa doanh nghiệp',
   partner_set_plan: 'Partner đặt gói',
   plan_pricing_updated: 'Cập nhật giá gói dịch vụ',
+  transaction_import: 'Import giao dịch từ Excel',
 };
 
 export const AUDIT_ENTITY_TYPE_LABELS: Record<string, string> = {

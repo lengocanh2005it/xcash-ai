@@ -13,11 +13,19 @@ export class PartnerService {
     private readonly notificationService: NotificationService,
   ) {}
 
-  async listTenants(params?: { search?: string; status?: string; plan?: string }) {
+  async listTenants(params?: {
+    search?: string;
+    status?: string;
+    plan?: string;
+    page?: number;
+    limit?: number;
+  }) {
     const search = params?.search?.trim();
     const statusFilter = params?.status && params.status !== 'all' ? params.status : undefined;
     const planFilter =
       params?.plan && params.plan !== 'all' ? (params.plan as SubscriptionPlan) : undefined;
+    const page = Math.max(1, Math.trunc(params?.page ?? 1));
+    const limit = params?.limit ? Math.min(100, Math.max(1, Math.trunc(params.limit))) : null;
 
     const tenants = await this.prisma.tenant.findMany({
       where: {
@@ -37,7 +45,7 @@ export class PartnerService {
     });
     const countsByTenant = new Map(transactionCounts.map((c) => [c.tenantId, c._count._all]));
 
-    return tenants
+    const all = tenants
       .map((tenant) => {
         const subscription = tenant.subscriptions[0];
         return {
@@ -59,6 +67,19 @@ export class PartnerService {
         }
         return true;
       });
+
+    const total = all.length;
+    if (!limit) {
+      return { items: all, page: 1, limit: total, total, totalPages: 1 };
+    }
+
+    return {
+      items: all.slice((page - 1) * limit, page * limit),
+      page,
+      limit,
+      total,
+      totalPages: Math.max(1, Math.ceil(total / limit)),
+    };
   }
 
   async getTenantDetail(tenantId: string) {
@@ -350,6 +371,7 @@ export class PartnerService {
       plan: p.plan,
       pricePerMonth: Number(p.pricePerMonth),
       transactionQuota: p.transactionQuota,
+      copilotQuota: p.copilotQuota,
       overagePricePerTransaction:
         p.overagePricePerTransaction !== null ? Number(p.overagePricePerTransaction) : null,
       editable: p.plan !== 'free',
@@ -375,6 +397,7 @@ export class PartnerService {
         pricePerMonth: dto.pricePerMonth,
         transactionQuota: dto.transactionQuota,
         overagePricePerTransaction: dto.overagePricePerTransaction ?? null,
+        ...(dto.copilotQuota !== undefined ? { copilotQuota: dto.copilotQuota } : {}),
       },
     });
 
@@ -407,6 +430,7 @@ export class PartnerService {
       plan: updated.plan,
       pricePerMonth: Number(updated.pricePerMonth),
       transactionQuota: updated.transactionQuota,
+      copilotQuota: updated.copilotQuota,
       overagePricePerTransaction:
         updated.overagePricePerTransaction !== null
           ? Number(updated.overagePricePerTransaction)

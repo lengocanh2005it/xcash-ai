@@ -6,7 +6,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import type { SubscriptionPlan } from '@prisma/client';
+import { type SubscriptionPlan, TransactionSource } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { NotificationService } from '../notification/notification.service';
 import { PayosService } from './payos.service';
@@ -50,6 +50,28 @@ export class BillingService {
     });
     if (!sub) throw new NotFoundException('Không tìm thấy gói dịch vụ');
 
+    const planPricing = await this.prisma.planPricing.findUnique({
+      where: { plan: sub.plan },
+      select: { copilotQuota: true },
+    });
+
+    const [fromBank, fromImport] = await Promise.all([
+      this.prisma.transaction.count({
+        where: {
+          tenantId,
+          source: TransactionSource.cas,
+          createdAt: { gte: sub.currentCycleStart, lte: sub.currentCycleEnd },
+        },
+      }),
+      this.prisma.transaction.count({
+        where: {
+          tenantId,
+          source: TransactionSource.import,
+          createdAt: { gte: sub.currentCycleStart, lte: sub.currentCycleEnd },
+        },
+      }),
+    ]);
+
     return {
       plan: sub.plan,
       pricePerMonth: Number(sub.pricePerMonth),
@@ -58,6 +80,9 @@ export class BillingService {
       currentCycleStart: sub.currentCycleStart,
       currentCycleEnd: sub.currentCycleEnd,
       status: sub.status,
+      copilotQuota: planPricing?.copilotQuota ?? -1,
+      copilotUsed: sub.copilotUsedThisCycle,
+      usageBreakdown: { fromBank, fromImport },
     };
   }
 
@@ -220,6 +245,133 @@ export class BillingService {
       );
 
     return { success: true, alreadyPaid: false };
+  }
+
+  async getPaymentHistory(
+    tenantId: string,
+    filters: {
+      orderType?: 'upgrade' | 'overage';
+      status?: 'pending' | 'paid' | 'failed' | 'expired';
+      fromDate?: string;
+      toDate?: string;
+      limit?: number;
+      page?: number;
+    },
+  ) {
+    const { orderType, status, fromDate, toDate, limit = 20, page = 1 } = filters;
+    const skip = (page - 1) * limit;
+
+    const where = {
+      tenantId,
+      ...(orderType ? { orderType } : {}),
+      ...(status ? { status } : {}),
+      ...(fromDate || toDate
+        ? {
+            createdAt: {
+              ...(fromDate ? { gte: new Date(fromDate) } : {}),
+              ...(toDate ? { lte: new Date(`${toDate}T23:59:59.999Z`) } : {}),
+            },
+          }
+        : {}),
+    };
+
+    const [total, orders] = await this.prisma.$transaction([
+      this.prisma.paymentOrder.count({ where }),
+      this.prisma.paymentOrder.findMany({
+        where,
+        orderBy: { createdAt: 'desc' },
+        skip,
+        take: limit,
+      }),
+    ]);
+
+    return {
+      data: orders.map((o) => ({
+        id: o.id,
+        orderCode: o.orderCode,
+        orderType: o.orderType,
+        targetPlan: o.targetPlan,
+        amount: Number(o.amount),
+        status: o.status,
+        paidAt: o.paidAt,
+        createdAt: o.createdAt,
+      })),
+      meta: { total, page, limit, totalPages: Math.ceil(total / limit) },
+    };
+  }
+
+  async getCycleTransactions(
+    tenantId: string,
+    filters: {
+      cycleStart: string;
+      cycleEnd: string;
+      search?: string;
+      page?: number;
+      limit?: number;
+    },
+  ) {
+    const { cycleStart, cycleEnd, search, page = 1, limit = 15 } = filters;
+    const skip = (page - 1) * limit;
+
+    const where = {
+      tenantId,
+      createdAt: {
+        gte: new Date(cycleStart),
+        lte: new Date(cycleEnd),
+      },
+      ...(search
+        ? {
+            OR: [
+              { content: { contains: search, mode: 'insensitive' as const } },
+              { transactionId: { contains: search, mode: 'insensitive' as const } },
+              { senderAccount: { contains: search, mode: 'insensitive' as const } },
+            ],
+          }
+        : {}),
+    };
+
+    const [items, total] = await this.prisma.$transaction([
+      this.prisma.transaction.findMany({
+        where,
+        include: {
+          classification: {
+            select: {
+              debitAccount: true,
+              creditAccount: true,
+              status: true,
+              confidenceScore: true,
+            },
+          },
+        },
+        orderBy: [{ transactionDate: 'desc' }, { createdAt: 'desc' }],
+        skip,
+        take: limit,
+      }),
+      this.prisma.transaction.count({ where }),
+    ]);
+
+    return {
+      items: items.map((t) => ({
+        id: t.id,
+        transactionId: t.transactionId,
+        amount: Number(t.amount),
+        content: t.content,
+        transactionDate: t.transactionDate,
+        createdAt: t.createdAt,
+        senderAccount: t.senderAccount,
+        source: t.source,
+        classification: t.classification
+          ? {
+              debitAccount: t.classification.debitAccount,
+              creditAccount: t.classification.creditAccount,
+              status: t.classification.status,
+            }
+          : null,
+      })),
+      total,
+      page,
+      limit,
+    };
   }
 
   async getOverageOrders(tenantId: string) {

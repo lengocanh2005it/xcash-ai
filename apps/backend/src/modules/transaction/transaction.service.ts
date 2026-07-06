@@ -1,6 +1,6 @@
 import { InjectQueue } from '@nestjs/bullmq';
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
-import { Prisma, TransactionStatus } from '@prisma/client';
+import { Prisma, TransactionSource, TransactionStatus } from '@prisma/client';
 import type { Queue } from 'bullmq';
 import { PrismaService } from '../../prisma/prisma.service';
 import { WEBHOOK_QUEUE } from '../../queue/queue.module';
@@ -41,12 +41,27 @@ export class TransactionService {
             ],
           }
         : {}),
+      ...(query.source ? { source: query.source as TransactionSource } : {}),
     };
+
+    const orderBy: Prisma.TransactionOrderByWithRelationInput[] =
+      query.source === TransactionSource.import
+        ? [{ createdAt: 'desc' }, { transactionDate: 'desc' }]
+        : [{ transactionDate: 'desc' }, { createdAt: 'desc' }];
 
     const [items, total] = await Promise.all([
       this.prisma.transaction.findMany({
         where,
-        include: {
+        select: {
+          id: true,
+          transactionId: true,
+          amount: true,
+          content: true,
+          senderAccount: true,
+          status: true,
+          transactionDate: true,
+          source: true,
+          direction: true,
           classification: {
             select: {
               debitAccount: true,
@@ -54,10 +69,11 @@ export class TransactionService {
               confidenceScore: true,
               classificationType: true,
               status: true,
+              reason: true,
             },
           },
         },
-        orderBy: { transactionDate: 'desc' },
+        orderBy,
         skip,
         take: limit,
       }),

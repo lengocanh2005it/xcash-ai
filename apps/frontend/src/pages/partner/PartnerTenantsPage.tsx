@@ -1,5 +1,5 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Eye, Search, Settings2 } from 'lucide-react';
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { ChevronLeft, ChevronRight, Eye, Search, Settings2 } from 'lucide-react';
 import { useCallback, useState } from 'react';
 import { toast } from 'sonner';
 import { Header } from '@/components/layout/Header';
@@ -28,18 +28,11 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { useDebouncedValue } from '@/hooks/useDebouncedValue';
 import { api } from '@/lib/api';
 import { formatVND } from '@/lib/format-vnd';
+import { PLAN_LABELS } from '@/lib/plan-labels';
+import type { PartnerTenant, PartnerTenantsResponse } from '@/types/partner';
 
 const SEARCH_DEBOUNCE_MS = 350;
-
-interface PartnerTenant {
-  id: string;
-  businessName: string;
-  createdAt: string;
-  plan: string | null;
-  status: string;
-  transactionsThisMonth: number;
-  revenuePerMonth: number;
-}
+const PAGE_SIZE = 20;
 
 interface TenantMember {
   id: string;
@@ -72,13 +65,6 @@ interface TenantDetail {
   members: TenantMember[];
 }
 
-const PLAN_LABELS: Record<string, string> = {
-  free: 'Free',
-  starter: 'Starter',
-  pro: 'Pro',
-  enterprise: 'Enterprise',
-};
-
 const ROLE_LABELS: Record<string, string> = {
   admin: 'Admin',
   accountant: 'Kế toán',
@@ -88,8 +74,15 @@ const ROLE_LABELS: Record<string, string> = {
 
 export default function PartnerTenantsPage() {
   const queryClient = useQueryClient();
+  const [page, setPage] = useState(1);
   const [searchInput, setSearchInput] = useState('');
-  const debouncedSearch = useDebouncedValue(searchInput, SEARCH_DEBOUNCE_MS);
+  const debouncedSearch = useDebouncedValue(
+    searchInput,
+    SEARCH_DEBOUNCE_MS,
+    useCallback(() => {
+      setPage(1);
+    }, []),
+  );
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'suspended'>('all');
   const [planFilter, setPlanFilter] = useState<'all' | string>('all');
   const [viewingTenantId, setViewingTenantId] = useState<string | null>(null);
@@ -102,27 +95,29 @@ export default function PartnerTenantsPage() {
   const [confirmSetPlan, setConfirmSetPlan] = useState(false);
 
   const {
-    data: tenants,
+    data: tenantsData,
     isLoading: loadingTenants,
     isError: tenantsError,
     refetch: refetchTenants,
   } = useQuery({
-    queryKey: ['partner', 'tenants', debouncedSearch, statusFilter, planFilter],
+    queryKey: ['partner', 'tenants', page, debouncedSearch, statusFilter, planFilter],
     queryFn: () =>
       api
-        .get<{ data: PartnerTenant[] }>('/partner/tenants', {
+        .get<{ data: PartnerTenantsResponse }>('/partner/tenants', {
           params: {
+            page,
+            limit: PAGE_SIZE,
             search: debouncedSearch.trim() || undefined,
             status: statusFilter,
             plan: planFilter,
           },
         })
         .then((r) => r.data.data),
+    placeholderData: keepPreviousData,
   });
 
-  const hasActiveFilters =
-    debouncedSearch.trim() !== '' || statusFilter !== 'all' || planFilter !== 'all';
-  const isSearchPending = searchInput !== debouncedSearch;
+  const filteredTenants = tenantsData?.items ?? [];
+  const totalPages = tenantsData ? Math.max(1, tenantsData.totalPages) : 1;
 
   const { data: planPricing } = useQuery({
     queryKey: ['partner', 'plan-pricing'],
@@ -180,12 +175,15 @@ export default function PartnerTenantsPage() {
     onError: () => toast.error('Không thể đổi gói dịch vụ'),
   });
 
-  const filteredTenants = tenants ?? [];
+  const hasActiveFilters =
+    debouncedSearch.trim() !== '' || statusFilter !== 'all' || planFilter !== 'all';
+  const isSearchPending = searchInput !== debouncedSearch;
 
   const clearFilters = useCallback(() => {
     setSearchInput('');
     setStatusFilter('all');
     setPlanFilter('all');
+    setPage(1);
   }, []);
 
   return (
@@ -212,7 +210,10 @@ export default function PartnerTenantsPage() {
               </div>
               <Select
                 value={statusFilter}
-                onValueChange={(v) => setStatusFilter(v as typeof statusFilter)}
+                onValueChange={(v) => {
+                  setStatusFilter(v as typeof statusFilter);
+                  setPage(1);
+                }}
               >
                 <SelectTrigger className="whitespace-nowrap sm:w-44">
                   <SelectValue placeholder="Trạng thái" />
@@ -223,7 +224,13 @@ export default function PartnerTenantsPage() {
                   <SelectItem value="suspended">Đã khóa</SelectItem>
                 </SelectContent>
               </Select>
-              <Select value={planFilter} onValueChange={setPlanFilter}>
+              <Select
+                value={planFilter}
+                onValueChange={(v) => {
+                  setPlanFilter(v);
+                  setPage(1);
+                }}
+              >
                 <SelectTrigger className="whitespace-nowrap sm:w-40">
                   <SelectValue placeholder="Gói" />
                 </SelectTrigger>
@@ -437,6 +444,37 @@ export default function PartnerTenantsPage() {
                     </tbody>
                   </table>
                 </div>
+
+                {totalPages > 1 ? (
+                  <div className="mt-4 flex items-center justify-between gap-2 border-t pt-4">
+                    <p className="text-sm text-muted-foreground">
+                      Trang {page}/{totalPages}
+                      {tenantsData ? ` · ${tenantsData.total} doanh nghiệp` : ''}
+                    </p>
+                    <div className="flex gap-2">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        disabled={page <= 1}
+                        onClick={() => setPage((p) => Math.max(1, p - 1))}
+                      >
+                        <ChevronLeft className="size-4" />
+                        Trước
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        disabled={page >= totalPages}
+                        onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                      >
+                        Sau
+                        <ChevronRight className="size-4" />
+                      </Button>
+                    </div>
+                  </div>
+                ) : null}
               </>
             )}
           </CardContent>

@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Query, UseGuards } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { ApiTags } from '@nestjs/swagger';
 import { Role } from '@xcash/shared-types';
@@ -7,6 +7,8 @@ import { Roles } from '../../common/decorators/roles.decorator';
 import { JwtAuthGuard, RolesGuard } from '../../common/guards/auth.guards';
 import type { AuthenticatedUser } from '../../common/types/authenticated-user.type';
 import { BillingService } from './billing.service';
+import { CycleTransactionsQueryDto } from './dto/cycle-transactions-query.dto';
+import { PaymentHistoryDto } from './dto/payment-history.dto';
 import { UpgradeBillingDto } from './dto/upgrade-billing.dto';
 
 @ApiTags('billing')
@@ -49,6 +51,21 @@ export class BillingController {
       return { success: false, message: 'Không khả dụng trong môi trường production' };
     }
     return this.service.confirmPayment(orderCode, user.tenantId!);
+  }
+
+  @Get('cycle-transactions')
+  @Roles(Role.ADMIN, Role.ACCOUNTANT)
+  getCycleTransactions(
+    @CurrentUser() user: AuthenticatedUser,
+    @Query() dto: CycleTransactionsQueryDto,
+  ) {
+    return this.service.getCycleTransactions(user.tenantId!, dto);
+  }
+
+  @Get('payment-history')
+  @Roles(Role.ADMIN, Role.ACCOUNTANT)
+  getPaymentHistory(@CurrentUser() user: AuthenticatedUser, @Query() dto: PaymentHistoryDto) {
+    return this.service.getPaymentHistory(user.tenantId!, dto);
   }
 
   @Get('overage-orders')

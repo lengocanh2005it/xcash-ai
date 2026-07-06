@@ -45,6 +45,7 @@ export class BillingCycleService {
       where: { id: sub.id },
       data: {
         transactionUsedThisCycle: 0,
+        copilotUsedThisCycle: 0,
         currentCycleStart: now,
         currentCycleEnd: newCycleEnd,
       },

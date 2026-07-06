@@ -1,6 +1,8 @@
 import { Fragment, type ReactNode } from 'react';
 
-type TokenType = 'money' | 'percent' | 'date' | 'account' | 'keyword';
+// Keyword nghiệp vụ để AI tự highlight qua **...** trong system prompt.
+// Chỉ giữ pattern deterministic ở FE — số tiền, %, ngày, mã TK.
+type TokenType = 'money' | 'percent' | 'date' | 'account';
 
 interface Token {
   start: number;
@@ -8,22 +10,6 @@ interface Token {
   type: TokenType;
   text: string;
 }
-
-const KEYWORD_PHRASES = [
-  'X-Cash AI',
-  'AI Copilot',
-  'TT133/2016',
-  'TT133',
-  'giao dịch chờ xét duyệt',
-  'giao dịch chờ duyệt',
-  'báo cáo thu chi',
-  'kế toán SME',
-  'định khoản',
-  'doanh thu',
-  'chi phí',
-  'lãi/lỗ',
-  'lãi lỗ',
-];
 
 const PATTERNS: { type: TokenType; re: RegExp }[] = [
   { type: 'account', re: /(?:Nợ|Có)\s+\d{3,4}/g },
@@ -36,21 +22,13 @@ const PATTERNS: { type: TokenType; re: RegExp }[] = [
     type: 'date',
     re: /\btháng\s*\d{1,2}(?:\/\d{4})?|\d{1,2}[/-]\d{1,2}(?:[/-]\d{2,4})?/gi,
   },
-  {
-    type: 'keyword',
-    re: new RegExp(
-      KEYWORD_PHRASES.map((p) => p.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|'),
-      'gi',
-    ),
-  },
 ];
 
 const TOKEN_CLASS: Record<TokenType, string> = {
-  money: 'font-semibold text-emerald-600 dark:text-emerald-400',
-  percent: 'font-semibold text-blue-600 dark:text-blue-400',
-  date: 'font-medium text-amber-600 dark:text-amber-400',
-  account: 'font-mono font-semibold text-purple-600 dark:text-purple-400',
-  keyword: 'font-semibold text-primary',
+  money: 'font-semibold',
+  percent: 'font-semibold',
+  date: 'font-semibold',
+  account: 'font-mono font-semibold',
 };
 
 function tokenize(text: string): Token[] {

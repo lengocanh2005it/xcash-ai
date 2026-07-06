@@ -113,10 +113,14 @@ import { toast } from "sonner"
 ## 1. 🏠 Dashboard
 
 **Route:** `/dashboard`
-**API calls:**
-- `GET /api/v1/dashboard/overview`
-- `GET /api/v1/dashboard/recent-transactions`
-- `GET /api/v1/analytics/revenue?period=month`
+**API calls (đã triển khai):**
+- `GET /api/v1/reports/summary?year=&month=` — độ chính xác AI tháng (`stats.aiAccuracy`)
+- `GET /api/v1/review/count` — số GD chờ Human Review (poll qua `useReviewCount`)
+- `GET /api/v1/transactions?status=pending&limit=1` — tổng GD chờ định khoản (`total` trong response)
+- `GET /api/v1/transactions?status=classified&from_date=&to_date=&limit=1` — đếm GD đã định khoản hôm nay / hôm qua (so sánh %)
+- `GET /api/v1/transactions?limit=100` — **chỉ cho charts + feed** (max BE cho phép); aggregate client-side tại `lib/dashboard-transactions.ts`
+
+> **Tách nguồn dữ liệu:** stat cards **không** derive từ 100 GD đầu — dùng summary/count API. Charts và “Giao dịch gần đây” vẫn lấy từ `limit=100`.
 
 ### Layout
 
@@ -124,50 +128,48 @@ import { toast } from "sonner"
 ┌─────────────────────────────────────────────────────┐
 │ Header: "Dashboard"                                  │
 ├─────────────────────────────────────────────────────┤
-│ Stats Row (grid grid-cols-4 gap-4)                   │
+│ Welcome card (avatar + tên user / tên DN)            │
+├─────────────────────────────────────────────────────┤
+│ [Banner CTA] Chưa liên kết NH → /onboarding          │  ← chỉ khi bankingLinked=false
+├─────────────────────────────────────────────────────┤
+│ Stats Row (grid grid-cols-4 gap-4) — clickable     │
 │ ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐│
-│ │Doanh thu │ │Giao dịch │ │Chờ review│ │AI Match  ││
-│ │hôm nay   │ │chưa xử lý│ │          │ │accuracy  ││
-│ │125.5M đ  │ │  12      │ │  3 🔴    │ │  94.2%   ││
-│ │↑12% vs   │ │          │ │          │ │          ││
-│ │hôm qua   │ │          │ │          │ │          ││
+│ │Định khoản│ │Chờ định  │ │Chờ Human │ │Độ chính  ││
+│ │hôm nay   │ │khoản     │ │Review    │ │xác AI    ││
+│ │  24      │ │  12      │ │  3 🔴    │ │  94.2%   ││
+│ │↑ vs hôm  │ │Đang chờ  │ │→ /review │ │tháng n/n ││
+│ │qua       │ │AI xử lý  │ │          │ │          ││
 │ └──────────┘ └──────────┘ └──────────┘ └──────────┘│
+│  → /transactions?status=classified                   │
+│  → /transactions?status=pending                      │
 ├─────────────────────────────────────────────────────┤
-│ Row 2 (grid grid-cols-3 gap-4)                       │
+│ Revenue Chart (AreaChart 7 ngày, full width)         │
+├─────────────────────────────────────────────────────┤
+│ Row (grid lg:grid-cols-3)                            │
 │ ┌────────────────────────┐ ┌──────────────────────┐ │
-│ │ Revenue Chart          │ │ Recent Transactions  │ │
-│ │ (LineChart, Recharts)  │ │ (feed real-time)     │ │
+│ │ Giao dịch gần đây (5)  │ │ Donut trạng thái GD  │ │
 │ │ col-span-2             │ │ col-span-1           │ │
-│ │                        │ │ TXN_001 | 350k | ✅  │ │
-│ │                        │ │ TXN_002 | 50M  | 🚨  │ │
-│ │                        │ │ TXN_003 | 1.2M | ⚠️  │ │
-│ │                        │ │ [Xem tất cả →]       │ │
+│ │ [Xem tất cả →]         │ │ pending/classified/… │ │
 │ └────────────────────────┘ └──────────────────────┘ │
-├─────────────────────────────────────────────────────┤
-│ Row 3 (grid grid-cols-2 gap-4)                       │
-│ ┌──────────────────────┐ ┌────────────────────────┐ │
-│ │ Công nợ chưa thu     │ │ AI Matching Stats      │ │
-│ │ Tổng: 45,200,000đ    │ │ Auto: 87% ████████░░  │ │
-│ │ Quá hạn: 12,400,000đ │ │ Review: 9% █░░░░░░░░  │ │
-│ │ [Xem chi tiết →]     │ │ Skip: 4%  ░░░░░░░░░░  │ │
-│ └──────────────────────┘ └────────────────────────┘ │
 └─────────────────────────────────────────────────────┘
 ```
 
 ### Stats Card component
 
+Stat card bọc `Link` khi có prop `to` — click điều hướng tới Review hoặc Transactions với filter tương ứng.
+
 ```jsx
-// Mỗi stat card dùng ShadCN Card
+// Mỗi stat card dùng ShadCN Card (+ optional Link wrapper)
 <Card>
   <CardHeader className="flex flex-row items-center justify-between pb-2">
     <CardTitle className="text-sm font-medium text-muted-foreground">
-      Doanh thu hôm nay
+      Định khoản hôm nay
     </CardTitle>
-    <TrendingUp className="h-4 w-4 text-muted-foreground" />
+    <CheckCircle2 className="h-4 w-4 text-muted-foreground" />
   </CardHeader>
   <CardContent>
-    <div className="text-2xl font-bold">125,500,000đ</div>
-    <p className="text-xs text-green-600 mt-1">↑ 12% so với hôm qua</p>
+    <div className="text-2xl font-bold">24</div>
+    <p className="text-xs text-primary mt-1">↑ 8.3% so với hôm qua</p>
   </CardContent>
 </Card>
 ```
@@ -192,8 +194,9 @@ import { toast } from "sonner"
 
 ### States
 
+- **Chưa liên kết NH:** banner CTA “Liên kết ngân hàng ngay” → `/onboarding`; stat/charts không fetch (`enabled: bankingLinked`)
 - **Loading:** Skeleton cho stats cards và chart
-- **Empty:** "Chưa có giao dịch nào hôm nay"
+- **Empty:** "Chưa có giao dịch nào hôm nay" (charts/feed)
 - **Error:** Toast error + retry button
 
 ---
@@ -1087,45 +1090,58 @@ function useUpgradeFlow() {
 
 ---
 
-## 9. 🏢 Partner Dashboard (Cas Partner)
+## 9. 🏢 Partner Console (Cas Partner)
 
-**Route:** `/partner` (layout hoàn toàn riêng, không dùng chung Sidebar 8 mục ở trên)
+**Routes:** `/partner/dashboard`, `/partner/tenants`, `/partner/payments`, `/partner/audit-logs`, `/partner/plans` — layout **sidebar riêng** (`PartnerLayout`), không dùng sidebar 8 mục tenant.
 **Quyền truy cập:** chỉ role `cas_partner` — middleware redirect role khác về `/dashboard` nếu cố vào `/partner`
-**API calls:**
-- `GET /api/v1/partner/tenants`
-- `GET /api/v1/partner/tenants/:id`
-- `PATCH /api/v1/partner/tenants/:id/suspend`
-- `PATCH /api/v1/partner/tenants/:id/activate`
-- `GET /api/v1/partner/revenue`
-- `GET /api/v1/partner/usage-stats`
-- `GET /api/v1/partner/audit-logs`
 
-### Layout riêng
+### API calls (đã triển khai)
 
-Partner Dashboard dùng layout **đơn giản hơn**, không có Sidebar 8 mục nghiệp vụ — chỉ có top nav vì Cas Partner không thao tác nghiệp vụ, chỉ xem tổng quan:
+| Màn hình | Endpoint chính |
+|---|---|
+| Dashboard | `GET /partner/stats` (?fromDate=&toDate=), `GET /partner/revenue-trend`, `GET /partner/tenants` **không paginate** (full list cho MRR / phân bố gói) |
+| Doanh nghiệp | `GET /partner/tenants?page=&limit=20` + filter; `GET /partner/tenants/:id`; `PATCH .../suspend|activate|plan` |
+| Thanh toán | `GET /partner/payments` (paginate + summary) |
+| Nhật ký | `GET /partner/audit-logs` |
+| Gói dịch vụ | `GET|PATCH /partner/plan-pricing` |
+
+**Phân trang `GET /partner/tenants`:**
+- Có `?page=&limit=` → response `{ items, page, limit, total, totalPages }` — `PartnerTenantsPage` dùng `limit=20`
+- Không truyền `page`/`limit` → trả **toàn bộ** DN (dùng trên Dashboard cho pie MRR / plan breakdown)
+
+### 9.1 Partner Dashboard (`/partner/dashboard`)
 
 ```
 ┌─────────────────────────────────────────────────────┐
-│ Top Nav: X-Cash AI — Partner Console      [Logout]  │
+│ Sidebar: Dashboard | DN | Thanh toán | Nhật ký | Gói│
 ├─────────────────────────────────────────────────────┤
-│ Stats Row (grid grid-cols-4 gap-4)                   │
-│ ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐│
-│ │Tổng DN   │ │DN active │ │Tổng GD    │ │Doanh thu ││
-│ │  127     │ │  118     │ │xử lý tháng│ │tháng này ││
-│ │↑8 mới    │ │9 suspended│ │1.2M       │ │45.8M đ   ││
-│ └──────────┘ └──────────┘ └──────────┘ └──────────┘│
+│ Filter ngày (optional) — ảnh hưởng stats GD / thực thu│
 ├─────────────────────────────────────────────────────┤
-│ Revenue Chart (LineChart, full width)                │
+│ Stats Row (4 cards + mô tả hint dưới mỗi card)       │
+│ Tổng DN | DN active/suspended | MRR | Thực thu tháng │
+│ MRR + pie "Phân bố theo gói": hint "snapshot hiện tại,│
+│ không theo kỳ lọc ngày" khi đang lọc fromDate/toDate │
+├─────────────────────────────────────────────────────┤
+│ Biểu đồ doanh thu theo tháng (multi-line theo gói)  │
+│ Top DN theo doanh thu (bar)                          │
+└─────────────────────────────────────────────────────┘
+```
+
+### 9.2 Danh sách doanh nghiệp (`/partner/tenants`)
+
+Bảng tenant **tách page riêng** (không nằm trên Dashboard). Có filter + phân trang server-side.
+
+```
+┌─────────────────────────────────────────────────────┐
+│ Header: "Doanh nghiệp"                                │
 ├─────────────────────────────────────────────────────┤
 │ Filter: [Search tên DN...] [Status ▼] [Plan ▼]      │
 ├─────────────────────────────────────────────────────┤
 │ Table: Danh sách doanh nghiệp                        │
 │ Tên DN | Gói | Trạng thái | GD/tháng | DT | Action  │
 │ TT Anh ngữ ABC│Pro│🟢 Active│2,400│2.5M│[Xem][Khóa] │
-│ Phòng khám XYZ│Free│🟢 Active│450│0đ│[Xem][Nâng cấp]│
-│ Shop Online K │Pro│🔴 Suspended│0│0đ│[Xem][Mở khóa] │
 ├─────────────────────────────────────────────────────┤
-│ Pagination                                           │
+│ Pagination: Trang 1/7  [← Trước] [Sau →]            │  ← 20 DN/trang
 └─────────────────────────────────────────────────────┘
 ```
 
@@ -1274,10 +1290,11 @@ Click "Xem" → Sheet từ phải, hiển thị usage chi tiết (KHÔNG hiển 
 - **Loading:** Skeleton table
 - **Suspend thành công:** Toast + badge chuyển đỏ ngay (optimistic update qua TanStack Query)
 
-### ⚠️ Lưu ý khi code màn hình này
+### ⚠️ Lưu ý khi code màn hình Partner
 
-- Route `/partner/*` phải tách hoàn toàn khỏi router nghiệp vụ — dùng `<ProtectedRoute role="cas_partner">` riêng wrap quanh, không tái sử dụng layout 8 màn hình kia.
-- Component này **không bao giờ** gọi API `/transactions`, `/invoices`, `/customers` của bất kỳ tenant nào — chỉ gọi `/partner/*`. Nếu thấy code Partner Dashboard import API nghiệp vụ thông thường, đó là dấu hiệu thiết kế sai.
+- Route `/partner/*` tách hoàn toàn khỏi router nghiệp vụ — dùng `<ProtectedRoute role="cas_partner">` riêng wrap quanh, không tái sử dụng layout 8 màn hình kia.
+- **Dashboard** gọi `GET /partner/tenants` **không** paginate (cần full list cho MRR/plan pie). **Tenants page** luôn gửi `page` + `limit=20`.
+- Component Partner **không bao giờ** gọi API `/transactions`, `/reports`, … của tenant — chỉ gọi `/partner/*`. Nếu thấy code Partner import API nghiệp vụ thông thường, đó là dấu hiệu thiết kế sai.
 
 ---
 

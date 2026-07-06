@@ -43,6 +43,7 @@ cp apps/frontend/.env.example apps/frontend/.env
 | Email (Resend) | `RESEND_API_KEY`, `RESEND_SENDER_EMAIL`, `RESEND_SENDER_NAME`, `EMAIL_OTP_TTL_SECONDS`, `EMAIL_OTP_RESEND_COOLDOWN_SECONDS`, `EMAIL_OTP_MAX_ATTEMPTS`, `TEAM_INVITE_TTL_SECONDS` | OTP đăng ký + quên mật khẩu + email mời thành viên qua BullMQ queue `email-delivery` |
 | Azure Blob (avatar) | `AZURE_STORAGE_CONNECTION_STRING`, `AZURE_STORAGE_CONTAINER_NAME`, `AZURE_STORAGE_MAX_FILE_SIZE` | Upload ảnh đại diện qua `POST /profile/avatar`; container mặc định `task-attachments` |
 | OpenAI | `OPENAI_API_KEY`, `OPENAI_EMBEDDING_MODEL`, `OPENAI_CHAT_MODEL` | công ty cấp sẵn key, không tự train model |
+| Copilot | `COPILOT_USE_FUNCTION_CALLING=1` (0=prompt stuffing cũ, 1=runTools), `COPILOT_CONTEXT_CACHE_TTL_SECONDS=300` | set =1 để bật 7 tools + meta.activities; =0 fallback CopilotContextService |
 | Cas SDK | `CAS_API_BASE_URL`, `CAS_CLIENT_ID`, `CAS_SECRET_KEY`, `CAS_GRANT_REDIRECT_URI` | sandbox thật, lấy tại `sandbox.console.bankhub.dev/developer/keys` |
 | Cas Webhook | `CAS_WEBHOOK_URL` | URL đăng ký trên Cas Console; dev local dùng **ngrok** → `https://<id>.ngrok-free.app/api/v1/webhook/cas` |
 | PayOS (billing) | `PAYOS_CLIENT_ID`, `PAYOS_API_KEY`, `PAYOS_CHECKSUM_KEY`, `PAYOS_BILLING_WEBHOOK_URL` | mock fallback khi thiếu CLIENT_ID/API_KEY; webhook upgrade + overage |
@@ -125,7 +126,7 @@ curl -X POST "http://localhost:3000/api/v1/webhook/cas" \
 
 5. Mở **Dashboard** / **Giao dịch** — thấy giao dịch mới. Mỗi lần gửi mock dùng `transaction.id` **khác nhau** (idempotency Redis 24h).
 
-**Lưu ý Dashboard:** FE gọi `GET /transactions?limit=100` (max BE cho phép).
+**Lưu ý Dashboard:** stat cards dùng `/reports/summary` + `/review/count` + count API; **charts** vẫn gọi `GET /transactions?limit=100` (max BE cho phép).
 
 **Deploy VPS (Sprint 4 — còn lại):** Dockerfiles + `deploy.yml` + `deploy/README.md` đã có; cần cấu hình secrets GitHub + domain/SSL trên VPS thật. Xem `deploy/README.md`.
 
@@ -159,4 +160,4 @@ Luồng đúng: chọn ngân hàng → **đăng nhập iBanking** trong popup (k
 | `grantToken` hết hạn khi test Cas Link | Token chỉ sống 30 phút, dùng 1 lần — tạo lại token mới, không cache/reuse |
 | Cas Link báo lỗi ở form xác thực STK/tên TK | Đang dùng nhầm scope `qrpay` — X-Cash AI cần `identity,transaction`. Restart backend, bấm lại Liên kết ngân hàng |
 | Callback `/onboarding/banking/callback` lỗi `Cas API error 400` sau khi Cas Link thành công | Thường do thiếu scope `identity` khi gọi `GET /identity`, hoặc `publicToken` đã dùng (bấm lại từ đầu, tạo grant mới). Restart backend sau khi đổi scope |
-| Dashboard hiện 0 giao dịch dù webhook OK | FE gọi `limit>100` → BE trả 400; Dashboard dùng `limit=100` |
+| Dashboard hiện 0 giao dịch dù webhook OK | FE gọi `limit>100` → BE trả 400; charts Dashboard dùng `limit=100`; stat cards dùng summary/count API riêng |

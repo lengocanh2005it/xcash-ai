@@ -11,7 +11,14 @@ import {
   useMemo,
   useState,
 } from 'react';
-import { type AuthSessionData, api, getApiData, postApiData, setAccessToken } from '@/lib/api';
+import {
+  type AuthSessionData,
+  api,
+  getApiData,
+  postApiData,
+  resetLogoutState,
+  setAccessToken,
+} from '@/lib/api';
 import { getErrorMessage } from '@/lib/errors';
 import { persistLoginPreferences } from '@/lib/remember-me';
 import type { AuthenticatedUser } from '@/types/auth';
@@ -169,6 +176,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         rememberMe: input.rememberMe !== false,
       }),
     onSuccess: (session, input) => {
+      resetLogoutState(); // cho phép phát hiện session hết hạn lần tiếp theo
       applySession(session, setUser);
       persistLoginPreferences(input.email, input.rememberMe !== false);
       queryClient.invalidateQueries({ queryKey: ['onboarding'] });

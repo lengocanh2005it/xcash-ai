@@ -1,9 +1,11 @@
 import { useQuery } from '@tanstack/react-query';
+import { useMemo, useState } from 'react';
 import { Header } from '@/components/layout/Header';
 import { EmptyState } from '@/components/shared/EmptyState';
 import { TableSkeleton } from '@/components/shared/TableSkeleton';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
 import { api } from '@/lib/api';
 
 interface Account {
@@ -44,13 +46,24 @@ const ACCOUNT_TYPE_LABELS: Record<string, { label: string; className: string }> 
 };
 
 export default function AccountsPage() {
+  const [search, setSearch] = useState('');
   const { data, isLoading } = useQuery({
     queryKey: ['accounts'],
     queryFn: fetchAccounts,
   });
 
-  const grouped = data
-    ? data.reduce<Record<string, Account[]>>((acc, a) => {
+  const filtered = useMemo(() => {
+    const keyword = search.trim().toLowerCase();
+    if (!keyword || !data) return data ?? [];
+    return data.filter(
+      (account) =>
+        account.accountCode.toLowerCase().includes(keyword) ||
+        account.accountName.toLowerCase().includes(keyword),
+    );
+  }, [data, search]);
+
+  const grouped = filtered
+    ? filtered.reduce<Record<string, Account[]>>((acc, a) => {
         const group = a.accountCode.charAt(0);
         if (!acc[group]) acc[group] = [];
         acc[group].push(a);
@@ -71,10 +84,16 @@ export default function AccountsPage() {
               Tài khoản TT133
               {data ? (
                 <span className="ml-2 text-base font-normal text-muted-foreground">
-                  ({data.length} tài khoản)
+                  ({filtered.length} tài khoản)
                 </span>
               ) : null}
             </CardTitle>
+            <Input
+              placeholder="Tìm mã hoặc tên tài khoản..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="mt-2 max-w-md"
+            />
           </CardHeader>
           <CardContent>
             {isLoading ? (
@@ -83,6 +102,20 @@ export default function AccountsPage() {
               <EmptyState
                 title="Chưa có tài khoản"
                 description="Hệ thống sẽ tự động khởi tạo danh mục TT133 khi đăng ký"
+              />
+            ) : !filtered.length ? (
+              <EmptyState
+                title="Không tìm thấy tài khoản"
+                description="Thử từ khóa khác hoặc xóa bộ lọc"
+                action={
+                  <button
+                    type="button"
+                    className="text-sm text-primary hover:underline"
+                    onClick={() => setSearch('')}
+                  >
+                    Xóa tìm kiếm
+                  </button>
+                }
               />
             ) : (
               <div className="space-y-6">

@@ -4,22 +4,26 @@ import {
   AlertTriangle,
   BellRing,
   Building2,
+  ChevronLeft,
+  ChevronRight,
   CreditCard,
   Lock,
   Mail,
   ScrollText,
+  Search,
   Sliders,
   Trash2,
   UserPlus,
   Users,
 } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import { AuditLogPanel } from '@/components/audit/AuditLogPanel';
 import { Header } from '@/components/layout/Header';
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog';
+import { TransactionSourceBadge } from '@/components/shared/TransactionSourceBadge';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -181,7 +185,8 @@ function NotificationsTab() {
 
   // Sync from server once
   const [synced, setSynced] = useState(false);
-  if (data && !synced) {
+  useEffect(() => {
+    if (!data || synced) return;
     setForm({
       emailEnabled: data.emailEnabled,
       email: data.email ?? '',
@@ -189,7 +194,7 @@ function NotificationsTab() {
       slackWebhookUrl: data.slackWebhookUrl ?? '',
     });
     setSynced(true);
-  }
+  }, [data, synced]);
 
   const { mutate: save, isPending } = useMutation({
     mutationFn: () => api.put('/settings/notifications', form),
@@ -501,8 +506,12 @@ interface PlanData {
   pricePerMonth: number;
   transactionQuota: number;
   transactionUsed: number;
+  currentCycleStart: string;
   currentCycleEnd: string;
   status: string;
+  copilotQuota: number;
+  copilotUsed: number;
+  usageBreakdown?: { fromBank: number; fromImport: number };
 }
 
 interface UpgradeResult {
@@ -567,6 +576,254 @@ interface BillingPlan {
   overagePricePerTransaction: number | null;
 }
 
+interface PaymentOrder {
+  id: string;
+  orderCode: string;
+  orderType: 'upgrade' | 'overage';
+  targetPlan: string;
+  amount: number;
+  status: 'pending' | 'paid' | 'failed' | 'expired';
+  paidAt: string | null;
+  createdAt: string;
+}
+
+interface PaymentHistoryResponse {
+  data: PaymentOrder[];
+  meta: { total: number; page: number; limit: number; totalPages: number };
+}
+
+const ORDER_TYPE_LABEL: Record<string, string> = {
+  upgrade: 'Nâng cấp gói',
+  overage: 'Vượt quota',
+};
+
+const STATUS_LABEL: Record<string, string> = {
+  pending: 'Chờ thanh toán',
+  paid: 'Đã thanh toán',
+  failed: 'Thất bại',
+  expired: 'Hết hạn',
+};
+
+const STATUS_CLASS: Record<string, string> = {
+  pending:
+    'bg-yellow-50 text-yellow-700 border-yellow-200 dark:bg-yellow-950 dark:text-yellow-300 dark:border-yellow-800',
+  paid: 'bg-green-50 text-green-700 border-green-200 dark:bg-green-950 dark:text-green-300 dark:border-green-800',
+  failed:
+    'bg-red-50 text-red-700 border-red-200 dark:bg-red-950 dark:text-red-300 dark:border-red-800',
+  expired: 'bg-muted text-muted-foreground border-border',
+};
+
+function useDebounce<T>(value: T, delay: number): T {
+  const [debounced, setDebounced] = useState(value);
+  useEffect(() => {
+    const t = setTimeout(() => setDebounced(value), delay);
+    return () => clearTimeout(t);
+  }, [value, delay]);
+  return debounced;
+}
+
+function PaymentHistoryTable() {
+  const [orderType, setOrderType] = useState<string>('all');
+  const [status, setStatus] = useState<string>('all');
+  const [fromDate, setFromDate] = useState('');
+  const [toDate, setToDate] = useState('');
+  const [page, setPage] = useState(1);
+  const LIMIT = 10;
+
+  const debouncedFrom = useDebounce(fromDate, 400);
+  const debouncedTo = useDebounce(toDate, 400);
+
+  // Reset page khi filter thay đổi
+  const resetPage = useCallback(() => setPage(1), []);
+  useEffect(() => {
+    resetPage();
+  }, [orderType, status, debouncedFrom, debouncedTo, resetPage]);
+
+  const params = new URLSearchParams({ page: String(page), limit: String(LIMIT) });
+  if (orderType !== 'all') params.set('orderType', orderType);
+  if (status !== 'all') params.set('status', status);
+  if (debouncedFrom) params.set('fromDate', debouncedFrom);
+  if (debouncedTo) params.set('toDate', debouncedTo);
+
+  const { data, isLoading } = useQuery({
+    queryKey: ['billing', 'payment-history', orderType, status, debouncedFrom, debouncedTo, page],
+    queryFn: () =>
+      api
+        .get<{ data: PaymentHistoryResponse }>(`/billing/payment-history?${params.toString()}`)
+        .then((r) => r.data.data),
+    placeholderData: (prev) => prev,
+  });
+
+  const orders = data?.data ?? [];
+  const meta = data?.meta;
+  const hasActiveFilter = orderType !== 'all' || status !== 'all' || fromDate || toDate;
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-base">Lịch sử thanh toán</CardTitle>
+        <CardDescription>
+          Toàn bộ giao dịch thanh toán gói dịch vụ và phí vượt quota
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        {/* Filters */}
+        <div className="flex flex-wrap gap-2">
+          <Select value={orderType} onValueChange={setOrderType}>
+            <SelectTrigger className="h-8 w-40 text-xs">
+              <SelectValue placeholder="Loại giao dịch" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Tất cả loại</SelectItem>
+              <SelectItem value="upgrade">Nâng cấp gói</SelectItem>
+              <SelectItem value="overage">Vượt quota</SelectItem>
+            </SelectContent>
+          </Select>
+
+          <Select value={status} onValueChange={setStatus}>
+            <SelectTrigger className="h-8 w-44 text-xs">
+              <SelectValue placeholder="Trạng thái" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Tất cả trạng thái</SelectItem>
+              <SelectItem value="pending">Chờ thanh toán</SelectItem>
+              <SelectItem value="paid">Đã thanh toán</SelectItem>
+              <SelectItem value="failed">Thất bại</SelectItem>
+              <SelectItem value="expired">Hết hạn</SelectItem>
+            </SelectContent>
+          </Select>
+
+          <div className="flex items-center gap-1.5">
+            <Input
+              type="date"
+              value={fromDate}
+              onChange={(e) => setFromDate(e.target.value)}
+              className="h-8 w-36 text-xs"
+              placeholder="Từ ngày"
+            />
+            <span className="text-xs text-muted-foreground">—</span>
+            <Input
+              type="date"
+              value={toDate}
+              onChange={(e) => setToDate(e.target.value)}
+              className="h-8 w-36 text-xs"
+              placeholder="Đến ngày"
+            />
+          </div>
+
+          {hasActiveFilter && (
+            <Button
+              size="sm"
+              variant="ghost"
+              className="h-8 text-xs text-muted-foreground"
+              onClick={() => {
+                setOrderType('all');
+                setStatus('all');
+                setFromDate('');
+                setToDate('');
+              }}
+            >
+              Xóa bộ lọc
+            </Button>
+          )}
+        </div>
+
+        {/* Table */}
+        {isLoading ? (
+          <div className="space-y-2">
+            {Array.from({ length: 4 }).map((_, i) => (
+              // biome-ignore lint/suspicious/noArrayIndexKey: skeleton
+              <Skeleton key={i} className="h-10 w-full" />
+            ))}
+          </div>
+        ) : orders.length === 0 ? (
+          <div className="flex flex-col items-center gap-2 py-10 text-muted-foreground">
+            <Search className="size-8 opacity-30" />
+            <p className="text-sm">Không có giao dịch nào</p>
+          </div>
+        ) : (
+          <div className="overflow-x-auto rounded-md border">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b bg-muted/40 text-xs text-muted-foreground">
+                  <th className="px-4 py-2.5 text-left font-medium">Mã đơn</th>
+                  <th className="px-4 py-2.5 text-left font-medium">Loại</th>
+                  <th className="px-4 py-2.5 text-left font-medium">Gói</th>
+                  <th className="px-4 py-2.5 text-right font-medium">Số tiền</th>
+                  <th className="px-4 py-2.5 text-left font-medium">Trạng thái</th>
+                  <th className="px-4 py-2.5 text-left font-medium">Ngày tạo</th>
+                  <th className="px-4 py-2.5 text-left font-medium">Ngày thanh toán</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y">
+                {orders.map((o) => (
+                  <tr key={o.id} className="hover:bg-muted/30 transition-colors">
+                    <td className="px-4 py-3 font-mono text-xs text-muted-foreground">
+                      {o.orderCode}
+                    </td>
+                    <td className="px-4 py-3">{ORDER_TYPE_LABEL[o.orderType] ?? o.orderType}</td>
+                    <td className="px-4 py-3">
+                      <Badge variant="outline" className="text-xs uppercase">
+                        {PLAN_LABEL[o.targetPlan as SubscriptionPlan] ?? o.targetPlan}
+                      </Badge>
+                    </td>
+                    <td className="px-4 py-3 text-right font-medium">{formatVND(o.amount)}</td>
+                    <td className="px-4 py-3">
+                      <span
+                        className={cn(
+                          'inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium',
+                          STATUS_CLASS[o.status],
+                        )}
+                      >
+                        {STATUS_LABEL[o.status] ?? o.status}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3 text-xs text-muted-foreground">
+                      {formatDateVN(o.createdAt)}
+                    </td>
+                    <td className="px-4 py-3 text-xs text-muted-foreground">
+                      {o.paidAt ? formatDateVN(o.paidAt) : '—'}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        {/* Pagination */}
+        {meta && meta.totalPages > 1 && (
+          <div className="flex items-center justify-between pt-1">
+            <p className="text-xs text-muted-foreground">
+              {meta.total} kết quả · Trang {meta.page}/{meta.totalPages}
+            </p>
+            <div className="flex gap-1">
+              <Button
+                size="icon"
+                variant="outline"
+                className="size-7"
+                disabled={page <= 1}
+                onClick={() => setPage((p) => p - 1)}
+              >
+                <ChevronLeft className="size-3.5" />
+              </Button>
+              <Button
+                size="icon"
+                variant="outline"
+                className="size-7"
+                disabled={page >= meta.totalPages}
+                onClick={() => setPage((p) => p + 1)}
+              >
+                <ChevronRight className="size-3.5" />
+              </Button>
+            </div>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
 function formatPlanQuota(quota: number): string {
   if (quota >= 999_999) return 'Không giới hạn';
   return `${quota.toLocaleString('vi-VN')} GD/tháng`;
@@ -591,6 +848,7 @@ function BillingTab() {
   const [selectedPlan, setSelectedPlan] = useState<string | null>(null);
   const [overagePaymentOpen, setOveragePaymentOpen] = useState(false);
   const [overageResult, setOverageResult] = useState<OveragePaymentResult | null>(null);
+  const [cycleDetailOpen, setCycleDetailOpen] = useState(false);
 
   // Mở sẵn dialog chọn gói khi được điều hướng từ nút "Nâng cấp gói dịch vụ" (?upgrade=1)
   useEffect(() => {
@@ -703,10 +961,19 @@ function BillingTab() {
     ? Math.min(100, Math.round((data.transactionUsed / data.transactionQuota) * 100))
     : 0;
   const isNearLimit = usedPct >= 80;
+
+  const copilotUnlimited = data?.copilotQuota === -1;
+  const copilotUsedPct =
+    data && !copilotUnlimited
+      ? Math.min(100, Math.round((data.copilotUsed / data.copilotQuota) * 100))
+      : 0;
+  const copilotNearLimit = copilotUsedPct >= 80;
+  const copilotExceeded = copilotUsedPct >= 100;
+
   const isDev = import.meta.env.DEV;
 
   return (
-    <>
+    <div className="space-y-6">
       <Card>
         <CardHeader>
           <div className="flex items-start justify-between gap-4">
@@ -771,11 +1038,78 @@ function BillingTab() {
                     Sắp đạt giới hạn. Nâng cấp gói để tiếp tục nhận giao dịch.
                   </p>
                 )}
+                {data.transactionUsed > 0 &&
+                  data.usageBreakdown &&
+                  (data.usageBreakdown.fromBank > 0 || data.usageBreakdown.fromImport > 0) && (
+                    <div className="flex flex-wrap items-center gap-x-4 gap-y-1 pt-0.5 text-xs text-muted-foreground">
+                      <span className="flex items-center gap-1">
+                        <span className="inline-block size-2 rounded-full bg-primary" />
+                        Ngân hàng: {data.usageBreakdown.fromBank.toLocaleString()}
+                      </span>
+                      <span className="flex items-center gap-1">
+                        <span className="inline-block size-2 rounded-full bg-amber-500" />
+                        Import Excel: {data.usageBreakdown.fromImport.toLocaleString()}
+                      </span>
+                    </div>
+                  )}
+                {data.transactionUsed > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setCycleDetailOpen(true)}
+                    className="text-xs text-primary underline-offset-2 hover:underline"
+                  >
+                    Xem chi tiết giao dịch trong chu kỳ →
+                  </button>
+                )}
               </div>
+
+              {/* Copilot quota */}
+              {!copilotUnlimited && (
+                <div className="space-y-1.5">
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">Lượt chat Copilot</span>
+                    <span
+                      className={cn(
+                        'font-medium',
+                        copilotExceeded
+                          ? 'text-destructive'
+                          : copilotNearLimit
+                            ? 'text-orange-500'
+                            : undefined,
+                      )}
+                    >
+                      {data.copilotUsed.toLocaleString()} / {data.copilotQuota.toLocaleString()}
+                    </span>
+                  </div>
+                  <Progress
+                    value={copilotUsedPct}
+                    className={cn(
+                      copilotExceeded
+                        ? '[&>div]:bg-destructive'
+                        : copilotNearLimit
+                          ? '[&>div]:bg-orange-500'
+                          : undefined,
+                    )}
+                  />
+                  {copilotExceeded && (
+                    <p className="text-xs text-destructive">
+                      Đã dùng hết lượt chat Copilot. Nâng cấp gói để tiếp tục.
+                    </p>
+                  )}
+                  {copilotNearLimit && !copilotExceeded && (
+                    <p className="text-xs text-orange-500">
+                      Sắp hết lượt chat Copilot trong chu kỳ này.
+                    </p>
+                  )}
+                </div>
+              )}
             </>
           )}
         </CardContent>
       </Card>
+
+      {/* Lịch sử thanh toán */}
+      <PaymentHistoryTable />
 
       {/* Banner phí vượt quota */}
       {pendingOverage && (
@@ -1054,7 +1388,276 @@ function BillingTab() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </>
+
+      {/* Dialog chi tiết giao dịch trong chu kỳ */}
+      {data && (
+        <CycleTransactionsDialog
+          open={cycleDetailOpen}
+          onOpenChange={setCycleDetailOpen}
+          cycleStart={data.currentCycleStart}
+          cycleEnd={data.currentCycleEnd}
+        />
+      )}
+    </div>
+  );
+}
+
+interface CycleTransaction {
+  id: string;
+  transactionId: string;
+  amount: number;
+  content: string;
+  transactionDate: string;
+  createdAt: string;
+  senderAccount: string | null;
+  source: 'cas' | 'import';
+  classification: {
+    debitAccount: string | null;
+    creditAccount: string | null;
+    status: string;
+  } | null;
+}
+
+interface CycleTransactionsDialogProps {
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+  cycleStart: string;
+  cycleEnd: string;
+}
+
+function CycleTransactionsDialog({
+  open,
+  onOpenChange,
+  cycleStart,
+  cycleEnd,
+}: CycleTransactionsDialogProps) {
+  const [search, setSearch] = useState('');
+  const [fromDate, setFromDate] = useState('');
+  const [toDate, setToDate] = useState('');
+  const [page, setPage] = useState(1);
+  const LIMIT = 15;
+  const debouncedSearch = useDebounce(search, 400);
+  const debouncedFrom = useDebounce(fromDate, 400);
+  const debouncedTo = useDebounce(toDate, 400);
+
+  const hasFilter = search || fromDate || toDate;
+
+  // Reset page khi filter thay đổi
+  useEffect(() => {
+    setPage(1);
+  }, [debouncedSearch, debouncedFrom, debouncedTo]);
+
+  // Clamp: from/to phải nằm trong cycleStart–cycleEnd
+  const effectiveFrom = debouncedFrom
+    ? new Date(
+        Math.max(new Date(debouncedFrom).getTime(), new Date(cycleStart).getTime()),
+      ).toISOString()
+    : cycleStart;
+  const effectiveTo = debouncedTo
+    ? new Date(
+        Math.min(new Date(`${debouncedTo}T23:59:59Z`).getTime(), new Date(cycleEnd).getTime()),
+      ).toISOString()
+    : cycleEnd;
+
+  const params = new URLSearchParams({
+    cycleStart: effectiveFrom,
+    cycleEnd: effectiveTo,
+    limit: String(LIMIT),
+    page: String(page),
+  });
+  if (debouncedSearch) params.set('search', debouncedSearch);
+
+  const { data, isLoading } = useQuery({
+    queryKey: ['billing', 'cycle-transactions', effectiveFrom, effectiveTo, debouncedSearch, page],
+    queryFn: () =>
+      api
+        .get<{ data: { items: CycleTransaction[]; total: number; page: number; limit: number } }>(
+          `/billing/cycle-transactions?${params.toString()}`,
+        )
+        .then((r) => r.data.data),
+    enabled: open,
+    placeholderData: (prev) => prev,
+  });
+
+  const items = data?.items ?? [];
+  const totalPages = data ? Math.ceil(data.total / LIMIT) : 1;
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-3xl max-h-[85vh] flex flex-col">
+        <DialogHeader>
+          <DialogTitle>Giao dịch trong chu kỳ hiện tại</DialogTitle>
+          <DialogDescription>
+            {formatDateVN(cycleStart)} — {formatDateVN(cycleEnd)} · Giao dịch đã tính quota
+          </DialogDescription>
+        </DialogHeader>
+
+        {/* Filters */}
+        <div className="flex flex-wrap gap-2">
+          <div className="relative flex-1 min-w-48">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+            <Input
+              placeholder="Tìm theo nội dung, số tài khoản..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="pl-9 h-9 text-sm"
+            />
+          </div>
+          <div className="flex items-center gap-1.5">
+            <Input
+              type="date"
+              value={fromDate}
+              min={cycleStart.slice(0, 10)}
+              max={toDate || cycleEnd.slice(0, 10)}
+              onChange={(e) => setFromDate(e.target.value)}
+              className="h-9 w-36 text-xs"
+            />
+            <span className="text-xs text-muted-foreground">—</span>
+            <Input
+              type="date"
+              value={toDate}
+              min={fromDate || cycleStart.slice(0, 10)}
+              max={cycleEnd.slice(0, 10)}
+              onChange={(e) => setToDate(e.target.value)}
+              className="h-9 w-36 text-xs"
+            />
+          </div>
+          {hasFilter && (
+            <Button
+              size="sm"
+              variant="ghost"
+              className="h-9 text-xs text-muted-foreground px-2"
+              onClick={() => {
+                setSearch('');
+                setFromDate('');
+                setToDate('');
+              }}
+            >
+              Xóa bộ lọc
+            </Button>
+          )}
+        </div>
+
+        {/* Table */}
+        <div className="flex-1 overflow-auto rounded-md border min-h-0">
+          {isLoading ? (
+            <div className="space-y-2 p-4">
+              {Array.from({ length: 5 }).map((_, i) => (
+                // biome-ignore lint/suspicious/noArrayIndexKey: skeleton
+                <Skeleton key={i} className="h-10 w-full" />
+              ))}
+            </div>
+          ) : items.length === 0 ? (
+            <div className="flex flex-col items-center gap-2 py-12 text-muted-foreground">
+              <Search className="size-8 opacity-30" />
+              <p className="text-sm">Không tìm thấy giao dịch nào</p>
+            </div>
+          ) : (
+            <table className="w-full text-sm">
+              <thead className="sticky top-0 bg-muted/80 backdrop-blur-sm">
+                <tr className="border-b text-xs text-muted-foreground">
+                  <th className="px-4 py-2.5 text-left font-medium">Ngày</th>
+                  <th className="px-4 py-2.5 text-left font-medium">Nội dung</th>
+                  <th className="px-4 py-2.5 text-left font-medium">Nguồn</th>
+                  <th className="px-4 py-2.5 text-right font-medium">Số tiền</th>
+                  <th className="px-4 py-2.5 text-left font-medium">Định khoản</th>
+                  <th className="px-4 py-2.5 text-left font-medium">Trạng thái</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y">
+                {items.map((tx) => (
+                  <tr key={tx.id} className="hover:bg-muted/30 transition-colors">
+                    <td className="px-4 py-3 text-xs text-muted-foreground whitespace-nowrap">
+                      {formatDateVN(tx.transactionDate)}
+                    </td>
+                    <td className="px-4 py-3 max-w-[240px]">
+                      <p className="truncate text-xs">{tx.content || '—'}</p>
+                      {tx.senderAccount && (
+                        <p className="text-[11px] text-muted-foreground font-mono truncate">
+                          {tx.senderAccount}
+                        </p>
+                      )}
+                    </td>
+                    <td className="px-4 py-3 whitespace-nowrap">
+                      <TransactionSourceBadge source={tx.source} size="md" />
+                    </td>
+                    <td
+                      className={cn(
+                        'px-4 py-3 text-right font-medium text-sm whitespace-nowrap',
+                        tx.amount >= 0
+                          ? 'text-green-600 dark:text-green-400'
+                          : 'text-red-600 dark:text-red-400',
+                      )}
+                    >
+                      {tx.amount >= 0 ? '+' : ''}
+                      {formatVND(tx.amount)}
+                    </td>
+                    <td className="px-4 py-3 text-xs text-muted-foreground font-mono whitespace-nowrap">
+                      {tx.classification
+                        ? `Nợ ${tx.classification.debitAccount ?? '?'} / Có ${tx.classification.creditAccount ?? '?'}`
+                        : '—'}
+                    </td>
+                    <td className="px-4 py-3">
+                      {tx.classification ? (
+                        <span
+                          className={cn(
+                            'inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium whitespace-nowrap',
+                            tx.classification.status === 'classified'
+                              ? 'bg-green-50 text-green-700 border-green-200 dark:bg-green-950 dark:text-green-300 dark:border-green-800'
+                              : tx.classification.status === 'review'
+                                ? 'bg-yellow-50 text-yellow-700 border-yellow-200 dark:bg-yellow-950 dark:text-yellow-300 dark:border-yellow-800'
+                                : 'bg-muted text-muted-foreground border-border',
+                          )}
+                        >
+                          {tx.classification.status === 'classified'
+                            ? 'Đã định khoản'
+                            : tx.classification.status === 'review'
+                              ? 'Chờ duyệt'
+                              : tx.classification.status === 'skipped'
+                                ? 'Bỏ qua'
+                                : 'Chờ xử lý'}
+                        </span>
+                      ) : (
+                        <span className="text-xs text-muted-foreground">Chưa định khoản</span>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+
+        {/* Pagination */}
+        {totalPages > 1 && (
+          <div className="flex items-center justify-between pt-1 border-t">
+            <p className="text-xs text-muted-foreground">
+              {data?.total ?? 0} kết quả · Trang {page}/{totalPages}
+            </p>
+            <div className="flex gap-1">
+              <Button
+                size="icon"
+                variant="outline"
+                className="size-7"
+                disabled={page <= 1}
+                onClick={() => setPage((p) => p - 1)}
+              >
+                <ChevronLeft className="size-3.5" />
+              </Button>
+              <Button
+                size="icon"
+                variant="outline"
+                className="size-7"
+                disabled={page >= totalPages}
+                onClick={() => setPage((p) => p + 1)}
+              >
+                <ChevronRight className="size-3.5" />
+              </Button>
+            </div>
+          </div>
+        )}
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -1203,6 +1806,7 @@ export default function SettingsPage() {
                   value={tab.value}
                   disabled={locked}
                   className="gap-1.5"
+                  title={tab.label}
                 >
                   <Icon className="size-3.5 shrink-0" />
                   <span className="hidden sm:inline">{tab.label}</span>

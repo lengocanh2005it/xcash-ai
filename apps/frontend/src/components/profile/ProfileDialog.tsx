@@ -119,16 +119,26 @@ export function ProfileDialog({ open, onOpenChange }: ProfileDialogProps) {
       avatarFile: File | null;
     }) => {
       let result: UserProfile | undefined;
+      let profilePatched = false;
 
-      if (Object.keys(payload).length > 0) {
-        result = await patchApiData<UserProfile>('/profile', payload);
+      try {
+        if (Object.keys(payload).length > 0) {
+          result = await patchApiData<UserProfile>('/profile', payload);
+          profilePatched = true;
+        }
+
+        if (avatarFile) {
+          result = await uploadAvatarFile(avatarFile);
+        }
+
+        return result;
+      } catch (error) {
+        if (profilePatched) {
+          await queryClient.invalidateQueries({ queryKey: ['profile'] });
+          throw new Error('PROFILE_PARTIAL');
+        }
+        throw error;
       }
-
-      if (avatarFile) {
-        result = await uploadAvatarFile(avatarFile);
-      }
-
-      return result;
     },
     onSuccess: (result) => {
       if (result) {
@@ -138,7 +148,13 @@ export function ProfileDialog({ open, onOpenChange }: ProfileDialogProps) {
       toast.success('Đã cập nhật thông tin');
       onOpenChange(false);
     },
-    onError: (error) => toast.error(getErrorMessage(error, 'Không thể lưu thông tin')),
+    onError: (error) => {
+      if (error instanceof Error && error.message === 'PROFILE_PARTIAL') {
+        toast.error('Đã cập nhật thông tin nhưng không upload được ảnh đại diện');
+        return;
+      }
+      toast.error(getErrorMessage(error, 'Không thể lưu thông tin'));
+    },
   });
 
   const canEditBusiness = profile?.role === Role.ADMIN && Boolean(profile?.tenantId);

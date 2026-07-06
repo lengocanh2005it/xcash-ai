@@ -107,6 +107,7 @@ function buildAccountBreakdownUrl(params: {
 
 export default function ReportsPage() {
   const now = new Date();
+  const yearOptions = [now.getFullYear() - 1, now.getFullYear()];
   const { user } = useAuth();
   const canExport = hasPlanAccess(user?.plan, SubscriptionPlan.PRO);
   const requiredPlanLabel = PLAN_LABEL[SubscriptionPlan.PRO];
@@ -227,7 +228,7 @@ export default function ReportsPage() {
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {[2024, 2025, 2026].map((y) => (
+                {yearOptions.map((y) => (
                   <SelectItem key={y} value={String(y)}>
                     {y}
                   </SelectItem>

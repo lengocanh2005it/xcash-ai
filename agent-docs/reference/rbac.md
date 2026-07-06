@@ -89,7 +89,7 @@ KHÔNG thao tác nghiệp vụ             Thao tác đầy đủ trong tenant m
 ```
 # Tất cả endpoint dưới /api/v1/partner/* chỉ Cas Partner gọi được (PartnerGuard)
 # ─── ĐÃ TRIỂN KHAI ───
-GET    /api/v1/partner/tenants              # Danh sách DN — filter search/status/plan
+GET    /api/v1/partner/tenants              # Danh sách DN — filter search/status/plan; ?page=&limit= → { items, page, limit, total, totalPages } (mặc định 20/trang trên FE Tenants); không truyền page/limit → trả full list (Partner Dashboard dùng cho MRR/plan breakdown)
 GET    /api/v1/partner/tenants/:id          # Chi tiết 1 DN (plan, GD tháng, AI accuracy, members)
 GET    /api/v1/partner/stats                # Tổng quan hệ thống (gộp usage-stats; ?fromDate=&toDate=)
 GET    /api/v1/partner/revenue-trend        # Doanh thu theo tháng + breakdown theo gói (mặc định 6 tháng)
@@ -99,16 +99,16 @@ PATCH  /api/v1/partner/tenants/:id/activate # Mở khóa tài khoản doanh nghi
 PATCH  /api/v1/partner/tenants/:id/plan     # Đặt gói bất kỳ cho tenant (Partner, không chặn downgrade)
 GET    /api/v1/partner/plan-pricing         # Xem giá/quota/phí vượt từng gói
 PATCH  /api/v1/partner/plan-pricing/:plan   # Sửa giá/quota Starter+ (Free cố định)
+GET    /api/v1/partner/audit-logs           # Audit log toàn hệ thống — phân trang, lọc tenantId/action
 
 # ─── CHƯA LÀM (spec gốc, không chặn go-live) ───
 GET    /api/v1/partner/revenue              # Tổng quan doanh thu (một phần đã có trong /stats và /revenue-trend)
 GET    /api/v1/partner/revenue/:tenantId    # Doanh thu 1 tenant tách riêng
 GET    /api/v1/partner/usage-stats          # Tách riêng (đã gộp vào GET /partner/stats)
-GET    /api/v1/partner/audit-logs           # Audit log toàn hệ thống (bảng audit_logs đã ghi, chưa có API đọc)
 GET    /api/v1/partner/system-health        # Health + webhook delivery status
 ```
 
-> Ghi chú trạng thái: danh sách **đã triển khai** khớp `partner.controller.ts` — xem bảng API đầy đủ trong `agent-docs/00-current-state.md`. FE Partner: `/partner/dashboard`, `/partner/tenants`, `/partner/payments`, `/partner/plans` (layout sidebar riêng).
+> Ghi chú trạng thái: danh sách **đã triển khai** khớp `partner.controller.ts` — xem bảng API đầy đủ trong `agent-docs/00-current-state.md`. FE Partner: `/partner/dashboard`, `/partner/tenants` (paginate 20/trang), `/partner/payments`, `/partner/audit-logs`, `/partner/plans` — layout **sidebar riêng** (`PartnerLayout`), không dùng sidebar 8 mục tenant.
 
 ### Database Schema bổ sung
 

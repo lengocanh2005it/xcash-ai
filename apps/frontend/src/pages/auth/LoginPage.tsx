@@ -76,7 +76,7 @@ export default function LoginPage() {
         </div>
 
         <div className="flex items-center justify-between">
-          <Label htmlFor="rememberMe" className="cursor-pointer font-normal text-muted-foreground">
+          <Label className="cursor-pointer font-normal text-muted-foreground">
             <Checkbox
               id="rememberMe"
               checked={rememberMe}

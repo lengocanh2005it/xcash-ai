@@ -3,6 +3,7 @@ import { Bell, CheckCheck, Trash2, X } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
+import { ConfirmDialog } from '@/components/shared/ConfirmDialog';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import {
@@ -43,6 +44,7 @@ export function NotificationBell({ className, align = 'right' }: NotificationBel
   const [open, setOpen] = useState(false);
   const [selectMode, setSelectMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [confirmDeleteAllOpen, setConfirmDeleteAllOpen] = useState(false);
   const [dropdownStyle, setDropdownStyle] = useState({ top: 0, left: 0, width: DROPDOWN_WIDTH });
   const triggerRef = useRef<HTMLButtonElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -170,6 +172,7 @@ export function NotificationBell({ className, align = 'right' }: NotificationBel
       return;
     }
     await deleteAll.mutateAsync();
+    setConfirmDeleteAllOpen(false);
     exitSelectMode();
   };
 
@@ -257,7 +260,7 @@ export function NotificationBell({ className, align = 'right' }: NotificationBel
                     size="sm"
                     className="h-7 gap-1.5 px-2 text-xs text-destructive hover:text-destructive"
                     disabled={isMutating}
-                    onClick={handleDeleteAll}
+                    onClick={() => setConfirmDeleteAllOpen(true)}
                   >
                     <Trash2 className="size-3.5" />
                     Xóa tất cả
@@ -350,6 +353,16 @@ export function NotificationBell({ className, align = 'right' }: NotificationBel
         ) : null}
       </Button>
       {dropdown}
+      <ConfirmDialog
+        open={confirmDeleteAllOpen}
+        onOpenChange={setConfirmDeleteAllOpen}
+        title="Xóa tất cả thông báo?"
+        description="Hành động này không thể hoàn tác. Tất cả thông báo sẽ bị xóa vĩnh viễn."
+        confirmLabel="Xóa tất cả"
+        variant="destructive"
+        loading={deleteAll.isPending}
+        onConfirm={handleDeleteAll}
+      />
     </div>
   );
 }

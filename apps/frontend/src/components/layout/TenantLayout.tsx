@@ -3,18 +3,18 @@ import { useState } from 'react';
 import { Outlet } from 'react-router-dom';
 import { ThemeToggle } from '@/components/shared/ThemeToggle';
 import { Button } from '@/components/ui/button';
+import { useSidebarCollapsed } from '@/hooks/useSidebarCollapsed';
 import { DesktopSidebar, MobileSidebar } from './Sidebar';
 
 export function TenantLayout() {
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [sidebarCollapsed, toggleSidebarCollapsed] = useSidebarCollapsed(
+    'xcash_tenant_sidebar_collapsed',
+  );
 
   return (
     <div className="flex h-svh items-stretch overflow-hidden bg-muted">
-      <DesktopSidebar
-        collapsed={sidebarCollapsed}
-        onToggleCollapsed={() => setSidebarCollapsed((value) => !value)}
-      />
+      <DesktopSidebar collapsed={sidebarCollapsed} onToggleCollapsed={toggleSidebarCollapsed} />
       <MobileSidebar open={mobileNavOpen} onClose={() => setMobileNavOpen(false)} />
 
       <div className="flex min-w-0 flex-1 flex-col">

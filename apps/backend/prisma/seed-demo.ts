@@ -434,8 +434,9 @@ async function ensureCasGrant(tenantId: string): Promise<string> {
 }
 
 async function clearPreviousSeed(tenantId: string): Promise<number> {
+  const seedPrefix = `${SEED_PREFIX}${tenantId.slice(0, 8)}-`;
   const seeded = await prisma.transaction.findMany({
-    where: { tenantId, transactionId: { startsWith: SEED_PREFIX } },
+    where: { tenantId, transactionId: { startsWith: seedPrefix } },
     select: { id: true },
   });
   if (seeded.length === 0) return 0;
@@ -464,7 +465,7 @@ async function seedTransactions(
       data: {
         tenantId,
         grantId,
-        transactionId: `${SEED_PREFIX}${item.key}`,
+        transactionId: `${SEED_PREFIX}${tenantId.slice(0, 8)}-${item.key}`,
         amount: item.amount,
         senderAccount: item.sender,
         receiverAccount: item.amount >= 0 ? '1903658888' : '9876543210',
@@ -526,6 +527,24 @@ async function main(): Promise<void> {
   }
 
   const { created, byStatus } = await seedTransactions(tenantId, grantId, user.id);
+
+  const sub = await prisma.subscription.findFirst({
+    where: { tenantId, status: 'active' },
+    select: { id: true, currentCycleStart: true, currentCycleEnd: true },
+  });
+  if (sub) {
+    const totalInCycle = await prisma.transaction.count({
+      where: {
+        tenantId,
+        source: { in: ['cas', 'import'] },
+        createdAt: { gte: sub.currentCycleStart, lte: sub.currentCycleEnd },
+      },
+    });
+    await prisma.subscription.update({
+      where: { id: sub.id },
+      data: { transactionUsedThisCycle: totalInCycle },
+    });
+  }
 
   console.log(`✅ Đã seed ${created} giao dịch demo:`);
   for (const [status, count] of Object.entries(byStatus)) {

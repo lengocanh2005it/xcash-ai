@@ -345,10 +345,10 @@ AI Classification Pipeline
 ### Các màn hình chính
 
 **1. Dashboard**
-- Tổng thu / tổng chi tháng này
-- Số giao dịch đã phân loại / chờ review
-- Biểu đồ thu-chi theo tuần (Recharts)
-- Feed giao dịch mới nhất với nhãn phân loại
+- 4 stat cards: định khoản hôm nay, chờ định khoản, chờ Human Review, độ chính xác AI tháng — nguồn từ `/reports/summary`, `/review/count`, count API transactions (không tính từ 100 GD chart)
+- Stat cards clickable → Review / Transactions (filter status)
+- Banner CTA liên kết NH khi chưa onboarding banking
+- Biểu đồ xu hướng 7 ngày + donut trạng thái + feed 5 GD gần nhất — từ `GET /transactions?limit=100`
 
 **2. Transactions**
 - Table giao dịch + nhãn phân loại AI (Nợ/Có TK)

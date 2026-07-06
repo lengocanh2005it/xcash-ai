@@ -1,7 +1,7 @@
 import { Injectable, Logger, NotFoundException, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { NotificationType, Prisma } from '@prisma/client';
-import { Observable, Subject } from 'rxjs';
+import { interval, merge, Observable, Subject } from 'rxjs';
 import { filter, map } from 'rxjs/operators';
 import { PrismaService } from '../../prisma/prisma.service';
 import { NotificationDeliveryService } from './notification-delivery.service';
@@ -22,10 +22,17 @@ export interface NotificationListResult {
   total: number;
 }
 
+export interface TransactionEvent {
+  type: 'transaction_classified';
+  transactionId: string;
+  status: 'classified' | 'review';
+}
+
 @Injectable()
 export class NotificationService {
   private readonly logger = new Logger(NotificationService.name);
   private readonly eventBus = new Subject<{ tenantId: string; notification: NotificationItem }>();
+  private readonly txEventBus = new Subject<{ tenantId: string; event: TransactionEvent }>();
 
   constructor(
     private readonly prisma: PrismaService,
@@ -47,6 +54,38 @@ export class NotificationService {
       filter((e) => e.tenantId === tenantId),
       map((e) => ({ data: e.notification })),
     );
+  }
+
+  streamTransactionEventsForToken(token: string): Observable<{ data: TransactionEvent }> {
+    let tenantId: string;
+    try {
+      const payload = this.jwtService.verify<{ tenantId?: string }>(token);
+      if (!payload.tenantId) throw new Error('no tenantId');
+      tenantId = payload.tenantId;
+    } catch {
+      throw new UnauthorizedException('Token không hợp lệ');
+    }
+
+    const events$ = this.txEventBus.pipe(
+      filter((e) => e.tenantId === tenantId),
+      map((e) => ({ data: e.event })),
+    );
+    // keepalive mỗi 25s để tránh idle-close của proxy/browser
+    const keepalive$ = interval(25_000).pipe(
+      map(() => ({ data: { type: 'keepalive' } as unknown as TransactionEvent })),
+    );
+    return merge(events$, keepalive$);
+  }
+
+  emitTransactionClassified(
+    tenantId: string,
+    transactionId: string,
+    status: 'classified' | 'review',
+  ): void {
+    this.txEventBus.next({
+      tenantId,
+      event: { type: 'transaction_classified', transactionId, status },
+    });
   }
 
   private userScope(userId: string): Prisma.NotificationWhereInput {

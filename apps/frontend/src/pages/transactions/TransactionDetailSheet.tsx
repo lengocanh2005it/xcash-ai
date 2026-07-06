@@ -4,6 +4,7 @@ import { toast } from 'sonner';
 import { ConfidenceBadge } from '@/components/shared/ConfidenceBadge';
 import { SignedTransactionAmount } from '@/components/shared/SignedTransactionAmount';
 import { TransactionStatusBadge } from '@/components/shared/TransactionStatusBadge';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
   Sheet,
@@ -62,7 +63,10 @@ export function TransactionDetailSheet({
         <SheetHeader>
           <SheetTitle>Chi tiết giao dịch</SheetTitle>
           {displayTxn ? (
-            <SheetDescription className="font-mono text-xs">
+            <SheetDescription
+              className="truncate font-mono text-xs"
+              title={displayTxn.transactionId}
+            >
               {displayTxn.transactionId}
             </SheetDescription>
           ) : null}
@@ -86,8 +90,16 @@ export function TransactionDetailSheet({
               {displayTxn.senderAccount ? (
                 <p className="mt-1 text-sm">{displayTxn.senderAccount}</p>
               ) : null}
-              <div className="mt-2">
+              <div className="mt-2 flex items-center gap-2 flex-wrap">
                 <TransactionStatusBadge status={displayTxn.status} />
+                {displayTxn.source === 'import' && (
+                  <Badge
+                    variant="outline"
+                    className="border-amber-300 bg-amber-50 text-amber-700 dark:border-amber-700 dark:bg-amber-950/40 dark:text-amber-400"
+                  >
+                    Import Excel
+                  </Badge>
+                )}
               </div>
             </div>
 

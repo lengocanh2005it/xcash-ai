@@ -2,13 +2,13 @@
 
 > Mục đích: cho biết **chính xác** cái gì đã tồn tại trong repo ngay lúc này, để agent không cần `find`/`grep`/`ls` lại từ đầu mỗi session mới. File này phải được cập nhật mỗi khi có thay đổi cấu trúc đáng kể (thêm module, thêm page, đổi dependency lớn, thêm service hạ tầng). Nếu file này và thực tế code lệch nhau, **tin thực tế code**, và sửa lại file này ngay sau đó.
 
-Cập nhật lần cuối: **Copilot hardening + UX polish** — đồng bộ `reference/` (`rbac`, `ui-design`, `business-overview`, `tt133-accounting`, `sprint-plan`, `user-journey`).
+Cập nhật lần cuối: **Merge feat/excel-import + Copilot quota** — Import Excel (backend `import/` module, dialog 3 bước, filter nguồn, usageBreakdown billing) + Copilot hardening/quota trên nhánh `feat/copilot-function-calling`.
 
 ---
 
 ## Repo đang ở giai đoạn nào
 
-**Trạng thái: Sprint 1–3 HOÀN THÀNH. Sprint 4 code feature HOÀN THÀNH** (Partner, billing, notification, auth security). **Còn lại:** deploy VPS + SSL/nginx, docker-compose env production đầy đủ, final E2E QA thủ công, test notification Slack/Resend với credential thật.
+**Trạng thái: Sprint 1–3 HOÀN THÀNH. Sprint 4 code feature HOÀN THÀNH** (Partner, billing, notification, auth security). **Branch `feat/excel-import`:** Excel Import hoàn tất (Phase 1–3). **Còn lại:** deploy VPS + SSL/nginx, docker-compose env production đầy đủ, final E2E QA thủ công, test notification Slack/Resend với credential thật.
 
 **Đã xong (Sprint 1–2):**
 - Auth, Onboarding (Cas Link), Banking webhook, Transaction module ✅
@@ -68,6 +68,8 @@ Cập nhật lần cuối: **Copilot hardening + UX polish** — đồng bộ `r
 - **Hồ sơ tài khoản + avatar Azure Blob:** module `profile` — `GET/PATCH /profile`, `POST /profile/avatar` (multipart, lưu Azure Blob `avatars/{userId}/...`); cột `users.avatar_url`; FE click vùng user ở đáy sidebar → `ProfileDialog` (tab Cá nhân/Doanh nghiệp), cập nhật UI ngay qua `updateUser()` ✅
 - **Đổi mật khẩu (đã đăng nhập):** `POST /auth/change-password/request` (xác thực mật khẩu cũ → gửi OTP email), `POST /auth/change-password/resend`, `POST /auth/change-password/confirm` (OTP → đổi mật khẩu + revoke toàn bộ refresh token); FE nút "Đổi mật khẩu" trong tab Cá nhân của `ProfileDialog` → `ChangePasswordPanel` 2 bước (cùng dialog, không lồng modal); thành công → logout + redirect `/login` ✅
 - **Bulk reclassify:** `POST /transactions/bulk-reclassify` — enqueue AI hàng loạt (tối đa 50 GD, chỉ `pending`); FE `TransactionsPage` checkbox chọn + nút "Định khoản lại hàng loạt" (Admin/Accountant) ✅
+- **Excel Import (Phase 1–3):** migration `add_transaction_source_direction_import_batch` — thêm enum `TransactionSource { cas, import }`, `TransactionDirection { in, out }`, cột `transactions.source`/`direction`/`importBatchId`; `import` module backend (`POST /transactions/import/validate`, `POST /transactions/import`, `GET /transactions/import/template`); `GET /transactions` thêm filter `source`; `GET /billing/current-plan` thêm `usageBreakdown { fromBank, fromImport }`; audit label `transaction_import`; FE `ImportTransactionsDialog` (3 bước: upload → validate/preview → kết quả), nút "Nhập từ Excel" trên `TransactionsPage` (Admin/Accountant), badge amber "Import Excel" trên card/bảng/detail sheet, source filter trên filter bar, breakdown dots trên BillingTab ✅
+- **Fix RolesGuard @Public():** `RolesGuard.canActivate` giờ kiểm tra `IS_PUBLIC_KEY` trước — route `@Public()` bypass hoàn toàn, sửa lỗi SSE stream `/notifications/stream?token=` trả 401 ✅
 
 **Đã xong (Copilot Function Calling — Phase 1a–1d):**
 - Backend: migrate `POST /ai/copilot` sang OpenAI `runTools` — 7 tools ban đầu (thay `get_cas_integration_help` bằng `search_knowledge_base` + pgvector sau); hiện factory có 8 tool cố định + `search_casso_public` tùy chọn ✅
@@ -176,7 +178,8 @@ paypilot-ai/                                   ← tên folder local có thể k
 │   │   │       ├── 20260703140000_add_notifications/ ← bảng notifications + enum NotificationType ✅
 │   │   │       ├── 20260703150000_extend_notification_types/ ← thêm quota/billing/suspend types ✅
 │   │   │       ├── 20260703160000_add_user_email_verified_at/ ← cột users.email_verified_at + backfill user cũ ✅
-│   │   │       └── 20260704100000_add_user_avatar_url/ ← cột users.avatar_url ✅
+│   │   │       ├── 20260704100000_add_user_avatar_url/ ← cột users.avatar_url ✅
+│   │   │       └── 20260704162813_add_transaction_source_direction_import_batch/ ← enum TransactionSource/Direction, cột source/direction/importBatchId trên transactions ✅
 │   │   ├── package.json
 │   │   ├── nest-cli.json
 │   │   ├── .swcrc
@@ -271,7 +274,13 @@ paypilot-ai/                                   ← tên folder local có thể k
 │   │           ├── cas/
 │   │           ├── health/
 │   │           ├── onboarding/
-│   │           └── transaction/               # GET list + detail + reclassify + bulk-reclassify ✅
+│   │           ├── import/                    # Excel Import — validate, import, download template ✅
+│   │           │   ├── import.controller.ts   # POST /transactions/import/validate, /import, GET /import/template
+│   │           │   ├── import.service.ts
+│   │           │   ├── import.module.ts
+│   │           │   ├── import.service.spec.ts
+│   │           │   └── dto/import.dto.ts
+│   │           └── transaction/               # GET list (+ filter source) + detail + reclassify + bulk-reclassify ✅
 │   └── frontend/
 │       ├── vite.config.ts
 │       ├── package.json
@@ -308,9 +317,9 @@ paypilot-ai/                                   ← tên folder local có thể k
 │           ├── pages/
 │           │   ├── auth/                      # LoginPage, RegisterPage, VerifyEmailPage, AcceptInvitePage, ForgotPasswordPage, ResetPasswordPage ✅
 │           │   ├── onboarding/                # OnboardingPage, OnboardingCallbackPage ✅
-│           │   ├── dashboard/DashboardPage.tsx # summary API + review count + stat cards clickable + CTA onboarding ✅
+│           │   ├── dashboard/DashboardPage.tsx # summary API + stat cards clickable + CTA onboarding ✅
 │           │   ├── accounts/AccountsPage.tsx  # Danh mục TK TT133 + tìm mã/tên ✅
-│           │   ├── transactions/              # TransactionsPage (checkbox chọn GD pending + định khoản lại hàng loạt) + TransactionDetailSheet ✅
+│           │   ├── transactions/              # TransactionsPage (filter source, nút Import Excel, badge amber, bulk-reclassify) + TransactionDetailSheet + ImportTransactionsDialog ✅
 │           │   ├── review/ReviewPage.tsx      # Human Review queue (confirm/correct/skip) + SwipeableReviewCard mobile ✅
 │           │   ├── reports/ReportsPage.tsx    # Báo cáo tháng + export Excel ✅
 │           │   ├── analytics/AnalyticsPage.tsx # So sánh tháng, BarChart thu/chi, top 5 danh mục ✅
@@ -358,7 +367,10 @@ paypilot-ai/                                   ← tên folder local có thể k
 | POST | `/onboarding/banking/callback` | Admin, Accountant | |
 | GET | `/onboarding/status` | Bearer JWT | |
 | POST | `/webhook/cas` | Public (signature) | → enqueue `ai-classify` |
-| GET | `/transactions` | Bearer JWT | Filter: `status`, `from_date`, `to_date`, `search` (nội dung/mã GD/người gửi), pagination — kèm `classification` nested |
+| GET | `/transactions` | Bearer JWT | Filter: `status`, `source` (cas\|import), `from_date`, `to_date`, `search` (nội dung/mã GD/người gửi), pagination — kèm `classification` nested |
+| GET | `/transactions/import/template` | Admin, Accountant | Download file Excel template (.xlsx) |
+| POST | `/transactions/import/validate` | Admin, Accountant | Validate file Excel (multipart) — trả lỗi hoặc preview rows |
+| POST | `/transactions/import` | Admin, Accountant | Import giao dịch từ Excel (multipart) — trả `{ imported, skipped, errors }`, ghi audit log |
 | GET | `/transactions/:id` | Bearer JWT | Kèm `classification` nested |
 | POST | `/transactions/:id/reclassify` | Admin, Accountant | Đẩy lại job AI cho giao dịch `pending` (enqueue `ai-classify` vào `webhook-processing`) |
 | POST | `/transactions/bulk-reclassify` | Admin, Accountant | Đẩy lại job AI hàng loạt — body `{ ids: string[] }`, tối đa 50 GD/lần, chỉ `pending` |
@@ -402,7 +414,7 @@ paypilot-ai/                                   ← tên folder local có thể k
 | POST | `/auth/accept-invite` | Public | Đặt mật khẩu + kích hoạt + cấp JWT |
 | GET | `/audit-logs` | Admin, Accountant | Nhật ký hoạt động tenant — phân trang, lọc `action`, `fromDate`, `toDate` |
 | GET | `/billing/plans` | Admin, Accountant | Danh sách gói từ `plan_pricing` |
-| GET | `/billing/current-plan` | Admin, Accountant | Gói hiện tại |
+| GET | `/billing/current-plan` | Admin, Accountant | Gói hiện tại — kèm `usageBreakdown { fromBank, fromImport }` |
 | GET | `/billing/usage-history` | Admin | Lịch sử sử dụng quota |
 | POST | `/billing/upgrade` | Admin | Tạo PaymentOrder + link PayOS (mock fallback khi chưa có keys) |
 | POST | `/billing/upgrade/:orderCode/mock-confirm` | Admin | Dev-only — giả lập xác nhận thanh toán upgrade |
@@ -450,7 +462,9 @@ transaction_classifications
 **Đổi:**
 - `tenants.matching_threshold` → `tenants.classification_threshold` (default 85)
 - `TransactionStatus` enum: `matched` → `classified`
-- `transactions`: bỏ cột `confidence_score`, thêm relation `classification`
+- `transactions`: bỏ cột `confidence_score`, thêm relation `classification`; thêm `source (TransactionSource)`, `direction (TransactionDirection)`, `importBatchId (String?)`
+- `TransactionSource` enum: `cas` (từ webhook Cas Balance Hook), `import` (nhập tay từ Excel)
+- `TransactionDirection` enum: `in` (thu), `out` (chi)
 
 ---
 
@@ -535,6 +549,8 @@ postinstall      → prisma generate
 - **Copilot tools cache keys:** `copilot:tool:summary:{tenantId}:{y}-{m}` TTL=300s; `copilot:tool:banking:{tenantId}` TTL=60s. Key cũ `copilot:context:{tenantId}:{y}-{m}` còn dùng khi flag=0 (fallback).
 - **Overage billing flow:** (1) webhook banking ghi `usageLog(metric='overage_transaction')` khi Starter/Pro vượt quota; (2) cron `BillingCycleService` 2am daily tìm sub hết `currentCycleEnd` → gọi `createOverageOrder()` nếu có overage → reset `transactionUsedThisCycle=0` và `currentCycleEnd`; (3) tenant thấy banner cam trên BillingTab → click "Thanh toán ngay" → tạo PayOS order `orderType='overage'`; (4) webhook PayOS xác nhận → `confirmPayment()` nhận biết `orderType` → chỉ mark paid + auditLog, không đổi gói. Giá đọc từ `planPricing.overagePricePerTransaction` (không hardcode).
 - **`payment_orders.order_type`:** field `orderType` (default `'upgrade'`) — Prisma client typed bình thường, không cần `as any`.
+- **Excel Import:** `POST /transactions/import` và `/validate` nhận `multipart/form-data` với field `file`. Backend dùng `xlsx` package đọc file, validate từng row, tạo transaction với `source = TransactionSource.import` và `importBatchId` chung cho cả batch. Template download từ `GET /transactions/import/template` (buffer xlsx trả về).
+- **`RolesGuard` + `@Public()`:** `RolesGuard.canActivate` kiểm tra `IS_PUBLIC_KEY` trước — nếu route đánh dấu `@Public()` thì bỏ qua toàn bộ auth check (kể cả cas_partner block). Điều này cho phép `/notifications/stream?token=` (đã `@Public()`) hoạt động bình thường dù `request.user` là undefined.
 - **Rate limiting per-tenant:** `TenantThrottlerGuard` override `getTracker()` để dùng `tenantId` (fallback `userId` rồi IP) làm key thay vì mặc định theo IP — vì nhiều user cùng tenant có thể gọi API từ IP khác nhau, và Cas Partner (không có `tenantId`) vẫn cần giới hạn theo user. Áp dụng global qua `APP_GUARD`, bỏ qua `/health`. Giới hạn: `RATE_LIMIT_PER_MINUTE` (default 120 request/phút/tenant).
 - **Tenant suspend chặn login:** `auth.service.ts` → `login()` tra `subscription` mới nhất theo `tenantId`, nếu `status === 'suspended'` thì từ chối đăng nhập luôn (không cho vào hệ thống dù JWT hợp lệ) — khớp edge case đã ghi trong `rbac.md`.
 

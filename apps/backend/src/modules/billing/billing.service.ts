@@ -6,12 +6,24 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import type { SubscriptionPlan } from '@prisma/client';
+import { type SubscriptionPlan, TransactionSource } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { NotificationService } from '../notification/notification.service';
 import { PayosService } from './payos.service';
 
 const OVERAGE_PLANS = ['starter', 'pro'] as const;
+
+function startOfDayUTC(d: Date | null): Date {
+  const r = new Date(d ?? 0);
+  r.setUTCHours(0, 0, 0, 0);
+  return r;
+}
+
+function endOfDayUTC(d: Date | null): Date {
+  const r = new Date(d ?? 0);
+  r.setUTCHours(23, 59, 59, 999);
+  return r;
+}
 
 @Injectable()
 export class BillingService {
@@ -55,6 +67,26 @@ export class BillingService {
       select: { copilotQuota: true },
     });
 
+    const cycleFrom = startOfDayUTC(sub.currentCycleStart);
+    const cycleTo = endOfDayUTC(sub.currentCycleEnd);
+
+    const [fromBank, fromImport] = await Promise.all([
+      this.prisma.transaction.count({
+        where: {
+          tenantId,
+          source: TransactionSource.cas,
+          transactionDate: { gte: cycleFrom, lte: cycleTo },
+        },
+      }),
+      this.prisma.transaction.count({
+        where: {
+          tenantId,
+          source: TransactionSource.import,
+          transactionDate: { gte: cycleFrom, lte: cycleTo },
+        },
+      }),
+    ]);
+
     return {
       plan: sub.plan,
       pricePerMonth: Number(sub.pricePerMonth),
@@ -65,6 +97,7 @@ export class BillingService {
       status: sub.status,
       copilotQuota: planPricing?.copilotQuota ?? -1,
       copilotUsed: sub.copilotUsedThisCycle,
+      usageBreakdown: { fromBank, fromImport },
     };
   }
 

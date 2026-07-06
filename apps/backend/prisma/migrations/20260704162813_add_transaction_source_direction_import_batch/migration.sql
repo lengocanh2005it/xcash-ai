@@ -1,8 +1,8 @@
 -- CreateEnum
-CREATE TYPE "TransactionDirection" AS ENUM ('in', 'out');
+CREATE TYPE "TransactionSource" AS ENUM ('cas', 'import');
 
 -- CreateEnum
-CREATE TYPE "TransactionSource" AS ENUM ('cas', 'import');
+CREATE TYPE "TransactionDirection" AS ENUM ('in', 'out');
 
 -- CreateTable
 CREATE TABLE "transaction_import_batches" (

@@ -1,5 +1,5 @@
 import { Type } from 'class-transformer';
-import { IsInt, IsISO8601, IsOptional, IsString, Max, MaxLength, Min } from 'class-validator';
+import { IsIn, IsInt, IsISO8601, IsOptional, IsString, Max, MaxLength, Min } from 'class-validator';
 
 export class ListTransactionsQueryDto {
   @IsOptional()
@@ -31,4 +31,8 @@ export class ListTransactionsQueryDto {
   @IsString()
   @MaxLength(200)
   search?: string;
+
+  @IsOptional()
+  @IsIn(['cas', 'import'])
+  source?: 'cas' | 'import';
 }

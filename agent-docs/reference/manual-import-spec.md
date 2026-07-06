@@ -536,37 +536,37 @@ Không cần thay đổi logic tổng hợp ở `report.service.ts`. Vì:
 
 ### Phase 1 — Schema + Backend core (~1.5 ngày)
 
-- [ ] Migration: enum `source`/`direction`, bảng `transaction_import_batches`, FK `import_batch_id`
-- [ ] Backfill `direction` cho GD Cas cũ (SQL trong migration)
-- [ ] Cập nhật `shared-types` (enum + interface mục 8)
-- [ ] Tách `TransactionQuotaService` từ `banking.service.ts`; refactor webhook dùng service chung
-- [ ] `banking.service.ts`: set `source=cas` + `direction` khi tạo GD mới
-- [ ] `classification.service.ts`: `resolveDirection()` theo mục 4
-- [ ] `ImportService`: `parseExcel`, `normalizeAmount`, `validateRows`, `importRows`, `generateTransactionId`
-- [ ] `ImportController`: template, validate, import, history
-- [ ] `ImportModule` + đăng ký `app.module.ts`
-- [ ] `audit-log.labels.ts`: thêm `transaction_import: 'Import giao dịch từ Excel'`
-- [ ] Unit test: `validateRows`, `normalizeAmount`, `resolveDirection`, quota batch
+- [x] Migration: enum `source`/`direction`, bảng `transaction_import_batches`, FK `import_batch_id`
+- [x] Backfill `direction` cho GD Cas cũ (SQL trong migration)
+- [x] Cập nhật `shared-types` (enum + interface mục 8)
+- [x] Tách `TransactionQuotaService` từ `banking.service.ts`; refactor webhook dùng service chung
+- [x] `banking.service.ts`: set `source=cas` + `direction` khi tạo GD mới
+- [x] `classification.service.ts`: `resolveDirection()` theo mục 4
+- [x] `ImportService`: `parseExcel`, `normalizeAmount`, `validateRows`, `importRows`, `generateTransactionId`
+- [x] `ImportController`: template, validate, import, history
+- [x] `ImportModule` + đăng ký `app.module.ts`
+- [x] `audit-log.labels.ts`: thêm `transaction_import: 'Import giao dịch từ Excel'`
+- [x] Unit test: `validateRows`, `normalizeAmount`, `resolveDirection`, quota batch
 
 ### Phase 2 — Frontend Dialog (~1 ngày)
 
-- [ ] `ImportTransactionsDialog` (3 bước)
-- [ ] Nút "Nhập từ Excel" trên `TransactionsPage`
-- [ ] Badge "Import Excel" + filter `source`
-- [ ] Invalidate queries sau import
+- [x] `ImportTransactionsDialog` (3 bước)
+- [x] Nút "Nhập từ Excel" trên `TransactionsPage`
+- [x] Badge "Import Excel" + filter `source`
+- [x] Invalidate queries sau import
 
 ### Phase 3 — Polish (~0.5 ngày)
 
-- [ ] `usage-history` breakdown `fromBank` / `fromImport`
-- [ ] `SettingsPage` BillingTab hiển thị breakdown
-- [ ] Quota warning trong preview import
+- [x] `usage-history` breakdown `fromBank` / `fromImport`
+- [x] `SettingsPage` BillingTab hiển thị breakdown
+- [x] Quota warning trong preview import
 - [ ] E2E: upload → validate → import → review → confirm → báo cáo đúng (kể cả GD Chi tiền mặt)
 
 ### Phase 4 — Template Excel (~0.5 ngày)
 
-- [ ] Template `.xlsx`: header, 3 dòng ví dụ xám, sheet "Hướng dẫn"
-- [ ] Dropdown `Thu`/`Chi` trên cột Loại (Excel data validation)
-- [ ] `GET /import/template` gen dynamic từ `xlsx` lib
+- [x] Template `.xlsx`: header, 3 dòng ví dụ xám, sheet "Hướng dẫn"
+- [x] Dropdown `Thu`/`Chi` trên cột Loại (Excel data validation)
+- [x] `GET /import/template` gen dynamic từ `xlsx` lib
 
 **Tổng ước tính: ~3.5 ngày**
 

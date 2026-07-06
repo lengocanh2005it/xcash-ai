@@ -61,6 +61,16 @@ enum PaymentOrderStatus {
   failed
 }
 
+enum TransactionSource {
+  cas
+  import
+}
+
+enum TransactionDirection {
+  in
+  out
+}
+
 enum NotificationType {
   review_needed
   quota_warning
@@ -89,6 +99,7 @@ model Tenant {
   chartOfAccounts     ChartOfAccount[]
   classifications     TransactionClassification[]
   notifications       Notification[]
+  importBatches       TransactionImportBatch[]
 
   @@map("tenants")
 }
@@ -125,18 +136,40 @@ model Transaction {
   senderAccount   String?           @map("sender_account")
   receiverAccount String?           @map("receiver_account")
   content         String?
-  transactionDate DateTime          @map("transaction_date")
-  status          TransactionStatus @default(pending)
-  createdAt       DateTime          @default(now()) @map("created_at")
-  updatedAt       DateTime          @updatedAt @map("updated_at")
+  transactionDate DateTime             @map("transaction_date")
+  status          TransactionStatus    @default(pending)
+  source          TransactionSource    @default(cas)
+  direction       TransactionDirection @default(in)
+  importBatchId   String?              @map("import_batch_id")
+  createdAt       DateTime             @default(now()) @map("created_at")
+  updatedAt       DateTime             @updatedAt @map("updated_at")
 
-  tenant         Tenant                     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenant         Tenant                      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   classification TransactionClassification?
+  importBatch    TransactionImportBatch?     @relation(fields: [importBatchId], references: [id], onDelete: SetNull)
 
   @@index([tenantId])
   @@index([grantId])
   @@index([tenantId, status])
+  @@index([tenantId, source])
   @@map("transactions")
+}
+
+model TransactionImportBatch {
+  id            String   @id @default(uuid())
+  tenantId      String   @map("tenant_id")
+  fileName      String   @map("file_name")
+  totalRows     Int      @map("total_rows")
+  importedCount Int      @map("imported_count")
+  skippedCount  Int      @map("skipped_count")
+  importedBy    String   @map("imported_by")
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  tenant       Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  transactions Transaction[]
+
+  @@index([tenantId, createdAt])
+  @@map("transaction_import_batches")
 }
 
 model ChartOfAccount {

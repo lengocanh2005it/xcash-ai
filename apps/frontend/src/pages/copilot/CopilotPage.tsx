@@ -229,151 +229,151 @@ export default function CopilotPage() {
   };
 
   return (
-    <PlanGate minPlan={SubscriptionPlan.STARTER} featureName="AI Copilot">
-      <div className="relative flex flex-col h-full bg-background">
-        {/* ── Theme toggle ── */}
-        <div className="absolute top-3 right-8 z-10">
-          <ThemeToggle />
-        </div>
-
-        {/* ── Chat area ── */}
-        <div
-          className="flex-1 overflow-y-auto"
-          role="log"
-          aria-live="polite"
-          aria-label="Lịch sử hội thoại AI Copilot"
-        >
-          {/* Welcome state */}
-          {isWelcome && (
-            <div className="flex flex-col items-center justify-center min-h-full px-4 py-12 gap-8">
-              <div className="flex flex-col items-center gap-3 text-center">
-                <div className="flex size-14 items-center justify-center rounded-2xl bg-primary text-primary-foreground shadow-md">
-                  <Bot className="size-7" />
-                </div>
-                <div>
-                  <h1 className="text-2xl font-semibold tracking-tight">AI Copilot</h1>
-                  <p className="mt-1 text-sm text-muted-foreground max-w-sm">
-                    Hỏi đáp tài chính bằng ngôn ngữ tự nhiên — doanh thu, chi phí, định khoản TT133,
-                    liên kết ngân hàng.
-                  </p>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-2 w-full max-w-xl">
-                {SUGGESTIONS.map(({ icon: Icon, text }) => (
-                  <button
-                    key={text}
-                    type="button"
-                    onClick={() => sendMessage(text)}
-                    className="flex items-start gap-3 rounded-xl border border-border bg-muted/40 hover:bg-muted/70 px-4 py-3 text-left text-sm transition-colors group"
-                  >
-                    <Icon className="size-4 shrink-0 mt-0.5 text-muted-foreground group-hover:text-foreground transition-colors" />
-                    <span className="text-muted-foreground group-hover:text-foreground transition-colors leading-snug">
-                      {text}
-                    </span>
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Message list */}
-          {!isWelcome && (
-            <div className="mx-auto w-full max-w-3xl px-4 py-6 flex flex-col gap-6">
-              {messages.map((msg) =>
-                msg.role === 'user' ? (
-                  <div key={msg.id} className="flex justify-end">
-                    <div className="max-w-[75%] rounded-2xl rounded-tr-none bg-muted px-4 py-3 text-sm">
-                      {msg.content}
-                    </div>
+    <div className="relative flex h-full flex-col">
+      <div className="absolute top-3 right-4 z-20 sm:right-8">
+        <ThemeToggle />
+      </div>
+      <PlanGate minPlan={SubscriptionPlan.STARTER} featureName="AI Copilot">
+        <div className="relative flex min-h-0 flex-1 flex-col bg-background">
+          {/* ── Chat area ── */}
+          <div
+            className="flex-1 overflow-y-auto"
+            role="log"
+            aria-live="polite"
+            aria-label="Lịch sử hội thoại AI Copilot"
+          >
+            {/* Welcome state */}
+            {isWelcome && (
+              <div className="flex flex-col items-center justify-center min-h-full px-4 py-12 gap-8">
+                <div className="flex flex-col items-center gap-3 text-center">
+                  <div className="flex size-14 items-center justify-center rounded-2xl bg-primary text-primary-foreground shadow-md">
+                    <Bot className="size-7" />
                   </div>
-                ) : (
-                  <div key={msg.id} className="flex gap-3">
+                  <div>
+                    <h1 className="text-2xl font-semibold tracking-tight">AI Copilot</h1>
+                    <p className="mt-1 text-sm text-muted-foreground max-w-sm">
+                      Hỏi đáp tài chính bằng ngôn ngữ tự nhiên — doanh thu, chi phí, định khoản
+                      TT133, liên kết ngân hàng.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2 w-full max-w-xl">
+                  {SUGGESTIONS.map(({ icon: Icon, text }) => (
+                    <button
+                      key={text}
+                      type="button"
+                      onClick={() => sendMessage(text)}
+                      className="flex items-start gap-3 rounded-xl border border-border bg-muted/40 hover:bg-muted/70 px-4 py-3 text-left text-sm transition-colors group"
+                    >
+                      <Icon className="size-4 shrink-0 mt-0.5 text-muted-foreground group-hover:text-foreground transition-colors" />
+                      <span className="text-muted-foreground group-hover:text-foreground transition-colors leading-snug">
+                        {text}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Message list */}
+            {!isWelcome && (
+              <div className="mx-auto w-full max-w-3xl px-4 py-6 flex flex-col gap-6">
+                {messages.map((msg) =>
+                  msg.role === 'user' ? (
+                    <div key={msg.id} className="flex justify-end">
+                      <div className="max-w-[75%] rounded-2xl rounded-tr-none bg-muted px-4 py-3 text-sm">
+                        {msg.content}
+                      </div>
+                    </div>
+                  ) : (
+                    <div key={msg.id} className="flex gap-3">
+                      <div className="flex size-7 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground mt-0.5">
+                        <Bot className="size-4" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="text-sm leading-relaxed whitespace-pre-wrap">
+                          <HighlightedText text={msg.content} />
+                        </div>
+                        {msg.activities && msg.activities.length > 0 && (
+                          <CopilotSourceChips activities={msg.activities} />
+                        )}
+                      </div>
+                    </div>
+                  ),
+                )}
+
+                {/* Streaming bubble */}
+                {isLoading && streamingContent && (
+                  <div className="flex gap-3">
                     <div className="flex size-7 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground mt-0.5">
                       <Bot className="size-4" />
                     </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="text-sm leading-relaxed whitespace-pre-wrap">
-                        <HighlightedText text={msg.content} />
-                      </div>
-                      {msg.activities && msg.activities.length > 0 && (
-                        <CopilotSourceChips activities={msg.activities} />
-                      )}
+                    <div className="flex-1 text-sm leading-relaxed whitespace-pre-wrap">
+                      <HighlightedText text={streamingContent} />
+                      <span className="inline-block w-0.5 h-4 bg-foreground/70 ml-0.5 animate-pulse align-middle" />
                     </div>
                   </div>
-                ),
-              )}
-
-              {/* Streaming bubble */}
-              {isLoading && streamingContent && (
-                <div className="flex gap-3">
-                  <div className="flex size-7 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground mt-0.5">
-                    <Bot className="size-4" />
-                  </div>
-                  <div className="flex-1 text-sm leading-relaxed whitespace-pre-wrap">
-                    <HighlightedText text={streamingContent} />
-                    <span className="inline-block w-0.5 h-4 bg-foreground/70 ml-0.5 animate-pulse align-middle" />
-                  </div>
-                </div>
-              )}
-
-              {/* Loading indicator */}
-              {isLoading && !streamingContent && (
-                <div className="flex gap-3">
-                  <div className="flex size-7 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground mt-0.5">
-                    <Bot className="size-4" />
-                  </div>
-                  <div className="pt-1">
-                    <CopilotLoadingStatus activity={streamActivity} />
-                  </div>
-                </div>
-              )}
-
-              <div ref={bottomRef} />
-            </div>
-          )}
-
-          {isWelcome && <div ref={bottomRef} />}
-        </div>
-
-        {/* ── Input area ── */}
-        <div className={cn('px-4 pb-4 pt-2', isWelcome && 'pb-8')}>
-          <div className="mx-auto w-full max-w-3xl">
-            <div className="relative flex items-center gap-2 rounded-2xl border border-border bg-background shadow-sm px-4 py-3 focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-0 transition-shadow">
-              <textarea
-                ref={textareaRef}
-                rows={1}
-                placeholder="Nhắn tin với AI Copilot... (Enter gửi, Shift+Enter xuống dòng)"
-                value={input}
-                onChange={(e) => {
-                  setInput(e.target.value);
-                  autoResize();
-                }}
-                onKeyDown={handleKeyDown}
-                disabled={isLoading}
-                className="flex-1 resize-none bg-transparent text-sm outline-none placeholder:text-muted-foreground disabled:opacity-50 max-h-[200px] leading-relaxed"
-              />
-              <button
-                type="button"
-                onClick={() => sendMessage(input)}
-                disabled={isLoading || !input.trim()}
-                className={cn(
-                  'flex size-8 shrink-0 items-center justify-center rounded-lg transition-colors',
-                  input.trim() && !isLoading
-                    ? 'bg-primary text-primary-foreground hover:bg-primary/90'
-                    : 'bg-muted text-muted-foreground cursor-not-allowed',
                 )}
-                aria-label="Gửi"
-              >
-                <Send className="size-4" />
-              </button>
+
+                {/* Loading indicator */}
+                {isLoading && !streamingContent && (
+                  <div className="flex gap-3">
+                    <div className="flex size-7 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground mt-0.5">
+                      <Bot className="size-4" />
+                    </div>
+                    <div className="pt-1">
+                      <CopilotLoadingStatus activity={streamActivity} />
+                    </div>
+                  </div>
+                )}
+
+                <div ref={bottomRef} />
+              </div>
+            )}
+
+            {isWelcome && <div ref={bottomRef} />}
+          </div>
+
+          {/* ── Input area ── */}
+          <div className={cn('px-4 pb-4 pt-2', isWelcome && 'pb-8')}>
+            <div className="mx-auto w-full max-w-3xl">
+              <div className="relative flex items-center gap-2 rounded-2xl border border-border bg-background shadow-sm px-4 py-3 focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-0 transition-shadow">
+                <textarea
+                  ref={textareaRef}
+                  rows={1}
+                  placeholder="Nhắn tin với AI Copilot... (Enter gửi, Shift+Enter xuống dòng)"
+                  value={input}
+                  onChange={(e) => {
+                    setInput(e.target.value);
+                    autoResize();
+                  }}
+                  onKeyDown={handleKeyDown}
+                  disabled={isLoading}
+                  className="flex-1 resize-none bg-transparent text-sm outline-none placeholder:text-muted-foreground disabled:opacity-50 max-h-[200px] leading-relaxed"
+                />
+                <button
+                  type="button"
+                  onClick={() => sendMessage(input)}
+                  disabled={isLoading || !input.trim()}
+                  className={cn(
+                    'flex size-8 shrink-0 items-center justify-center rounded-lg transition-colors',
+                    input.trim() && !isLoading
+                      ? 'bg-primary text-primary-foreground hover:bg-primary/90'
+                      : 'bg-muted text-muted-foreground cursor-not-allowed',
+                  )}
+                  aria-label="Gửi"
+                >
+                  <Send className="size-4" />
+                </button>
+              </div>
+              <p className="mt-1.5 text-center text-[11px] text-muted-foreground/60">
+                AI Copilot có thể mắc lỗi. Kiểm tra thông tin quan trọng trước khi sử dụng.
+              </p>
             </div>
-            <p className="mt-1.5 text-center text-[11px] text-muted-foreground/60">
-              AI Copilot có thể mắc lỗi. Kiểm tra thông tin quan trọng trước khi sử dụng.
-            </p>
           </div>
         </div>
-      </div>
-    </PlanGate>
+      </PlanGate>
+    </div>
   );
 }

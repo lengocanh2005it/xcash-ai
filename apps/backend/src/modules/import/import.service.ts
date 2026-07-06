@@ -71,20 +71,21 @@ export class ImportService {
     // Excel serial number
     if (typeof raw === 'number') {
       const d = XLSX.SSF.parse_date_code(raw);
-      if (d) return new Date(Date.UTC(d.y, d.m - 1, d.d));
+      if (d) return new Date(Date.UTC(d.y, d.m - 1, d.d, 12, 0, 0));
     }
 
     const str = String(raw).trim();
 
     // dd/MM/yyyy or dd-MM-yyyy
     const dmyMatch = str.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{4})$/);
+    // Excel chỉ có ngày — dùng 12:00 UTC để sort cùng ngày ổn định hơn midnight
     if (dmyMatch) {
       const [, dd, mm, yyyy] = dmyMatch;
       const day = Number(dd);
       const month = Number(mm);
       const year = Number(yyyy);
       if (month < 1 || month > 12 || day < 1 || day > 31) return null;
-      const d = new Date(Date.UTC(year, month - 1, day));
+      const d = new Date(Date.UTC(year, month - 1, day, 12, 0, 0));
       // Verify no overflow (e.g., day=32 rolls over)
       if (d.getUTCDate() !== day || d.getUTCMonth() !== month - 1) return null;
       if (!Number.isNaN(d.getTime())) return d;

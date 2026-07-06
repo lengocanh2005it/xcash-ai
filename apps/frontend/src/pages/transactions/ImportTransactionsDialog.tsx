@@ -61,6 +61,7 @@ type Step = 'upload' | 'preview' | 'result';
 interface ImportTransactionsDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  onImported?: (result: ImportResult) => void;
 }
 
 async function downloadTemplate() {
@@ -73,7 +74,11 @@ async function downloadTemplate() {
   URL.revokeObjectURL(url);
 }
 
-export function ImportTransactionsDialog({ open, onOpenChange }: ImportTransactionsDialogProps) {
+export function ImportTransactionsDialog({
+  open,
+  onOpenChange,
+  onImported,
+}: ImportTransactionsDialogProps) {
   const queryClient = useQueryClient();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -119,6 +124,10 @@ export function ImportTransactionsDialog({ open, onOpenChange }: ImportTransacti
       setStep('result');
       queryClient.invalidateQueries({ queryKey: ['transactions'] });
       queryClient.invalidateQueries({ queryKey: ['review'] });
+      onImported?.(result);
+      toast.success(
+        `Đã import ${result.imported.toLocaleString()} giao dịch — đang lọc theo Import Excel`,
+      );
     },
     onError: (error) => {
       toast.error(getErrorMessage(error, 'Import thất bại — vui lòng thử lại'));

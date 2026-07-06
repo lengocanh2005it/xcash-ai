@@ -13,18 +13,6 @@ import { PayosService } from './payos.service';
 
 const OVERAGE_PLANS = ['starter', 'pro'] as const;
 
-function startOfDayUTC(d: Date | null): Date {
-  const r = new Date(d ?? 0);
-  r.setUTCHours(0, 0, 0, 0);
-  return r;
-}
-
-function endOfDayUTC(d: Date | null): Date {
-  const r = new Date(d ?? 0);
-  r.setUTCHours(23, 59, 59, 999);
-  return r;
-}
-
 @Injectable()
 export class BillingService {
   private readonly logger = new Logger(BillingService.name);
@@ -67,22 +55,19 @@ export class BillingService {
       select: { copilotQuota: true },
     });
 
-    const cycleFrom = startOfDayUTC(sub.currentCycleStart);
-    const cycleTo = endOfDayUTC(sub.currentCycleEnd);
-
     const [fromBank, fromImport] = await Promise.all([
       this.prisma.transaction.count({
         where: {
           tenantId,
           source: TransactionSource.cas,
-          transactionDate: { gte: cycleFrom, lte: cycleTo },
+          createdAt: { gte: sub.currentCycleStart, lte: sub.currentCycleEnd },
         },
       }),
       this.prisma.transaction.count({
         where: {
           tenantId,
           source: TransactionSource.import,
-          transactionDate: { gte: cycleFrom, lte: cycleTo },
+          createdAt: { gte: sub.currentCycleStart, lte: sub.currentCycleEnd },
         },
       }),
     ]);
@@ -358,7 +343,7 @@ export class BillingService {
             },
           },
         },
-        orderBy: { createdAt: 'desc' },
+        orderBy: [{ transactionDate: 'desc' }, { createdAt: 'desc' }],
         skip,
         take: limit,
       }),

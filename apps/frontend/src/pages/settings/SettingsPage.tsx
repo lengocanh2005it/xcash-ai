@@ -1015,21 +1015,10 @@ function BillingTab() {
               <div className="space-y-1.5">
                 <div className="flex justify-between text-sm">
                   <span className="text-muted-foreground">Giao dịch đã dùng</span>
-                  <div className="flex items-center gap-2">
-                    <span className={cn('font-medium', isNearLimit && 'text-destructive')}>
-                      {data.transactionUsed.toLocaleString()} /{' '}
-                      {data.transactionQuota.toLocaleString()}
-                    </span>
-                    {data.transactionUsed > 0 && (
-                      <button
-                        type="button"
-                        onClick={() => setCycleDetailOpen(true)}
-                        className="text-xs text-primary underline-offset-2 hover:underline"
-                      >
-                        Xem chi tiết
-                      </button>
-                    )}
-                  </div>
+                  <span className={cn('font-medium', isNearLimit && 'text-destructive')}>
+                    {data.transactionUsed.toLocaleString()} /{' '}
+                    {data.transactionQuota.toLocaleString()}
+                  </span>
                 </div>
                 <Progress value={usedPct} className={cn(isNearLimit && '[&>div]:bg-destructive')} />
                 {isNearLimit && (
@@ -1037,9 +1026,10 @@ function BillingTab() {
                     Sắp đạt giới hạn. Nâng cấp gói để tiếp tục nhận giao dịch.
                   </p>
                 )}
-                {data.usageBreakdown &&
+                {data.transactionUsed > 0 &&
+                  data.usageBreakdown &&
                   (data.usageBreakdown.fromBank > 0 || data.usageBreakdown.fromImport > 0) && (
-                    <div className="flex items-center gap-4 pt-1 text-xs text-muted-foreground">
+                    <div className="flex flex-wrap items-center gap-x-4 gap-y-1 pt-0.5 text-xs text-muted-foreground">
                       <span className="flex items-center gap-1">
                         <span className="inline-block size-2 rounded-full bg-primary" />
                         Ngân hàng: {data.usageBreakdown.fromBank.toLocaleString()}
@@ -1054,7 +1044,7 @@ function BillingTab() {
                   <button
                     type="button"
                     onClick={() => setCycleDetailOpen(true)}
-                    className="pt-0.5 text-xs text-primary underline-offset-2 hover:underline"
+                    className="text-xs text-primary underline-offset-2 hover:underline"
                   >
                     Xem chi tiết giao dịch trong chu kỳ →
                   </button>

@@ -60,7 +60,7 @@ export class ClassificationService {
             select: { content: true, amount: true, transactionDate: true, grantId: true },
           },
         },
-        orderBy: { createdAt: 'desc' },
+        orderBy: [{ transaction: { transactionDate: 'desc' } }, { createdAt: 'desc' }],
         skip,
         take: limit,
       }),

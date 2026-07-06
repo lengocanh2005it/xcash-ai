@@ -649,6 +649,10 @@ export default function TransactionsPage() {
           setImportDialogOpen(open);
           if (!open) refetch();
         }}
+        onImported={() => {
+          setSource('import');
+          setPage(1);
+        }}
       />
 
       <ConfirmDialog

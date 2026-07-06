@@ -44,6 +44,11 @@ export class TransactionService {
       ...(query.source ? { source: query.source as TransactionSource } : {}),
     };
 
+    const orderBy: Prisma.TransactionOrderByWithRelationInput[] =
+      query.source === TransactionSource.import
+        ? [{ createdAt: 'desc' }, { transactionDate: 'desc' }]
+        : [{ transactionDate: 'desc' }, { createdAt: 'desc' }];
+
     const [items, total] = await Promise.all([
       this.prisma.transaction.findMany({
         where,
@@ -68,7 +73,7 @@ export class TransactionService {
             },
           },
         },
-        orderBy: { createdAt: 'desc' },
+        orderBy,
         skip,
         take: limit,
       }),

@@ -160,7 +160,13 @@ export class CopilotToolService {
   private async searchCassoPublic(query: string) {
     if (!query.trim()) return { results: [], disclaimer: '' };
 
-    const cacheKey = `copilot:tool:casso_search:${Buffer.from(query).toString('base64').slice(0, 64)}`;
+    // Đảm bảo query luôn liên quan đến Casso
+    const CASSO_KEYWORDS = ['casso', 'cas link', 'bankhub', 'cas balance'];
+    const normalizedQuery = query.toLowerCase();
+    const hasCassoKeyword = CASSO_KEYWORDS.some((kw) => normalizedQuery.includes(kw));
+    const safeQuery = hasCassoKeyword ? query : `casso ${query}`;
+
+    const cacheKey = `copilot:tool:casso_search:${Buffer.from(safeQuery).toString('base64').slice(0, 64)}`;
     const cached = await this.redisService.client.get(cacheKey);
     if (cached) return JSON.parse(cached) as object;
 
@@ -171,7 +177,7 @@ export class CopilotToolService {
     }
 
     const client = tavily({ apiKey });
-    const response = await client.search(`${query} site:casso.vn`, {
+    const response = await client.search(`${safeQuery} site:casso.vn`, {
       maxResults: 3,
       searchDepth: 'basic',
       includeAnswer: true,

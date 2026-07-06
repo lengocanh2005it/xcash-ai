@@ -161,5 +161,38 @@ export function buildCopilotTools(
         function: bind('get_cas_integration_help'),
       },
     },
+    {
+      type: 'function',
+      function: {
+        name: 'search_transactions',
+        description:
+          'Tìm kiếm giao dịch theo từ khóa nội dung hoặc tài khoản. Dùng source="cas" để lọc giao dịch từ ngân hàng, source="import" cho giao dịch import Excel.',
+        strict: true,
+        parameters: {
+          type: 'object',
+          properties: {
+            keyword: {
+              type: 'string',
+              description: 'Từ khóa tìm trong nội dung hoặc số tài khoản gửi',
+            },
+            source: {
+              type: 'string',
+              enum: ['cas', 'import'],
+              description: 'Lọc theo nguồn: cas = ngân hàng, import = Excel',
+            },
+            limit: {
+              type: 'integer',
+              minimum: 1,
+              maximum: 20,
+              description: 'Số kết quả, mặc định 10',
+            },
+          },
+          required: ['keyword', 'source', 'limit'],
+          additionalProperties: false,
+        },
+        parse: JSON.parse,
+        function: bind('search_transactions'),
+      },
+    },
   ];
 }

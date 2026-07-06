@@ -102,6 +102,41 @@ export class CopilotToolService {
       case 'get_cas_integration_help':
         return getCasIntegrationFaq(String(args.topic));
 
+      case 'search_transactions': {
+        const keyword = String(args.keyword ?? '');
+        const source = args.source
+          ? (String(args.source) as import('@prisma/client').TransactionSource)
+          : undefined;
+        const limit = Math.min(20, Math.max(1, Number(args.limit ?? 10)));
+        const items = await this.prisma.transaction.findMany({
+          where: {
+            tenantId,
+            ...(keyword
+              ? {
+                  OR: [
+                    { content: { contains: keyword, mode: 'insensitive' } },
+                    { senderAccount: { contains: keyword, mode: 'insensitive' } },
+                  ],
+                }
+              : {}),
+            ...(source ? { source } : {}),
+          },
+          select: {
+            transactionId: true,
+            content: true,
+            amount: true,
+            transactionDate: true,
+            source: true,
+            classification: {
+              select: { debitAccount: true, creditAccount: true, status: true },
+            },
+          },
+          orderBy: { transactionDate: 'desc' },
+          take: limit,
+        });
+        return { items, total: items.length };
+      }
+
       default:
         throw new BadRequestException(`Unknown copilot tool: ${name}`);
     }

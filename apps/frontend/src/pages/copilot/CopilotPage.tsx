@@ -1,6 +1,8 @@
 import { SubscriptionPlan } from '@xcash/shared-types';
 import { Bot, Send, User } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
+import type { StreamActivity } from '@/components/copilot/CopilotLoadingStatus';
+import { CopilotLoadingStatus } from '@/components/copilot/CopilotLoadingStatus';
 import type { CopilotActivity } from '@/components/copilot/CopilotSourceChips';
 import { CopilotSourceChips } from '@/components/copilot/CopilotSourceChips';
 import { Header } from '@/components/layout/Header';
@@ -8,7 +10,7 @@ import { HighlightedText } from '@/components/shared/HighlightedText';
 import { PlanGate } from '@/components/shared/PlanGate';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { api } from '@/lib/api';
+import { API_BASE_URL, api, getAccessToken } from '@/lib/api';
 import { cn } from '@/lib/utils';
 
 interface Message {
@@ -26,6 +28,22 @@ const SUGGESTED_QUESTIONS = [
   'Sao không thấy giao dịch từ Casso?',
 ];
 
+function parseSseChunk(chunk: string): Array<{ event: string; data: string }> {
+  const events: Array<{ event: string; data: string }> = [];
+  const blocks = chunk.split('\n\n');
+  for (const block of blocks) {
+    const lines = block.split('\n');
+    let event = 'message';
+    let data = '';
+    for (const line of lines) {
+      if (line.startsWith('event: ')) event = line.slice(7).trim();
+      else if (line.startsWith('data: ')) data = line.slice(6).trim();
+    }
+    if (data) events.push({ event, data });
+  }
+  return events;
+}
+
 export default function CopilotPage() {
   const [messages, setMessages] = useState<Message[]>([
     {
@@ -37,51 +55,132 @@ export default function CopilotPage() {
   ]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [streamActivity, setStreamActivity] = useState<StreamActivity | undefined>();
+  const [streamingContent, setStreamingContent] = useState('');
   const bottomRef = useRef<HTMLDivElement>(null);
+  const abortRef = useRef<AbortController | null>(null);
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: re-scroll when messages or loading state changes
+  // biome-ignore lint/correctness/useExhaustiveDependencies: re-scroll when messages, loading, or streaming content changes
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages, isLoading]);
+  }, [messages, isLoading, streamingContent]);
+
+  const getHistory = (msgs: Message[]) =>
+    msgs
+      .filter((m) => m.id !== 'init')
+      .slice(-10)
+      .map(({ role, content }) => ({ role, content }));
+
+  const sendViaStream = async (text: string, msgs: Message[]) => {
+    const token = getAccessToken();
+    abortRef.current = new AbortController();
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/ai/copilot/stream`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({ message: text, history: getHistory(msgs) }),
+        signal: abortRef.current.signal,
+      });
+
+      if (!response.ok || !response.body) throw new Error('stream failed');
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let accumulated = '';
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        const chunk = decoder.decode(value, { stream: true });
+        const parsed = parseSseChunk(chunk);
+
+        for (const { event, data } of parsed) {
+          if (event === 'activity') {
+            const act = JSON.parse(data) as StreamActivity;
+            setStreamActivity(act);
+          } else if (event === 'delta') {
+            const { content } = JSON.parse(data) as { content: string };
+            accumulated += content;
+            setStreamingContent(accumulated);
+          } else if (event === 'done') {
+            const { reply, meta } = JSON.parse(data) as {
+              reply: string;
+              meta?: { activities: CopilotActivity[] };
+            };
+            setStreamingContent('');
+            setStreamActivity(undefined);
+            setMessages((prev) => [
+              ...prev,
+              {
+                id: `a-${Date.now()}`,
+                role: 'assistant',
+                content: reply,
+                activities: meta?.activities ?? [],
+              },
+            ]);
+          }
+        }
+      }
+    } catch (err) {
+      if ((err as Error).name === 'AbortError') return;
+      throw err;
+    }
+  };
+
+  const sendViaJson = async (text: string, msgs: Message[]) => {
+    const res = await api.post<{
+      data: { reply: string; meta?: { activities: CopilotActivity[] } };
+    }>('/ai/copilot', {
+      message: text,
+      history: getHistory(msgs),
+    });
+    const { reply, meta } = res.data.data;
+    setMessages((prev) => [
+      ...prev,
+      {
+        id: `a-${Date.now()}`,
+        role: 'assistant',
+        content: reply,
+        activities: meta?.activities ?? [],
+      },
+    ]);
+  };
 
   const sendMessage = async (text: string) => {
     if (!text.trim() || isLoading) return;
 
     const userMsg: Message = { id: `u-${Date.now()}`, role: 'user', content: text };
-    const history = messages.filter((m) => m.role !== 'assistant' || m.id !== 'init');
+    const prevMessages = messages;
     setMessages((prev) => [...prev, userMsg]);
     setInput('');
     setIsLoading(true);
+    setStreamActivity(undefined);
+    setStreamingContent('');
 
     try {
-      const res = await api.post<{
-        data: { reply: string; meta?: { activities: CopilotActivity[] } };
-      }>('/ai/copilot', {
-        message: text,
-        history: history.slice(-10).map(({ role, content }) => ({ role, content })),
-      });
-
-      const { reply, meta } = res.data.data;
-      setMessages((prev) => [
-        ...prev,
-        {
-          id: `a-${Date.now()}`,
-          role: 'assistant',
-          content: reply,
-          activities: meta?.activities ?? [],
-        },
-      ]);
+      await sendViaStream(text, [...prevMessages, userMsg]);
     } catch {
-      setMessages((prev) => [
-        ...prev,
-        {
-          id: `err-${Date.now()}`,
-          role: 'assistant',
-          content: 'Xin lỗi, có lỗi xảy ra. Vui lòng thử lại.',
-        },
-      ]);
+      try {
+        await sendViaJson(text, [...prevMessages, userMsg]);
+      } catch {
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: `err-${Date.now()}`,
+            role: 'assistant',
+            content: 'Xin lỗi, có lỗi xảy ra. Vui lòng thử lại.',
+          },
+        ]);
+      }
     } finally {
       setIsLoading(false);
+      setStreamActivity(undefined);
+      setStreamingContent('');
     }
   };
 
@@ -145,20 +244,30 @@ export default function CopilotPage() {
             </div>
           ))}
 
-          {isLoading && (
+          {/* Streaming bubble — hiện khi đang nhận delta từ SSE */}
+          {isLoading && streamingContent && (
+            <div className="flex gap-3 max-w-[calc(100%-3rem)]">
+              <div className="flex size-8 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground">
+                <Bot className="size-4" />
+              </div>
+              <div className="rounded-2xl rounded-tl-none border border-border bg-background px-4 py-3 text-sm whitespace-pre-wrap">
+                <HighlightedText text={streamingContent} />
+              </div>
+            </div>
+          )}
+
+          {/* Loading indicator — dots hoặc activity status */}
+          {isLoading && !streamingContent && (
             <div className="flex gap-3 max-w-[calc(100%-3rem)]">
               <div className="flex size-8 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground">
                 <Bot className="size-4" />
               </div>
               <div className="rounded-2xl rounded-tl-none border border-border bg-background px-4 py-3">
-                <div className="flex gap-1 items-center h-4">
-                  <span className="size-2 bg-muted-foreground/50 rounded-full animate-bounce [animation-delay:0ms]" />
-                  <span className="size-2 bg-muted-foreground/50 rounded-full animate-bounce [animation-delay:150ms]" />
-                  <span className="size-2 bg-muted-foreground/50 rounded-full animate-bounce [animation-delay:300ms]" />
-                </div>
+                <CopilotLoadingStatus activity={streamActivity} />
               </div>
             </div>
           )}
+
           <div ref={bottomRef} />
         </div>
 

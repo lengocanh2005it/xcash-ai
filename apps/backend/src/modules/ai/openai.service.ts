@@ -31,9 +31,10 @@ const ACTIVITY_MAP: Record<string, Omit<CopilotActivity, 'urls'>> = {
     label: 'Hướng dẫn tích hợp Casso',
     source: 'X-Cash AI',
   },
+  search_transactions: { kind: 'internal_data', label: 'Giao dịch', source: 'X-Cash AI' },
 };
 
-function buildActivities(calledTools: string[]): CopilotActivity[] {
+export function buildActivities(calledTools: string[]): CopilotActivity[] {
   const seen = new Set<string>();
   const result: CopilotActivity[] = [];
   for (const name of calledTools) {
@@ -155,51 +156,16 @@ ${financialContext}`;
     history: Array<{ role: 'user' | 'assistant'; content: string }>,
     toolService: CopilotToolService,
   ): Promise<{ reply: string; activities: CopilotActivity[] }> {
-    if (!this.client) {
-      return {
-        reply: 'AI Copilot chưa được cấu hình. Vui lòng liên hệ quản trị viên.',
-        activities: [],
-      };
-    }
-
-    const now = new Date();
-    const systemPrompt = `Bạn là AI Copilot tài chính của X-Cash AI, chuyên hỗ trợ kế toán SME Việt Nam.
-Bạn có khả năng phân tích dữ liệu giao dịch và định khoản theo chuẩn TT133.
-
-Định dạng: LUÔN bọc phần quan trọng trong dấu markdown in đậm "**...**":
-- Số liệu: số tiền (**1.500.000đ**), phần trăm (**85%**), ngày/tháng (**tháng 7/2026**), số lượng (**12 giao dịch**), mã TK (**Nợ 112**, **Có 511**).
-- Từ khóa nghiệp vụ: **X-Cash AI**, **AI Copilot**, **TT133**, **doanh thu**, **chi phí**, **lãi/lỗ**, **định khoản**, **giao dịch chờ duyệt**.
-
-Quy tắc gọi tool:
-- Khi cần số liệu thu/chi/lãi-lỗ, giao dịch, tài khoản kế toán — HÃY GỌI TOOL phù hợp, không đoán.
-- Khi user hỏi về Casso, Cas Link, liên kết ngân hàng, mất GD từ ngân hàng → gọi get_banking_status trước; nếu cần giải thích luồng → gọi get_cas_integration_help.
-- Tháng/năm: nếu user nói "tháng này" hoặc "hiện tại", dùng tháng ${now.getMonth() + 1} năm ${now.getFullYear()}.
-- Câu xã giao, giới thiệu bản thân → trả lời trực tiếp, không gọi tool.
-
-Bảo mật: Không tiết lộ tên tool kỹ thuật, grantId, accessToken hay JSON thô cho user.
-Không bịa thông tin về sản phẩm Casso (giá, danh sách ngân hàng hỗ trợ) — nếu không có trong FAQ, hướng user vào casso.vn.
-Luôn trả lời tiếng Việt.`;
-
-    const tools = buildCopilotTools(tenantId, toolService);
     const calledTools: string[] = [];
 
     try {
-      const runner = this.client.chat.completions.runTools(
-        {
-          model: this.chatModel,
-          messages: [
-            { role: 'system', content: systemPrompt },
-            ...history.map((h) => ({ role: h.role as 'user' | 'assistant', content: h.content })),
-            { role: 'user', content: message },
-          ],
-          // biome-ignore lint/suspicious/noExplicitAny: OpenAI SDK tool type requires cast
-          tools: tools as any,
-          tool_choice: 'auto',
-          temperature: 0.3,
-          max_tokens: 500,
-        },
-        { maxChatCompletions: 5 },
-      );
+      const runner = this.createCopilotRunner(tenantId, message, history, toolService);
+      if (!runner) {
+        return {
+          reply: 'AI Copilot chưa được cấu hình. Vui lòng liên hệ quản trị viên.',
+          activities: [],
+        };
+      }
 
       runner.on('functionToolCall', (call) => {
         this.logger.debug(`Copilot tool called: ${call.name}`);
@@ -216,6 +182,55 @@ Luôn trả lời tiếng Việt.`;
       );
       return { reply: 'Xin lỗi, có lỗi xảy ra. Vui lòng thử lại.', activities: [] };
     }
+  }
+
+  buildCopilotSystemPrompt(): string {
+    const now = new Date();
+    return `Bạn là AI Copilot tài chính của X-Cash AI, chuyên hỗ trợ kế toán SME Việt Nam.
+Bạn có khả năng phân tích dữ liệu giao dịch và định khoản theo chuẩn TT133.
+
+Định dạng: LUÔN bọc phần quan trọng trong dấu markdown in đậm "**...**":
+- Số liệu: số tiền (**1.500.000đ**), phần trăm (**85%**), ngày/tháng (**tháng 7/2026**), số lượng (**12 giao dịch**), mã TK (**Nợ 112**, **Có 511**).
+- Từ khóa nghiệp vụ: **X-Cash AI**, **AI Copilot**, **TT133**, **doanh thu**, **chi phí**, **lãi/lỗ**, **định khoản**, **giao dịch chờ duyệt**.
+
+Quy tắc gọi tool:
+- Khi cần số liệu thu/chi/lãi-lỗ, giao dịch, tài khoản kế toán — HÃY GỌI TOOL phù hợp, không đoán.
+- Khi user hỏi về Casso, Cas Link, liên kết ngân hàng, mất GD từ ngân hàng → gọi get_banking_status trước; nếu cần giải thích luồng → gọi get_cas_integration_help.
+- Khi user hỏi tìm GD cụ thể (theo nội dung, số tiền, người gửi) → gọi search_transactions.
+- Tháng/năm: nếu user nói "tháng này" hoặc "hiện tại", dùng tháng ${now.getMonth() + 1} năm ${now.getFullYear()}.
+- Câu xã giao, giới thiệu bản thân → trả lời trực tiếp, không gọi tool.
+
+Bảo mật: Không tiết lộ tên tool kỹ thuật, grantId, accessToken hay JSON thô cho user.
+Không bịa thông tin về sản phẩm Casso (giá, danh sách ngân hàng hỗ trợ) — nếu không có trong FAQ, hướng user vào casso.vn.
+Luôn trả lời tiếng Việt.`;
+  }
+
+  createCopilotRunner(
+    tenantId: string,
+    message: string,
+    history: Array<{ role: 'user' | 'assistant'; content: string }>,
+    toolService: CopilotToolService,
+  ) {
+    if (!this.client) return null;
+
+    const tools = buildCopilotTools(tenantId, toolService);
+    return this.client.chat.completions.runTools(
+      {
+        model: this.chatModel,
+        messages: [
+          { role: 'system', content: this.buildCopilotSystemPrompt() },
+          ...history.map((h) => ({ role: h.role as 'user' | 'assistant', content: h.content })),
+          { role: 'user', content: message },
+        ],
+        // biome-ignore lint/suspicious/noExplicitAny: OpenAI SDK tool type requires cast
+        tools: tools as any,
+        tool_choice: 'auto',
+        temperature: 0.3,
+        max_tokens: 500,
+        stream: true,
+      },
+      { maxChatCompletions: 5 },
+    );
   }
 
   /** @deprecated Dùng chatCopilotWithTools khi COPILOT_USE_FUNCTION_CALLING=1 */

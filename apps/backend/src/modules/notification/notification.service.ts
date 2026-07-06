@@ -219,6 +219,33 @@ export class NotificationService {
     });
   }
 
+  async checkCopilotQuotaNotifications(
+    tenantId: string,
+    used: number,
+    quota: number,
+    cycleStart: Date,
+  ): Promise<void> {
+    if (quota === -1) return;
+
+    if (used >= quota) {
+      await this.createOncePerCycle(tenantId, NotificationType.copilot_quota_exceeded, cycleStart, {
+        title: 'Đã hết lượt chat Copilot',
+        body: `Đã dùng hết ${quota} lượt chat Copilot trong tháng này. Nâng cấp gói để tiếp tục.`,
+        link: '/settings?tab=billing',
+      });
+      return;
+    }
+
+    const percent = used / quota;
+    if (percent >= 0.8) {
+      await this.createOncePerCycle(tenantId, NotificationType.copilot_quota_warning, cycleStart, {
+        title: 'Sắp hết lượt chat Copilot',
+        body: `Đã dùng ${used}/${quota} lượt chat Copilot (${Math.round(percent * 100)}%) trong tháng này.`,
+        link: '/settings?tab=billing',
+      });
+    }
+  }
+
   async createOverageStarted(
     tenantId: string,
     pricePerTransaction: number,

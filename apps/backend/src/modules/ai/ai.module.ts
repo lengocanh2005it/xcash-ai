@@ -1,5 +1,6 @@
 import { BullModule } from '@nestjs/bullmq';
 import { Module } from '@nestjs/common';
+import { CopilotQuotaGuard } from '../../common/guards/copilot-quota.guard';
 import { PlanGuard } from '../../common/guards/plan.guard';
 import { PrismaModule } from '../../prisma/prisma.module';
 import { WEBHOOK_QUEUE } from '../../queue/queue.module';
@@ -31,6 +32,7 @@ import { OpenAiService } from './openai.service';
     CopilotContextService,
     CopilotToolService,
     PlanGuard,
+    CopilotQuotaGuard,
   ],
   exports: [OpenAiService, EmbeddingService, ClassificationService],
 })

@@ -2,7 +2,7 @@
 
 > Mục đích: cho biết **chính xác** cái gì đã tồn tại trong repo ngay lúc này, để agent không cần `find`/`grep`/`ls` lại từ đầu mỗi session mới. File này phải được cập nhật mỗi khi có thay đổi cấu trúc đáng kể (thêm module, thêm page, đổi dependency lớn, thêm service hạ tầng). Nếu file này và thực tế code lệch nhau, **tin thực tế code**, và sửa lại file này ngay sau đó.
 
-Cập nhật lần cuối: **Architecture refactoring (#1–#7):** extract `CopilotQuotaService`, `NotificationStreamService`, `ReportService.fetchExportData()`, shared `OVERAGE_PLANS`, rewrite `CopilotQuotaGuard` with Redis cache; extract `TokenService` from AuthService (9→7 deps), extract `copilot-activity.helper.ts` from OpenAiService (570→~310 lines). `pnpm verify` pass.
+Cập nhật lần cuối: **feat(partner): AI cost visibility dashboard (issue #21)** — bảng `ai_usage_logs` + `AiCallType` enum; `AiUsageLogService.record()` fire-and-forget; instrument toàn bộ OpenAI call sites (classify/copilot/embedding/title_gen); SQL GROUP BY aggregate; 2 endpoint mới `/partner/ai-costs` + `/partner/ai-costs/detail`; `PartnerAiCostsPage`, stat card trên Dashboard, nav item sidebar. `pnpm verify` pass.
 
 Trước đó — **Performance polish** — report SQL aggregations (`getDailyTrend`, `buildAccountSummaries`, `getTopAccounts`); Vite `manualChunks` (recharts/tanstack/radix); Settings tab lazy mount; billing upgrade sync JWT `plan` ngay (optimistic `updateUser` + `refreshSession`). `pnpm verify` pass.
 
@@ -185,6 +185,20 @@ Trước đó — **Phase 7 polish + UX hardening** — Settings tab phân trang
 - Frontend: `SettingsPage` — chỉ mount tab đang active (`render()` lazy per tab) ✅
 - Frontend: `BillingTab` — `syncPlanFromBilling()` optimistic `updateUser({ plan })` + `await refreshSession()` sau upgrade ✅
 
+**Đã xong (AI Cost Visibility — issue #21):**
+- Backend: migration `20260708000000_add_ai_usage_logs` — enum `AiCallType { classify, copilot, embedding, title_gen }`; bảng `ai_usage_logs` (id, tenant_id FK cascade, call_type, model, tokens_in, tokens_out, transaction_id?, conversation_id?, created_at); index `(tenant_id, created_at)` + `(call_type, created_at)` ✅
+- Backend: `common/constants/ai-pricing.ts` — `AI_PRICING` record (gpt-4o-mini: $0.15/1M in, $0.60/1M out; text-embedding-3-small: $0.02/1M); `calcCostUsd(model, tokensIn, tokensOut)` on-the-fly ✅
+- Backend: `AiUsageLogService.record()` fire-and-forget (`.catch(logger.warn)`) — seam duy nhất cho toàn bộ AI logging ✅
+- Backend: instrument `openai.service.ts` — `classifyTransaction`, `chatCopilot`, `chatCopilotWithTools`, `createEmbedding(text, tenantId?)`, `generateCopilotTitle(msg, tenantId?, convId?)` đều log sau mỗi call ✅
+- Backend: SSE path (`copilot.controller.ts`) — sau `runner.finalContent()`, `await runner.totalUsage()` rồi `aiUsageLogService.record({ callType: 'copilot', ... })` ✅
+- Backend: `embedding.service.ts` — `embedAndStoreClassification(id, content, tenantId?)` + `findSimilarClassifications(tenantId, ...)` đều truyền `tenantId` vào `createEmbedding()` ✅
+- Backend: `classification/classification.service.ts` — `triggerEmbedding(id, content, tenantId)` + 4 call sites (confirm/correct/override×2) đều pass `tenantId` ✅
+- Backend: `GET /partner/ai-costs` — SQL `GROUP BY tenant_id, call_type, model` (không load all rows vào Node); aggregate + sort by cost + paginate in JS; trả `{ items, total, page, limit, totalPages, grandTotalCostUsd }` ✅
+- Backend: `GET /partner/ai-costs/detail` — per-call logs paginated, trả `transactionId`, `conversationId`, `costUsd` per row ✅
+- Frontend: stat card "Chi phí AI tháng này" trên `PartnerDashboardPage` (grid 5 cột, click → `/partner/ai-costs`) ✅
+- Frontend: `PartnerAiCostsPage` — date filter, bảng tenant ranked by cost, breakdown badges, click row → Sheet detail (7 cột: Loại/Model/In/Out/Chi phí/Ref/Thời gian) ✅
+- Frontend: "Chi phí AI" nav item trong `PartnerLayout` sidebar ✅
+
 **Đã xong (Architecture refactoring — #1–#7):**
 - **#1 Extract CopilotQuotaService:** tách `incrementAndNotify()` + quota check logic ra `copilot-quota.service.ts` — CopilotController deps giảm từ 8 xuống 5 (bỏ PrismaService, NotificationService) ✅
 - **#2 Split AuthService → TokenService:** tạo `token.service.ts` tách token lifecycle (`issueTokens`, `refresh`, `logout`, `revokeAllRefreshTokens`) + plan checks (`getActivePlan`, `assertNotSuspended`) + cookie utils (`setRefreshCookie`, `clearRefreshCookie`) + Redis key builders + `parseDurationToSeconds()` — AuthService deps giảm từ 9 xuống 7 (bỏ JwtService, RedisService, ConfigService); `forgotPassword`/`resendPasswordReset` gộp chung `sendPasswordResetOtp()` private ✅
@@ -261,7 +275,8 @@ paypilot-ai/                                   ← tên folder local có thể k
 │   │   │       ├── 20260706143059_add_copilot_quota/ ← NotificationType enum thêm copilot_quota_warning/exceeded; subscriptions.copilot_used_this_cycle; plan_pricing.copilot_quota ✅
 │   │   │       ├── 20260707020628_add_copilot_conversations/ ← enum CopilotMessageRole; model copilot_conversations + copilot_messages ✅
 │   │   │       ├── 20260707100000_restore_copilot_conversation_indexes/ ← restore indexes nếu migration trước drop nhầm ✅
-│   │   │       └── 20260707120000_seed_copilot_quota_by_plan/ ← seed copilot_quota theo plan (Free=0, Starter=200, Pro=1000, Enterprise=-1) ✅
+│   │   │       ├── 20260707120000_seed_copilot_quota_by_plan/ ← seed copilot_quota theo plan (Free=0, Starter=200, Pro=1000, Enterprise=-1) ✅
+│   │   │       └── 20260708000000_add_ai_usage_logs/ ← enum AiCallType; bảng ai_usage_logs; index (tenant_id,created_at) + (call_type,created_at) ✅
 │   │   ├── package.json
 │   │   ├── nest-cli.json
 │   │   ├── .swcrc
@@ -271,7 +286,8 @@ paypilot-ai/                                   ← tên folder local có thể k
 │   │       ├── config/configuration.ts        # + RATE_LIMIT_PER_MINUTE, AZURE_STORAGE_*, COPILOT_USE_FUNCTION_CALLING, COPILOT_CONTEXT_CACHE_TTL_SECONDS
 │   │       ├── common/
 │   │       │   ├── constants/
-│   │       │   │   └── quota-policy.ts          # OVERAGE_PLANS, QUOTA_WARNING_RATIO, isOveragePlan() — shared across billing/banking ✅
+│   │       │   │   ├── quota-policy.ts          # OVERAGE_PLANS, QUOTA_WARNING_RATIO, isOveragePlan() — shared across billing/banking ✅
+│   │       │   │   └── ai-pricing.ts            # AI_PRICING record + calcCostUsd(model, tokensIn, tokensOut) — on-the-fly cost calculation ✅
 │   │       │   ├── decorators/                # @Roles, @RequiresPlan, @Public
 │   │       │   ├── guards/auth.guards.ts       # JwtAuthGuard, RolesGuard, PartnerGuard
 │   │       │   ├── guards/plan.guard.ts
@@ -296,6 +312,8 @@ paypilot-ai/                                   ← tên folder local có thể k
 │   │           │   └── change-password.service.ts
 │   │           ├── banking/                   # POST /webhook/cas → enqueue ai-classify ✅
 │   │           ├── ai/                        # openai.service, embedding.service, classification.service, classification.processor, copilot.controller ✅
+│   │           │   ├── ai-usage-log.service.ts    # AiUsageLogService.record() — fire-and-forget AI token logging (seam duy nhất) ✅
+│   │           │   ├── ai-usage-log.service.spec.ts  # 4 tests: classify/embedding/copilot/error-swallow ✅
 │   │           │   ├── copilot.controller.ts      # POST /ai/copilot + POST /ai/copilot/stream + 4 conversation CRUD endpoints — CopilotQuotaGuard method-level (chat+stream only); chat() thêm CopilotThrottlerGuard; stream() @SkipThrottle + Redis SSE limit (Phase 6); deps reduced 8→5 via CopilotQuotaService
 │   │           │   ├── copilot-quota.service.ts   # incrementAndNotify() — quota check + increment + notify (extracted from controller) ✅
 │   │           │   ├── copilot-activity.helper.ts # TOOL_ACTIVITIES, getStreamingActivityMeta(), buildActivities() — extracted from OpenAiService ✅
@@ -427,12 +445,13 @@ paypilot-ai/                                   ← tên folder local có thể k
 │           │   ├── settings/CopilotHistoryTab.tsx  # Phase 7 — bảng lịch sử Copilot trong Settings ✅
 │           │   ├── components/audit/AuditLogPanel.tsx  # Bảng nhật ký dùng chung ✅
 │           │   └── partner/
-│           │       ├── PartnerLayout.tsx          # Sidebar: Dashboard/DN/Thanh toán/Nhật ký/Gói dịch vụ ✅
-│           │       ├── PartnerDashboardPage.tsx   # Stat cards + biểu đồ doanh thu theo gói (hint MRR/plan khi lọc ngày) ✅
+│           │       ├── PartnerLayout.tsx          # Sidebar: Dashboard/DN/Thanh toán/Nhật ký/Gói dịch vụ/Chi phí AI ✅
+│           │       ├── PartnerDashboardPage.tsx   # Stat cards (5 cột, thêm "Chi phí AI tháng này" click → /partner/ai-costs) + biểu đồ doanh thu theo gói ✅
 │           │       ├── PartnerTenantsPage.tsx     # Danh sách tenant paginate 20/trang, filter, dialog chi tiết + đổi gói ✅
 │           │       ├── PartnerPaymentsPage.tsx    # Lịch sử thanh toán (bảng payment_orders + filter + summary) ✅
 │           │       ├── PartnerAuditPage.tsx       # /partner/audit-logs — audit log toàn hệ thống ✅
-│           │       └── PartnerPlansPage.tsx       # 4 plan cards, bảng giá, dialog chỉnh giá ✅
+│           │       ├── PartnerPlansPage.tsx       # 4 plan cards, bảng giá, dialog chỉnh giá ✅
+│           │       └── PartnerAiCostsPage.tsx     # Chi phí AI — date filter, bảng tenant ranked by cost, breakdown badges, Sheet detail per-call ✅
 ├── packages/shared-types/src/index.ts        # TransactionStatus.CLASSIFIED (bỏ MATCHED), ClassificationType, AccountType ✅
 ├── biome.json, package.json, turbo.json, pnpm-workspace.yaml
 ```
@@ -537,6 +556,8 @@ paypilot-ai/                                   ← tên folder local có thể k
 | GET | `/partner/plan-pricing` | Cas Partner | Xem giá/quota từng gói |
 | PATCH | `/partner/plan-pricing/:plan` | Cas Partner | Sửa giá/quota/phí vượt/copilotQuota (chặn sửa `free`) |
 | GET | `/partner/audit-logs` | Cas Partner | Audit log toàn hệ thống — lọc `tenantId`, `action`, phân trang |
+| GET | `/partner/ai-costs` | Cas Partner | Chi phí AI aggregate per tenant — SQL GROUP BY; `?fromDate=&toDate=&tenantId=&page=&limit=`; trả `{ items[{ tenantId, tenantName, totalTokensIn, totalTokensOut, totalCostUsd, breakdown }], grandTotalCostUsd, ... }` |
+| GET | `/partner/ai-costs/detail` | Cas Partner | Per-call AI logs của 1 tenant — `?tenantId=` (required), `callType?`, `fromDate?`, `toDate?`, phân trang; trả `{ id, callType, model, tokensIn, tokensOut, costUsd, transactionId?, conversationId?, createdAt }[]` |
 
 Swagger UI: `http://localhost:3000/api/docs`
 
@@ -587,6 +608,18 @@ copilot_messages
 ```
 - `TransactionSource` enum: `cas` (từ webhook Cas Balance Hook), `import` (nhập tay từ Excel)
 - `TransactionDirection` enum: `in` (thu), `out` (chi)
+
+**Đã thêm (AI Cost Tracking):**
+```
+ai_usage_logs
+  id (uuid), tenant_id (FK → tenants cascade), call_type (AiCallType enum),
+  model (String), tokens_in (Int), tokens_out (Int default 0),
+  transaction_id (String?), conversation_id (String?), created_at
+  index: (tenant_id, created_at) — lọc theo tenant + kỳ
+  index: (call_type, created_at) — aggregate theo loại cuộc gọi
+```
+- `AiCallType` enum (mới): `classify` | `copilot` | `embedding` | `title_gen`
+- **Không có cột `cost_usd`** — chi phí tính on-the-fly từ `calcCostUsd(model, tokens_in, tokens_out)` trong `ai-pricing.ts`
 
 ---
 
@@ -711,6 +744,7 @@ postinstall      → prisma generate
 - **`RolesGuard` + `@Public()`:** `RolesGuard.canActivate` kiểm tra `IS_PUBLIC_KEY` trước — nếu route đánh dấu `@Public()` thì bỏ qua toàn bộ auth check (kể cả cas_partner block). Điều này cho phép `/notifications/stream?token=` (đã `@Public()`) hoạt động bình thường dù `request.user` là undefined.
 - **Rate limiting per-tenant:** `TenantThrottlerGuard` override `getTracker()` để dùng `tenantId` (fallback `userId` rồi IP) làm key thay vì mặc định theo IP — vì nhiều user cùng tenant có thể gọi API từ IP khác nhau, và Cas Partner (không có `tenantId`) vẫn cần giới hạn theo user. Áp dụng global qua `APP_GUARD`, bỏ qua `/health`. Giới hạn: `RATE_LIMIT_PER_MINUTE` (default 120 request/phút/tenant).
 - **Tenant suspend chặn login:** `auth.service.ts` → `login()` tra `subscription` mới nhất theo `tenantId`, nếu `status === 'suspended'` thì từ chối đăng nhập luôn (không cho vào hệ thống dù JWT hợp lệ) — khớp edge case đã ghi trong `rbac.md`.
+- **AI cost tracking pattern:** `AiUsageLogService.record()` là seam duy nhất — void (không async), dùng `.catch(logger.warn)` để không block calling path. `calcCostUsd(model, tokensIn, tokensOut)` tính chi phí on-the-fly từ `AI_PRICING` hardcode (`ai-pricing.ts`). `getAiCosts()` dùng `$queryRaw GROUP BY tenant_id, call_type, model` (không load all rows). `embedding.service.ts` nhận `tenantId?` — truyền qua toàn bộ call chain `embedAndStoreClassification(id, content, tenantId?)` và `findSimilarClassifications(tenantId, ...)`.
 - **Architecture refactoring (#1–#7):** (1) `CopilotQuotaService` tách quota logic khỏi CopilotController — deps giảm 8→5; (2) `TokenService` tách token lifecycle khỏi AuthService — AuthService deps giảm 9→7; (3) `copilot-activity.helper.ts` tách activity UI helpers khỏi OpenAiService — file giảm ~570→~310 lines; (4) `OVERAGE_PLANS` shared constant trong `common/constants/quota-policy.ts` — 3 consumer files import chung; (5) `ReportService.fetchExportData()` method public tách data fetching khỏi Excel gen; (6) `NotificationStreamService` tách SSE RxJS Subject streaming khỏi `NotificationService`; (7) `CopilotQuotaGuard` rewrite dùng Redis cache 30s TTL (match PlanGuard pattern) — không còn đọc DB mỗi request.
 
 ---

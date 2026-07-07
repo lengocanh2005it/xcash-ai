@@ -1,11 +1,17 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { ClassificationType, Prisma, TransactionStatus } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
+import { EmbeddingService } from '../ai/embedding.service';
 import type { CorrectClassificationDto } from './dto/review.dto';
 
 @Injectable()
 export class ClassificationService {
-  constructor(private readonly prisma: PrismaService) {}
+  private readonly logger = new Logger(ClassificationService.name);
+
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly embeddingService: EmbeddingService,
+  ) {}
 
   async getClassification(tenantId: string, transactionId: string) {
     const classification = await this.prisma.transactionClassification.findFirst({
@@ -97,6 +103,8 @@ export class ClassificationService {
         },
       });
     });
+
+    this.triggerEmbedding(classificationId, classification.transaction?.content);
   }
 
   async correct(
@@ -138,6 +146,8 @@ export class ClassificationService {
         },
       });
     });
+
+    this.triggerEmbedding(classificationId, classification.transaction?.content);
   }
 
   async skip(tenantId: string, classificationId: string, userId: string) {
@@ -181,7 +191,7 @@ export class ClassificationService {
     });
 
     if (existing) {
-      return this.prisma.transactionClassification.update({
+      const updated = await this.prisma.transactionClassification.update({
         where: { id: existing.id },
         data: {
           debitAccount: dto.debitAccount,
@@ -192,9 +202,11 @@ export class ClassificationService {
           status: TransactionStatus.classified,
         },
       });
+      this.triggerEmbedding(updated.id, transaction.content);
+      return updated;
     }
 
-    return this.prisma.transactionClassification.create({
+    const created = await this.prisma.transactionClassification.create({
       data: {
         tenantId,
         transactionId,
@@ -208,13 +220,25 @@ export class ClassificationService {
         status: TransactionStatus.classified,
       },
     });
+    this.triggerEmbedding(created.id, transaction.content);
+    return created;
   }
 
   private async findInQueue(tenantId: string, classificationId: string) {
     const classification = await this.prisma.transactionClassification.findFirst({
       where: { id: classificationId, tenantId, status: TransactionStatus.review },
+      include: { transaction: { select: { content: true } } },
     });
     if (!classification) throw new NotFoundException('Không tìm thấy mục cần review');
     return classification;
+  }
+
+  private triggerEmbedding(classificationId: string, content: string | null | undefined): void {
+    if (!content) return;
+    this.embeddingService
+      .embedAndStoreClassification(classificationId, content)
+      .catch((err: unknown) =>
+        this.logger.warn(`Embedding failed for classification ${classificationId}`, err),
+      );
   }
 }

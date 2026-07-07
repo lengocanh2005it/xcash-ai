@@ -252,6 +252,9 @@ Không tiết lộ tên tool kỹ thuật, grantId, accessToken, JSON thô. Luô
     amount: number,
     direction: 'in' | 'out',
     fewShotExamples: FewShotExample[],
+    senderAccount?: string | null,
+    receiverAccount?: string | null,
+    transactionDate?: Date | null,
   ): Promise<ClassificationResult | null> {
     if (!this.client) {
       return null;
@@ -284,9 +287,24 @@ ${examplesText}
 Trả lời CHÍNH XÁC theo JSON, không giải thích thêm:
 {"debitAccount":"xxx","creditAccount":"xxx","confidence":0-100,"reason":"lý do ngắn gọn tiếng Việt"}`;
 
+    const counterpartyLine =
+      direction === 'in'
+        ? senderAccount
+          ? `Tài khoản người chuyển: ${senderAccount}`
+          : ''
+        : receiverAccount
+          ? `Tài khoản người nhận: ${receiverAccount}`
+          : '';
+
+    const dateLine = transactionDate
+      ? `Ngày GD: ngày ${transactionDate.getDate()} tháng ${transactionDate.getMonth() + 1}`
+      : '';
+
+    const extraContext = [counterpartyLine, dateLine].filter(Boolean).join('\n');
+
     const userMessage = `Nội dung GD: "${content}"
 Số tiền: ${Math.abs(amount).toLocaleString('vi-VN')}đ
-Chiều: ${direction === 'in' ? 'Tiền VÀO tài khoản' : 'Tiền RA khỏi tài khoản'}
+Chiều: ${direction === 'in' ? 'Tiền VÀO tài khoản' : 'Tiền RA khỏi tài khoản'}${extraContext ? `\n${extraContext}` : ''}
 
 Định khoản:`;
 

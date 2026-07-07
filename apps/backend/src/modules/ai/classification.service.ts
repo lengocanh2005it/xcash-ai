@@ -70,6 +70,9 @@ export class ClassificationService {
       amount,
       direction,
       fewShotExamples,
+      transaction.senderAccount,
+      transaction.receiverAccount,
+      transaction.transactionDate,
     );
 
     const { debitAccount, creditAccount, confidenceScore, reason } = aiResult

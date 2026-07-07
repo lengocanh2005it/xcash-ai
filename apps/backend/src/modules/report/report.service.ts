@@ -1,9 +1,23 @@
 import { Injectable, StreamableFile } from '@nestjs/common';
-import { TransactionDirection, TransactionSource, TransactionStatus } from '@prisma/client';
+import { Prisma, TransactionDirection, TransactionSource, TransactionStatus } from '@prisma/client';
 import * as XLSX from 'xlsx';
 import { PrismaService } from '../../prisma/prisma.service';
 import type { AccountBreakdownQueryDto } from './dto/account-breakdown.dto';
 import { buildExportWorkbook } from './report-excel.util';
+
+interface DailyTrendSqlRow {
+  day_key: string;
+  activity_count: bigint;
+  classified_count: bigint;
+  revenue_amount: unknown;
+  expense_amount: unknown;
+}
+
+interface AccountSideSqlRow {
+  account_code: string;
+  total: unknown;
+  tx_count: bigint;
+}
 
 export interface DailyTrendPoint {
   date: string;
@@ -87,32 +101,6 @@ export class ReportService {
     });
   }
 
-  private isClassifiedRevenue(tx: {
-    amount: unknown;
-    source: TransactionSource;
-    direction: TransactionDirection | null;
-  }) {
-    if (tx.source === TransactionSource.import) {
-      return tx.direction === TransactionDirection.in;
-    }
-    return Number(tx.amount) > 0;
-  }
-
-  private isClassifiedExpense(tx: {
-    amount: unknown;
-    source: TransactionSource;
-    direction: TransactionDirection | null;
-  }) {
-    if (tx.source === TransactionSource.import) {
-      return tx.direction === TransactionDirection.out;
-    }
-    return Number(tx.amount) < 0;
-  }
-
-  private flowAmount(tx: { amount: unknown }) {
-    return Math.abs(Number(tx.amount)) || 0;
-  }
-
   async getDailyTrend(tenantId: string, days = 7) {
     const clampedDays = Math.min(31, Math.max(1, days));
     const buckets = this.buildDailyTrendBuckets(clampedDays);
@@ -123,48 +111,48 @@ export class ReportService {
     to.setHours(23, 59, 59, 999);
 
     const bucketByDay = new Map(buckets.map((bucket) => [bucket.date, bucket]));
-    const dateRange = { gte: from, lte: to };
 
-    const [classifiedTransactions, activityTransactions] = await Promise.all([
-      this.prisma.transaction.findMany({
-        where: { tenantId, status: TransactionStatus.classified, transactionDate: dateRange },
-        select: {
-          transactionDate: true,
-          amount: true,
-          source: true,
-          direction: true,
-        },
-      }),
-      this.prisma.transaction.findMany({
-        where: { tenantId, transactionDate: dateRange },
-        select: { transactionDate: true },
-      }),
-    ]);
+    const rows = await this.prisma.$queryRaw<DailyTrendSqlRow[]>`
+      SELECT
+        to_char(date_trunc('day', t.transaction_date), 'YYYY-MM-DD') AS day_key,
+        COUNT(*)::bigint AS activity_count,
+        COUNT(*) FILTER (WHERE t.status = ${TransactionStatus.classified})::bigint AS classified_count,
+        COALESCE(SUM(
+          CASE WHEN t.status = ${TransactionStatus.classified} AND (
+            (t.source = ${TransactionSource.import} AND t.direction = ${TransactionDirection.in})
+            OR (t.source <> ${TransactionSource.import} AND t.amount > 0)
+          ) THEN ABS(t.amount) ELSE 0 END
+        ), 0) AS revenue_amount,
+        COALESCE(SUM(
+          CASE WHEN t.status = ${TransactionStatus.classified} AND (
+            (t.source = ${TransactionSource.import} AND t.direction = ${TransactionDirection.out})
+            OR (t.source <> ${TransactionSource.import} AND t.amount < 0)
+          ) THEN ABS(t.amount) ELSE 0 END
+        ), 0) AS expense_amount
+      FROM transactions t
+      WHERE t.tenant_id = ${tenantId}::uuid
+        AND t.transaction_date >= ${from}
+        AND t.transaction_date <= ${to}
+      GROUP BY 1
+      ORDER BY 1
+    `;
 
-    for (const transaction of classifiedTransactions) {
-      const dayKey = this.formatDayKey(transaction.transactionDate);
-      const bucket = bucketByDay.get(dayKey);
+    for (const row of rows) {
+      const bucket = bucketByDay.get(row.day_key);
       if (!bucket) {
         continue;
       }
 
-      bucket.classifiedCount += 1;
-      const value = this.flowAmount(transaction);
-      if (this.isClassifiedRevenue(transaction)) {
-        bucket.revenueAmount += value;
-      } else if (this.isClassifiedExpense(transaction)) {
-        bucket.expenseAmount += value;
-      }
-      bucket.count = bucket.classifiedCount;
-      bucket.amount = bucket.revenueAmount;
-    }
+      const classifiedCount = Number(row.classified_count);
+      const revenueAmount = Number(row.revenue_amount);
+      const expenseAmount = Number(row.expense_amount);
 
-    for (const transaction of activityTransactions) {
-      const dayKey = this.formatDayKey(transaction.transactionDate);
-      const bucket = bucketByDay.get(dayKey);
-      if (bucket) {
-        bucket.activityCount += 1;
-      }
+      bucket.activityCount = Number(row.activity_count);
+      bucket.classifiedCount = classifiedCount;
+      bucket.revenueAmount = revenueAmount;
+      bucket.expenseAmount = expenseAmount;
+      bucket.count = classifiedCount;
+      bucket.amount = revenueAmount;
     }
 
     return {
@@ -209,30 +197,96 @@ export class ReportService {
     return { items, total };
   }
 
+  private async fetchClassificationSides(
+    tenantId: string,
+    from: Date,
+    to: Date,
+    inclusiveEnd = false,
+  ): Promise<{ debits: AccountSideSqlRow[]; credits: AccountSideSqlRow[] }> {
+    const dateEnd = inclusiveEnd
+      ? Prisma.sql`t.transaction_date <= ${to}`
+      : Prisma.sql`t.transaction_date < ${to}`;
+
+    const [debits, credits] = await Promise.all([
+      this.prisma.$queryRaw<AccountSideSqlRow[]>`
+        SELECT
+          tc.debit_account AS account_code,
+          COALESCE(SUM(tc.amount::numeric), 0) AS total,
+          COUNT(*)::bigint AS tx_count
+        FROM transaction_classifications tc
+        INNER JOIN transactions t ON t.id = tc.transaction_id
+        WHERE tc.tenant_id = ${tenantId}::uuid
+          AND tc.status = ${TransactionStatus.classified}
+          AND t.transaction_date >= ${from}
+          AND ${dateEnd}
+        GROUP BY tc.debit_account
+      `,
+      this.prisma.$queryRaw<AccountSideSqlRow[]>`
+        SELECT
+          tc.credit_account AS account_code,
+          COALESCE(SUM(tc.amount::numeric), 0) AS total,
+          COUNT(*)::bigint AS tx_count
+        FROM transaction_classifications tc
+        INNER JOIN transactions t ON t.id = tc.transaction_id
+        WHERE tc.tenant_id = ${tenantId}::uuid
+          AND tc.status = ${TransactionStatus.classified}
+          AND t.transaction_date >= ${from}
+          AND ${dateEnd}
+        GROUP BY tc.credit_account
+      `,
+    ]);
+
+    return { debits, credits };
+  }
+
+  private mergeAccountSideAggregates(
+    map: Map<string, AccountSummary>,
+    rows: AccountSideSqlRow[],
+    side: 'debit' | 'credit',
+  ): void {
+    for (const row of rows) {
+      const amount = Number(row.total);
+      const count = Number(row.tx_count);
+      const existing = map.get(row.account_code);
+      if (existing) {
+        if (side === 'debit') {
+          existing.totalDebit += amount;
+        } else {
+          existing.totalCredit += amount;
+        }
+        existing.transactionCount += count;
+        existing.net = existing.totalCredit - existing.totalDebit;
+        continue;
+      }
+
+      map.set(row.account_code, {
+        accountCode: row.account_code,
+        accountName: row.account_code,
+        accountType: 'unknown',
+        totalDebit: side === 'debit' ? amount : 0,
+        totalCredit: side === 'credit' ? amount : 0,
+        net: (side === 'credit' ? amount : 0) - (side === 'debit' ? amount : 0),
+        transactionCount: count,
+      });
+    }
+  }
+
   private async buildAccountSummaries(
     tenantId: string,
     from: Date,
     to: Date,
     inclusiveEnd = false,
   ): Promise<AccountSummary[]> {
-    const classifications = await this.prisma.transactionClassification.findMany({
-      where: {
-        tenantId,
-        status: TransactionStatus.classified,
-        transaction: {
-          transactionDate: inclusiveEnd ? { gte: from, lte: to } : { gte: from, lt: to },
-        },
-      },
-      select: { debitAccount: true, creditAccount: true, amount: true },
-    });
+    const { debits, credits } = await this.fetchClassificationSides(
+      tenantId,
+      from,
+      to,
+      inclusiveEnd,
+    );
 
     const accountMap = new Map<string, AccountSummary>();
-
-    for (const c of classifications) {
-      const amount = Number(c.amount);
-      this.updateAccount(accountMap, c.debitAccount, amount, 0);
-      this.updateAccount(accountMap, c.creditAccount, 0, amount);
-    }
+    this.mergeAccountSideAggregates(accountMap, debits, 'debit');
+    this.mergeAccountSideAggregates(accountMap, credits, 'credit');
 
     const codes = [...accountMap.keys()];
     if (codes.length > 0) {
@@ -476,23 +530,10 @@ export class ReportService {
     const from = new Date(year, month - 1, 1);
     const to = new Date(year, month, 1);
 
-    const classifications = await this.prisma.transactionClassification.findMany({
-      where: {
-        tenantId,
-        status: TransactionStatus.classified,
-        transaction: { transactionDate: { gte: from, lt: to } },
-      },
-      select: { debitAccount: true, creditAccount: true, amount: true },
-    });
+    const { debits, credits } = await this.fetchClassificationSides(tenantId, from, to, false);
 
-    const expenseMap = new Map<string, number>();
-    const revenueMap = new Map<string, number>();
-
-    for (const c of classifications) {
-      const amt = Number(c.amount);
-      expenseMap.set(c.debitAccount, (expenseMap.get(c.debitAccount) ?? 0) + amt);
-      revenueMap.set(c.creditAccount, (revenueMap.get(c.creditAccount) ?? 0) + amt);
-    }
+    const expenseMap = new Map(debits.map((row) => [row.account_code, Number(row.total)]));
+    const revenueMap = new Map(credits.map((row) => [row.account_code, Number(row.total)]));
 
     const codes = [...new Set([...expenseMap.keys(), ...revenueMap.keys()])];
     const accounts =
@@ -526,30 +567,5 @@ export class ReportService {
       }));
 
     return { topExpense, topRevenue };
-  }
-
-  private updateAccount(
-    map: Map<string, AccountSummary>,
-    code: string,
-    debit: number,
-    credit: number,
-  ): void {
-    const existing = map.get(code);
-    if (existing) {
-      existing.totalDebit += debit;
-      existing.totalCredit += credit;
-      existing.net = existing.totalCredit - existing.totalDebit;
-      existing.transactionCount += 1;
-    } else {
-      map.set(code, {
-        accountCode: code,
-        accountName: code,
-        accountType: 'unknown',
-        totalDebit: debit,
-        totalCredit: credit,
-        net: credit - debit,
-        transactionCount: 1,
-      });
-    }
   }
 }

@@ -850,9 +850,17 @@ function formatPlanQuotaSubtitle(plan: BillingPlan): string {
 
 function BillingTab() {
   const qc = useQueryClient();
-  const { refreshSession, user } = useAuth();
+  const { refreshSession, updateUser, user } = useAuth();
   const canAccessBilling = canViewBilling(user?.role);
   const isAdminUser = isAdmin(user?.role);
+
+  const syncPlanFromBilling = useCallback(
+    async (plan: string) => {
+      updateUser({ plan: plan as SubscriptionPlan });
+      await refreshSession();
+    },
+    [refreshSession, updateUser],
+  );
   const [searchParams, setSearchParams] = useSearchParams();
   const [upgradeOpen, setUpgradeOpen] = useState(false);
   const [paymentOpen, setPaymentOpen] = useState(false);
@@ -918,6 +926,12 @@ function BillingTab() {
     onError: () => toast.error('Không thể xác nhận mock'),
   });
 
+  // Đồng bộ JWT plan với billing API — sidebar PlanGate dùng user.plan
+  useEffect(() => {
+    if (!data?.plan || data.plan === user?.plan) return;
+    updateUser({ plan: data.plan as SubscriptionPlan });
+  }, [data?.plan, updateUser, user?.plan]);
+
   // Tự đóng dialog khi plan đã đổi thành targetPlan
   const prevPlanRef = useRef<string | undefined>(undefined);
   useEffect(() => {
@@ -932,10 +946,10 @@ function BillingTab() {
       );
       qc.invalidateQueries({ queryKey: ['billing', 'current-plan'] });
       qc.invalidateQueries({ queryKey: ['notifications'] });
-      void refreshSession();
+      void syncPlanFromBilling(data.plan);
     }
     prevPlanRef.current = data.plan;
-  }, [data, paymentOpen, upgradeResult, qc, refreshSession]);
+  }, [data, paymentOpen, upgradeResult, qc, syncPlanFromBilling]);
 
   useEffect(() => {
     if (data && !paymentOpen) prevPlanRef.current = data.plan;
@@ -957,14 +971,23 @@ function BillingTab() {
 
   const mockConfirmMutation = useMutation({
     mutationFn: (orderCode: string) => api.post(`/billing/upgrade/${orderCode}/mock-confirm`),
-    onSuccess: () => {
+    onSuccess: async () => {
       qc.invalidateQueries({ queryKey: ['billing', 'current-plan'] });
       qc.invalidateQueries({ queryKey: ['notifications'] });
       setPaymentOpen(false);
       setUpgradeResult(null);
       setSelectedPlan(null);
       toast.success('Demo: Thanh toán thành công!');
-      void refreshSession();
+      const refreshed = await qc.fetchQuery({
+        queryKey: ['billing', 'current-plan'],
+        queryFn: () =>
+          api.get<{ data: PlanData }>('/billing/current-plan').then((r) => r.data.data),
+      });
+      if (refreshed?.plan) {
+        await syncPlanFromBilling(refreshed.plan);
+      } else {
+        await refreshSession();
+      }
     },
     onError: () => toast.error('Không thể xác nhận mock'),
   });
@@ -1781,7 +1804,7 @@ type SettingsTabConfig = {
   value: string;
   label: string;
   icon: typeof Building2;
-  component: ReactNode;
+  render: () => ReactNode;
   adminOnly?: boolean;
   auditOnly?: boolean;
   bankingOnly?: boolean;
@@ -1811,42 +1834,48 @@ export default function SettingsPage() {
         label: 'Ngân hàng',
         icon: Building2,
         bankingOnly: true,
-        component: <BankingTab />,
+        render: () => <BankingTab />,
       },
       {
         value: 'threshold',
         label: 'Ngưỡng AI',
         icon: Sliders,
         thresholdOnly: true,
-        component: <ThresholdTab />,
+        render: () => <ThresholdTab />,
       },
       {
         value: 'notifications',
         label: 'Thông báo',
         icon: BellRing,
         adminOnly: true,
-        component: <NotificationsTab />,
+        render: () => <NotificationsTab />,
       },
-      { value: 'team', label: 'Thành viên', icon: Users, adminOnly: true, component: <TeamTab /> },
+      {
+        value: 'team',
+        label: 'Thành viên',
+        icon: Users,
+        adminOnly: true,
+        render: () => <TeamTab />,
+      },
       {
         value: 'audit',
         label: 'Nhật ký',
         icon: ScrollText,
         auditOnly: true,
-        component: <AuditLogTab />,
+        render: () => <AuditLogTab />,
       },
       {
         value: 'billing',
         label: 'Gói dịch vụ',
         icon: CreditCard,
         billingOnly: true,
-        component: <BillingTab />,
+        render: () => <BillingTab />,
       },
       {
         value: 'copilot-history',
         label: 'Lịch sử Copilot',
         icon: MessageSquare,
-        component: <CopilotHistoryTab />,
+        render: () => <CopilotHistoryTab />,
       },
     ],
     [],
@@ -1898,7 +1927,7 @@ export default function SettingsPage() {
 
           {tabs.map((tab) => (
             <TabsContent key={tab.value} value={tab.value} className="mt-4">
-              {tab.component}
+              {resolvedTab === tab.value ? tab.render() : null}
             </TabsContent>
           ))}
         </Tabs>

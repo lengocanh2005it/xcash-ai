@@ -1,4 +1,4 @@
-import { TransactionDirection, TransactionSource, TransactionStatus } from '@prisma/client';
+import { TransactionSource, TransactionStatus } from '@prisma/client';
 import { ReportService } from './report.service';
 
 describe('ReportService dashboard charts', () => {
@@ -6,25 +6,25 @@ describe('ReportService dashboard charts', () => {
 
   let prisma: {
     transaction: {
-      findMany: jest.Mock;
       groupBy: jest.Mock;
     };
+    $queryRaw: jest.Mock;
   };
   let service: ReportService;
 
   beforeEach(() => {
     prisma = {
       transaction: {
-        findMany: jest.fn(),
         groupBy: jest.fn(),
       },
+      $queryRaw: jest.fn(),
     };
     service = new ReportService(prisma as never);
   });
 
   describe('getDailyTrend', () => {
     it('returns zero-filled buckets for each day in range', async () => {
-      prisma.transaction.findMany.mockResolvedValue([]);
+      prisma.$queryRaw.mockResolvedValue([]);
 
       const result = await service.getDailyTrend(tenantId, 7);
 
@@ -36,32 +36,29 @@ describe('ReportService dashboard charts', () => {
             point.activityCount === 0 && point.revenueAmount === 0 && point.expenseAmount === 0,
         ),
       ).toBe(true);
-      expect(prisma.transaction.findMany).toHaveBeenCalledTimes(2);
+      expect(prisma.$queryRaw).toHaveBeenCalledTimes(1);
     });
 
     it('aggregates revenue, expense, and activity into daily buckets', async () => {
       const today = new Date();
       today.setHours(12, 0, 0, 0);
+      const todayKey = [
+        today.getFullYear(),
+        String(today.getMonth() + 1).padStart(2, '0'),
+        String(today.getDate()).padStart(2, '0'),
+      ].join('-');
 
-      prisma.transaction.findMany
-        .mockResolvedValueOnce([
-          {
-            transactionDate: today,
-            amount: 1_000_000,
-            source: TransactionSource.cas,
-            direction: null,
-          },
-          {
-            transactionDate: today,
-            amount: -400_000,
-            source: TransactionSource.cas,
-            direction: null,
-          },
-        ])
-        .mockResolvedValueOnce([{ transactionDate: today }, { transactionDate: today }]);
+      prisma.$queryRaw.mockResolvedValue([
+        {
+          day_key: todayKey,
+          activity_count: BigInt(2),
+          classified_count: BigInt(2),
+          revenue_amount: 1_000_000,
+          expense_amount: 400_000,
+        },
+      ]);
 
       const result = await service.getDailyTrend(tenantId, 7);
-      const todayKey = result.points.at(-1)?.date;
       const todayBucket = result.points.find((point) => point.date === todayKey);
 
       expect(todayBucket).toEqual(
@@ -79,26 +76,24 @@ describe('ReportService dashboard charts', () => {
     it('treats import direction as revenue or expense', async () => {
       const today = new Date();
       today.setHours(10, 0, 0, 0);
+      const todayKey = [
+        today.getFullYear(),
+        String(today.getMonth() + 1).padStart(2, '0'),
+        String(today.getDate()).padStart(2, '0'),
+      ].join('-');
 
-      prisma.transaction.findMany
-        .mockResolvedValueOnce([
-          {
-            transactionDate: today,
-            amount: 200_000,
-            source: TransactionSource.import,
-            direction: TransactionDirection.in,
-          },
-          {
-            transactionDate: today,
-            amount: 150_000,
-            source: TransactionSource.import,
-            direction: TransactionDirection.out,
-          },
-        ])
-        .mockResolvedValueOnce([{ transactionDate: today }]);
+      prisma.$queryRaw.mockResolvedValue([
+        {
+          day_key: todayKey,
+          activity_count: BigInt(1),
+          classified_count: BigInt(2),
+          revenue_amount: 200_000,
+          expense_amount: 150_000,
+        },
+      ]);
 
       const result = await service.getDailyTrend(tenantId, 7);
-      const todayBucket = result.points.at(-1);
+      const todayBucket = result.points.find((point) => point.date === todayKey);
 
       expect(todayBucket).toEqual(
         expect.objectContaining({

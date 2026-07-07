@@ -2,7 +2,7 @@
 
 > Mục đích: cho biết **chính xác** cái gì đã tồn tại trong repo ngay lúc này, để agent không cần `find`/`grep`/`ls` lại từ đầu mỗi session mới. File này phải được cập nhật mỗi khi có thay đổi cấu trúc đáng kể (thêm module, thêm page, đổi dependency lớn, thêm service hạ tầng). Nếu file này và thực tế code lệch nhau, **tin thực tế code**, và sửa lại file này ngay sau đó.
 
-Cập nhật lần cuối: **Copilot Quota (Phase 1–4 hoàn thành)** — Schema (2 enum values + 2 cột), guard `CopilotQuotaGuard`, increment/notify fire-and-forget, reset quota theo billing cycle, expose trong API + Partner DTO, UI progress bar BillingTab + PartnerPlansPage input field. Branch `feat/copilot-function-calling`.
+Cập nhật lần cuối: **Copilot History (Phase 1–3 hoàn thành)** — Schema (`copilot_conversations` + `copilot_messages` + `CopilotMessageRole` enum), `CopilotConversationService` CRUD cursor-based + auto-title fire-and-forget, 4 endpoint mới (`GET/GET/:id/PATCH/DELETE /ai/copilot/conversations`), tích hợp lưu messages vào chat + stream flow, security validations DTO, `CopilotActivity` + conversation types vào shared-types. Branch `feat/copilot-history`.
 
 ---
 
@@ -118,6 +118,13 @@ Cập nhật lần cuối: **Copilot Quota (Phase 1–4 hoàn thành)** — Sche
 - Frontend: `PartnerDashboardPage` hint MRR/plan pie "snapshot hiện tại, không theo kỳ lọc ngày"; `PartnerPlansPage` fix confirm khi đóng dialog edit; skeleton dùng `<Skeleton>` ✅
 - Frontend: `PartnerLayout` bỏ `ThemeToggle` trùng trên mobile top bar (giữ sidebar footer) ✅
 
+**Đã xong (Copilot History — Phase 1–3):**
+- **Phase 1 — Schema:** migration `20260707020628_add_copilot_conversations` — enum `CopilotMessageRole { user, assistant }`; model `copilot_conversations` (id, tenant_id, user_id, title, created_at, updated_at); model `copilot_messages` (id, conversation_id, role, content Text, activities Json?, is_partial Boolean, created_at); quan hệ cascade; index `[tenantId, userId, updatedAt DESC]` và `[conversationId, createdAt]` ✅
+- **Phase 2 — Backend CRUD:** `CopilotConversationService` — `findOrCreate()` (validate ownership 404, create if no ID), `saveUserMessage()`, `saveAssistantMessage()` (sanitize activities: max 10, snippet ≤300 ký tự, URLs ≤5), `getHistoryForContext()` (10 messages cuối, exclude current), `triggerAutoTitle()` (fire-and-forget LLM gpt-4o-mini ≤6 từ tiếng Việt, sanitize XSS chars), `listConversations()` cursor-based `?before=<uuid>&limit`, `getConversation()`, `renameConversation()`, `deleteConversation()`; DTO `ListConversationsQueryDto`, `GetConversationQueryDto`, `RenameConversationDto`; 4 endpoint mới (`GET/GET :id/PATCH :id/DELETE :id /ai/copilot/conversations`) ✅
+- **Phase 3 — Tích hợp + Security:** `chat()` và `streamChat()` gọi `findOrCreate` + `saveUserMessage` → khi `conversationId` có, dùng history từ DB thay vì FE-provided `history[]` (chặn injection); `saveAssistantMessage` + `triggerAutoTitle` fire-and-forget; response thêm `conversationId`; SSE setup (findOrCreate + saveUserMessage) trước `flushHeaders()` để lỗi 404 trả đúng HTTP code; DTO hardening: `ChatMessage.role` `@IsIn`, `content` `@MaxLength(2000)`, `history` `@ArrayMaxSize(20)`, `conversationId` `@IsOptional @IsUUID`; `CopilotQuotaGuard` chuyển từ controller-level sang method-level (chỉ trên `chat()` và `streamChat()`) để CRUD endpoint không bị chặn bởi quota ✅
+- **shared-types:** thêm `CopilotActivity` (canonical từ `openai.service.ts`), `CopilotConversationSummary`, `CopilotMessageDto`, `CopilotConversationDetail`, `CopilotConversationsListResponse`; `CopilotSourceChips.tsx` import `CopilotActivity` từ `@xcash/shared-types` thay vì định nghĩa local ✅
+- **`openai.service.ts`:** thêm `generateCopilotTitle(firstMessage: string): Promise<string>` — prompt "≤6 từ tiếng Việt", sanitize chars `<>"'\``, fallback `'Cuộc chat mới'` ✅
+
 **Đã xong (Copilot Quota — Phase 1–4):**
 - **Phase 1 — Schema:** migration `20260706143059_add_copilot_quota` — thêm `NotificationType.copilot_quota_warning` + `copilot_quota_exceeded`; cột `subscriptions.copilot_used_this_cycle` (Int, default 0); cột `plan_pricing.copilot_quota` (Int, default -1 = unlimited); seed `plan_pricing` copilotQuota (Free=0, Starter=200, Pro=1000, Enterprise=-1) ✅
 - **Phase 2 — Guard + increment:** `CopilotQuotaGuard` (`common/guards/copilot-quota.guard.ts`) — đọc subscription + planPricing từ DB (no cache), skip nếu quota=-1 (Enterprise), throw 429 nếu đã vượt, store `{ id }` vào `request[COPILOT_SUBSCRIPTION_KEY]`; guard chain trên `CopilotController`: `JwtAuthGuard → RolesGuard → PlanGuard → CopilotQuotaGuard`; `incrementAndNotify()` fire-and-forget sau `writeEvent('done')` — `$increment copilotUsedThisCycle` + gọi `checkCopilotQuotaNotifications()`; `NotificationService.checkCopilotQuotaNotifications()` dedup `copilot_quota_warning` (≥80%) và `copilot_quota_exceeded` (≥100%) mỗi chu kỳ bằng `createOncePerCycle()` ✅
@@ -186,7 +193,8 @@ paypilot-ai/                                   ← tên folder local có thể k
 │   │   │       ├── 20260703160000_add_user_email_verified_at/ ← cột users.email_verified_at + backfill user cũ ✅
 │   │   │       ├── 20260704100000_add_user_avatar_url/ ← cột users.avatar_url ✅
 │   │   │       ├── 20260704162813_add_transaction_source_direction_import_batch/ ← enum TransactionSource/Direction, cột source/direction/importBatchId trên transactions ✅
-│   │   │       └── 20260706143059_add_copilot_quota/ ← NotificationType enum thêm copilot_quota_warning/exceeded; subscriptions.copilot_used_this_cycle; plan_pricing.copilot_quota ✅
+│   │   │       ├── 20260706143059_add_copilot_quota/ ← NotificationType enum thêm copilot_quota_warning/exceeded; subscriptions.copilot_used_this_cycle; plan_pricing.copilot_quota ✅
+│   │   │       └── 20260707020628_add_copilot_conversations/ ← enum CopilotMessageRole; model copilot_conversations + copilot_messages ✅
 │   │   ├── package.json
 │   │   ├── nest-cli.json
 │   │   ├── .swcrc
@@ -217,11 +225,14 @@ paypilot-ai/                                   ← tên folder local có thể k
 │   │           │   └── change-password.service.ts
 │   │           ├── banking/                   # POST /webhook/cas → enqueue ai-classify ✅
 │   │           ├── ai/                        # openai.service, embedding.service, classification.service, classification.processor, copilot.controller ✅
-│   │           │   ├── copilot.controller.ts      # POST /ai/copilot + POST /ai/copilot/stream (SSE) — guard chain JwtAuth→Roles→Plan→CopilotQuota; incrementAndNotify() fire-and-forget
+│   │           │   ├── copilot.controller.ts      # POST /ai/copilot + POST /ai/copilot/stream + 4 conversation CRUD endpoints — CopilotQuotaGuard method-level (chat+stream only)
+│   │           │   ├── copilot-conversation.service.ts  # CRUD conversations + messages, cursor pagination, auto-title fire-and-forget ✅
 │   │           │   ├── copilot-context.service.ts # Fallback: preload summary tháng hiện tại (dùng khi flag=0)
 │   │           │   ├── copilot-tool.service.ts    # execute(tenantId, name, args) — 8 tools + Redis cache (+ search_casso_public khi bật)
 │   │           │   ├── copilot-tools.factory.ts   # buildCopilotTools() → 8 Tool[] (+ search_casso_public optional)
-│   │           │   └── copilot-cas-faq.ts         # FAQ tĩnh Casso/Cas Link (4 topics)
+│   │           │   ├── copilot-cas-faq.ts         # FAQ tĩnh Casso/Cas Link (4 topics)
+│   │           │   └── dto/
+│   │           │       └── copilot-conversation.dto.ts  # ListConversationsQueryDto, GetConversationQueryDto, RenameConversationDto ✅
 │   │           ├── chart-of-accounts/         # CRUD + seedTt133() ✅
 │   │           │   ├── chart-of-accounts.controller.ts
 │   │           │   ├── chart-of-accounts.service.ts
@@ -399,8 +410,12 @@ paypilot-ai/                                   ← tên folder local có thể k
 | GET | `/reports/export` | Bearer JWT | Export Excel (.xlsx) |
 | GET | `/reports/comparison` | Bearer JWT | So sánh tháng này vs tháng trước |
 | GET | `/reports/top-accounts` | Bearer JWT | Top 5 TK chi/thu nhiều nhất |
-| POST | `/ai/copilot` | Bearer JWT | AI Copilot chat — `COPILOT_USE_FUNCTION_CALLING=1`: `runTools` 8 tools (+ `search_casso_public` khi bật) + trả `meta.activities`; =0: prompt stuffing cũ |
-| POST | `/ai/copilot/stream` | Bearer JWT | SSE streaming copilot — emit `activity`/`delta`/`done`; `try/catch` sau flushHeaders; flag=0 fallback `chatCopilot()`; `@Res()` bypass ResponseInterceptor |
+| GET | `/ai/copilot/conversations` | Bearer JWT (Starter+) | Danh sách conversations của user — cursor-based `?before=<uuid>&limit=` (default 20, max 50); trả `{ items, hasMore, cursorNext }` |
+| GET | `/ai/copilot/conversations/:id` | Bearer JWT (Starter+) | Chi tiết 1 conversation + messages cursor-based `?before=<uuid>&limit=` (default 10, max 50); trả `{ id, title, messages, hasMore, oldestMessageId }` |
+| PATCH | `/ai/copilot/conversations/:id` | Bearer JWT (Starter+) | Đổi tên conversation — body `{ title }` (1–100 ký tự, trim); 404 nếu không tìm thấy / không phải của user |
+| DELETE | `/ai/copilot/conversations/:id` | Bearer JWT (Starter+) | Xóa conversation + cascade messages; 204 No Content |
+| POST | `/ai/copilot` | Bearer JWT | AI Copilot chat — `COPILOT_USE_FUNCTION_CALLING=1`: `runTools` 8 tools (+ `search_casso_public` khi bật) + trả `meta.activities`; =0: prompt stuffing cũ; tích hợp lịch sử: trả `conversationId`, khi gửi `conversationId` thì history đọc từ DB thay vì FE |
+| POST | `/ai/copilot/stream` | Bearer JWT | SSE streaming copilot — emit `activity`/`delta`/`done` (done kèm `conversationId`); setup conversation+userMsg trước flushHeaders; `try/catch` sau flushHeaders; flag=0 fallback `chatCopilot()`; `@Res()` bypass ResponseInterceptor |
 | GET | `/notifications` | Bearer JWT (mọi role tenant) | Danh sách thông báo in-app (kèm unreadCount) |
 | GET | `/notifications/stream` | Public (JWT qua `?token=`) | SSE push thông báo mới — EventSource không gửi được Authorization header |
 | GET | `/notifications/unread-count` | Bearer JWT | Số thông báo chưa đọc |
@@ -474,6 +489,21 @@ transaction_classifications
 - `subscriptions`: thêm `copilot_used_this_cycle (Int, default 0)` — đếm lượt chat Copilot trong chu kỳ hiện tại, reset cùng `transactionUsedThisCycle` khi hết chu kỳ
 - `plan_pricing`: thêm `copilot_quota (Int, default -1)` — số lượt Copilot/tháng; -1 = unlimited (Enterprise), 0 = blocked (Free)
 - `NotificationType` enum: thêm `copilot_quota_warning`, `copilot_quota_exceeded`
+- `CopilotMessageRole` enum (mới): `user`, `assistant`
+
+**Đã thêm (Copilot History):**
+```
+copilot_conversations
+  id (uuid), tenant_id (FK → tenants cascade), user_id (FK → users cascade),
+  title (String, default "Cuộc chat mới"), created_at, updated_at
+  index: [tenant_id, user_id, updated_at DESC]
+
+copilot_messages
+  id (uuid), conversation_id (FK → copilot_conversations cascade),
+  role (CopilotMessageRole), content (Text), activities (Json?),
+  is_partial (Boolean default false), created_at
+  index: [conversation_id, created_at]
+```
 - `TransactionSource` enum: `cas` (từ webhook Cas Balance Hook), `import` (nhập tay từ Excel)
 - `TransactionDirection` enum: `in` (thu), `out` (chi)
 
@@ -507,6 +537,29 @@ export enum AccountType {
   EQUITY = 'equity',
   REVENUE = 'revenue',
   EXPENSE = 'expense',
+}
+
+export interface CopilotActivity {
+  kind: 'internal_data' | 'knowledge' | 'web_search';
+  label: string;
+  source?: string;
+  urls?: string[];
+  snippet?: string;
+}
+export interface CopilotConversationSummary {
+  id: string; title: string; createdAt: string; updatedAt: string;
+  messageCount: number; lastMessage?: string;
+}
+export interface CopilotMessageDto {
+  id: string; role: 'user' | 'assistant'; content: string;
+  activities?: CopilotActivity[]; createdAt: string; isPartial: boolean;
+}
+export interface CopilotConversationDetail {
+  id: string; title: string; createdAt: string; updatedAt: string;
+  messages: CopilotMessageDto[]; hasMore: boolean; oldestMessageId: string | null;
+}
+export interface CopilotConversationsListResponse {
+  items: CopilotConversationSummary[]; hasMore: boolean; cursorNext: string | null;
 }
 
 // + CasGrantStatus, SubscriptionPlan, SubscriptionStatus, PaymentOrderStatus, ApiResponse<T>
@@ -558,6 +611,8 @@ postinstall      → prisma generate
 - **`search_transactions` tool:** Prisma trực tiếp — `content`+`senderAccount` ILIKE keyword; `source` optional (`cas` → `grantId: { not: null }`, `import` → `grantId: null`, `all`/bỏ trống = không lọc source); limit 1–20 (required trong schema).
 - **`search_casso_public` tool (Phase 3):** Tavily `@tavily/core` singleton trong `CopilotToolService`, query thêm `site:casso.vn`, cache 24h theo base64(query) key. Chỉ active khi `COPILOT_CASSO_SEARCH_ENABLED=1` + `TAVILY_API_KEY` set. `buildCopilotTools()` nhận `configService?` để kiểm tra flag — nếu không truyền (backward compat) thì tool không xuất hiện. `TOOL_ACTIVITIES` có entry `web_search` cho tool này.
 - **Copilot tools cache keys:** `copilot:tool:summary:{tenantId}:{y}-{m}` TTL=300s; `copilot:tool:banking:{tenantId}` TTL=60s. Key cũ `copilot:context:{tenantId}:{y}-{m}` còn dùng khi flag=0 (fallback).
+- **Copilot conversation history:** khi `POST /ai/copilot` hoặc `POST /ai/copilot/stream` nhận `conversationId`, backend dùng history từ DB (không dùng FE-provided `history[]`) — chặn injection tấn công qua history. Conversation tự tạo (`findOrCreate`) nếu không có `conversationId`; `saveAssistantMessage` + `triggerAutoTitle` đều fire-and-forget. SSE: setup conversation + saveUserMessage trước `res.flushHeaders()` để lỗi 404 trả đúng HTTP code, không bị nuốt vào SSE stream.
+- **`CopilotQuotaGuard` method-level:** guard này đặt tại từng method `@UseGuards(CopilotQuotaGuard)` trên `chat()` và `streamChat()`, KHÔNG phải ở controller-level — để 4 CRUD conversation endpoint không bị chặn khi user vượt quota. Controller vẫn có class-level `@UseGuards(JwtAuthGuard, RolesGuard, PlanGuard)`.
 - **Copilot Quota guard chain:** `JwtAuthGuard → RolesGuard → PlanGuard → CopilotQuotaGuard` — thứ tự này quan trọng. `CopilotQuotaGuard` luôn đọc DB (no cache) để tránh race condition khi nhiều request đến cùng lúc. Sentinel `-1` (Enterprise) bypass hoàn toàn check quota. Guard store `{ id: subscription.id }` vào `request[COPILOT_SUBSCRIPTION_KEY]` để controller dùng cho `$increment`. Increment là fire-and-forget sau `writeEvent('done')` — lỗi increment không fail request.
 - **Copilot Quota notification dedup:** `checkCopilotQuotaNotifications()` trong `NotificationService` dùng `createOncePerCycle(tenantId, type, cycleStart)` để chỉ gửi notification 1 lần/chu kỳ per loại (`copilot_quota_warning` ≥80%, `copilot_quota_exceeded` ≥100%). Nếu quota=-1 (unlimited) thì không gửi gì.
 - **Overage billing flow:** (1) webhook banking ghi `usageLog(metric='overage_transaction')` khi Starter/Pro vượt quota; (2) cron `BillingCycleService` 2am daily tìm sub hết `currentCycleEnd` → gọi `createOverageOrder()` nếu có overage → reset `transactionUsedThisCycle=0` và `currentCycleEnd`; (3) tenant thấy banner cam trên BillingTab → click "Thanh toán ngay" → tạo PayOS order `orderType='overage'`; (4) webhook PayOS xác nhận → `confirmPayment()` nhận biết `orderType` → chỉ mark paid + auditLog, không đổi gói. Giá đọc từ `planPricing.overagePricePerTransaction` (không hardcode).

@@ -1,18 +1,12 @@
+import type { CopilotActivity } from '@xcash/shared-types';
 import { BarChart3, BookOpen, ExternalLink, Globe } from 'lucide-react';
 import { useState } from 'react';
 import { HighlightedText } from '@/components/shared/HighlightedText';
 import { Badge } from '@/components/ui/badge';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 
-export type CopilotActivityKind = 'internal_data' | 'knowledge' | 'web_search';
-
-export interface CopilotActivity {
-  kind: CopilotActivityKind;
-  label: string;
-  source?: string;
-  urls?: string[];
-  snippet?: string;
-}
+export type { CopilotActivity };
+export type CopilotActivityKind = CopilotActivity['kind'];
 
 interface Props {
   activities: CopilotActivity[];

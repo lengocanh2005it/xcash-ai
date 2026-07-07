@@ -11,6 +11,7 @@ import { ClassificationProcessor } from './classification.processor';
 import { ClassificationService } from './classification.service';
 import { CopilotController } from './copilot.controller';
 import { CopilotContextService } from './copilot-context.service';
+import { CopilotConversationService } from './copilot-conversation.service';
 import { CopilotToolService } from './copilot-tool.service';
 import { EmbeddingService } from './embedding.service';
 import { OpenAiService } from './openai.service';
@@ -30,6 +31,7 @@ import { OpenAiService } from './openai.service';
     ClassificationService,
     ClassificationProcessor,
     CopilotContextService,
+    CopilotConversationService,
     CopilotToolService,
     PlanGuard,
     CopilotQuotaGuard,

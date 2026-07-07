@@ -131,6 +131,48 @@ export interface ImportHistoryItem {
   createdAt: string;
 }
 
+export interface CopilotActivity {
+  kind: 'internal_data' | 'knowledge' | 'web_search';
+  label: string;
+  source?: string;
+  urls?: string[];
+  snippet?: string;
+}
+
+export interface CopilotConversationSummary {
+  id: string;
+  title: string;
+  createdAt: string;
+  updatedAt: string;
+  messageCount: number;
+  lastMessage?: string;
+}
+
+export interface CopilotMessageDto {
+  id: string;
+  role: 'user' | 'assistant';
+  content: string;
+  activities?: CopilotActivity[];
+  createdAt: string;
+  isPartial: boolean;
+}
+
+export interface CopilotConversationDetail {
+  id: string;
+  title: string;
+  createdAt: string;
+  updatedAt: string;
+  messages: CopilotMessageDto[];
+  hasMore: boolean;
+  oldestMessageId: string | null;
+}
+
+export interface CopilotConversationsListResponse {
+  items: CopilotConversationSummary[];
+  hasMore: boolean;
+  cursorNext: string | null;
+}
+
 export interface ApiResponse<T> {
   success: boolean;
   data: T | null;

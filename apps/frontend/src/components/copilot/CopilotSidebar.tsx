@@ -1,7 +1,7 @@
-import { useQuery } from '@tanstack/react-query';
 import type { CopilotConversationSummary } from '@xcash/shared-types';
 import { Loader2, MessageSquarePlus, MoreHorizontal, Pencil, Trash2 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
+import { CopilotQuotaSummary } from '@/components/copilot/CopilotQuotaSummary';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -10,15 +10,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { Progress } from '@/components/ui/progress';
 import { useCopilotConversations } from '@/hooks/useCopilotConversations';
-import { api } from '@/lib/api';
 import { cn } from '@/lib/utils';
-
-interface PlanData {
-  copilotQuota: number;
-  copilotUsed: number;
-}
 
 interface Props {
   userId?: string;
@@ -130,7 +123,9 @@ function ConversationItem({
     <div
       className={cn(
         'group relative flex items-center rounded-lg text-sm transition-colors',
-        isActive ? 'bg-accent text-accent-foreground' : 'hover:bg-muted/60',
+        isActive
+          ? 'bg-primary/10 font-medium text-primary ring-1 ring-primary/15'
+          : 'text-foreground/80 hover:bg-primary/5 hover:text-primary',
       )}
     >
       {renaming ? (
@@ -226,19 +221,7 @@ export function CopilotSidebar({
   const loadMoreRef = useRef<HTMLDivElement>(null);
   const listScrollRef = useRef<HTMLDivElement>(null);
 
-  const { data: planData } = useQuery<PlanData>({
-    queryKey: ['billing', 'current-plan'],
-    queryFn: () => api.get<{ data: PlanData }>('/billing/current-plan').then((r) => r.data.data),
-    staleTime: 60_000,
-    select: (d) => ({ copilotQuota: d.copilotQuota, copilotUsed: d.copilotUsed }),
-  });
-
   const groups = groupByDate(items);
-  const quota = planData?.copilotQuota ?? 0;
-  const used = planData?.copilotUsed ?? 0;
-  const isUnlimited = quota === -1;
-  const pct = isUnlimited ? 0 : quota > 0 ? Math.min(100, Math.round((used / quota) * 100)) : 100;
-
   // biome-ignore lint/correctness/useExhaustiveDependencies: re-bind observer when list grows
   useEffect(() => {
     if (!hasNextPage || isFetchingNextPage || !loadMoreRef.current || !listScrollRef.current)
@@ -267,11 +250,11 @@ export function CopilotSidebar({
         <Button
           variant="outline"
           size="sm"
-          className="w-full justify-start gap-2"
+          className="w-full justify-start gap-2 border-sidebar-border/80 bg-background shadow-none hover:bg-primary/5 hover:text-primary"
           onClick={onNewChat}
         >
           <MessageSquarePlus className="size-4" />
-          Chat mới
+          Cuộc trò chuyện mới
         </Button>
       </div>
 
@@ -311,26 +294,7 @@ export function CopilotSidebar({
         )}
       </div>
 
-      {/* Usage bar */}
-      {!isUnlimited && quota > 0 && (
-        <div className="border-t border-border px-4 py-3">
-          <div className="flex items-center justify-between text-xs text-muted-foreground mb-1.5">
-            <span>Lượt chat Copilot</span>
-            <span
-              className={cn(pct >= 100 ? 'text-destructive' : pct >= 80 ? 'text-orange-500' : '')}
-            >
-              {used}/{quota}
-            </span>
-          </div>
-          <Progress
-            value={pct}
-            className={cn(
-              'h-1.5',
-              pct >= 100 ? '[&>div]:bg-destructive' : pct >= 80 ? '[&>div]:bg-orange-500' : '',
-            )}
-          />
-        </div>
-      )}
+      <CopilotQuotaSummary variant="sidebar" />
 
       {/* Delete confirm dialog */}
       <Dialog open={!!deleteTarget} onOpenChange={(o) => !o && setDeleteTarget(null)}>

@@ -55,7 +55,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { api } from '@/lib/api';
 import { formatDateVN } from '@/lib/dashboard-transactions';
 import { formatVND } from '@/lib/format-vnd';
-import { hasPlanAccess, PLAN_LABEL } from '@/lib/plan';
+import { formatCopilotQuota, formatTransactionQuota, hasPlanAccess, PLAN_LABEL } from '@/lib/plan';
 import { cn } from '@/lib/utils';
 import { CopilotHistoryTab } from '@/pages/settings/CopilotHistoryTab';
 
@@ -575,6 +575,7 @@ interface BillingPlan {
   plan: string;
   pricePerMonth: number;
   transactionQuota: number;
+  copilotQuota?: number;
   overagePricePerTransaction: number | null;
 }
 
@@ -826,13 +827,8 @@ function PaymentHistoryTable() {
   );
 }
 
-function formatPlanQuota(quota: number): string {
-  if (quota >= 999_999) return 'Không giới hạn';
-  return `${quota.toLocaleString('vi-VN')} GD/tháng`;
-}
-
 function formatPlanQuotaSubtitle(plan: BillingPlan): string {
-  const quota = formatPlanQuota(plan.transactionQuota);
+  const quota = formatTransactionQuota(plan.transactionQuota);
   if (plan.overagePricePerTransaction != null) {
     return `${quota} · Phí vượt ${formatVND(plan.overagePricePerTransaction)}/GD`;
   }
@@ -1159,82 +1155,91 @@ function BillingTab() {
 
       {/* Dialog chọn gói */}
       <Dialog open={upgradeOpen} onOpenChange={setUpgradeOpen}>
-        <DialogContent className="max-w-2xl">
-          <DialogHeader>
+        <DialogContent className="flex max-h-[min(88dvh,100%)] w-[min(42rem,calc(100vw-2.5rem))] max-w-2xl flex-col gap-0 overflow-hidden px-5 py-5 top-[6dvh] translate-y-0 sm:top-[50%] sm:translate-y-[-50%] sm:px-6 sm:py-6">
+          <DialogHeader className="shrink-0 pb-3 pr-8">
             <DialogTitle>Chọn gói dịch vụ</DialogTitle>
           </DialogHeader>
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            {loadingPlans
-              ? Array.from({ length: 4 }).map((_, i) => (
-                  // biome-ignore lint/suspicious/noArrayIndexKey: skeleton placeholder
-                  <Skeleton key={i} className="h-40 w-full rounded-xl" />
-                ))
-              : (availablePlans ?? []).map((planItem) => {
-                  const plan = planItem.plan;
-                  const isCurrent = data?.plan === plan;
-                  const currentPlanItem = availablePlans?.find((p) => p.plan === data?.plan);
-                  const isLower =
-                    !isCurrent &&
-                    currentPlanItem != null &&
-                    planItem.pricePerMonth < currentPlanItem.pricePerMonth;
-                  const isDisabled = isCurrent || isLower;
-                  const isSelected = selectedPlan === plan;
-                  return (
-                    <button
-                      key={plan}
-                      type="button"
-                      disabled={isDisabled}
-                      onClick={() => setSelectedPlan(plan)}
-                      className={cn(
-                        'rounded-xl border p-4 text-left transition-all',
-                        isDisabled
-                          ? 'cursor-not-allowed border-primary/40 bg-primary/5 opacity-60'
-                          : isSelected
-                            ? 'border-primary ring-1 ring-primary'
-                            : 'hover:border-primary/50',
-                      )}
-                    >
-                      <div className="mb-2 flex items-center justify-between">
-                        <span className="font-semibold">
-                          {PLAN_LABEL[plan as SubscriptionPlan] ?? plan}
-                        </span>
-                        {isCurrent && (
-                          <Badge variant="secondary" className="text-[10px]">
-                            Hiện tại
-                          </Badge>
+          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-0.5 pb-2">
+            <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2">
+              {loadingPlans
+                ? Array.from({ length: 4 }).map((_, i) => (
+                    // biome-ignore lint/suspicious/noArrayIndexKey: skeleton placeholder
+                    <Skeleton key={i} className="h-48 w-full rounded-xl" />
+                  ))
+                : (availablePlans ?? []).map((planItem) => {
+                    const plan = planItem.plan;
+                    const isCurrent = data?.plan === plan;
+                    const currentPlanItem = availablePlans?.find((p) => p.plan === data?.plan);
+                    const isLower =
+                      !isCurrent &&
+                      currentPlanItem != null &&
+                      planItem.pricePerMonth < currentPlanItem.pricePerMonth;
+                    const isDisabled = isCurrent || isLower;
+                    const isSelected = selectedPlan === plan;
+                    return (
+                      <button
+                        key={plan}
+                        type="button"
+                        disabled={isDisabled}
+                        onClick={() => setSelectedPlan(plan)}
+                        className={cn(
+                          'w-full min-w-0 rounded-xl border p-4 text-left transition-all',
+                          isDisabled
+                            ? 'cursor-not-allowed border-primary/40 bg-primary/5 opacity-60'
+                            : isSelected
+                              ? 'border-primary ring-1 ring-primary'
+                              : 'hover:border-primary/50',
                         )}
-                        {isLower && (
-                          <Badge variant="outline" className="text-[10px] text-muted-foreground">
-                            Không khả dụng
-                          </Badge>
-                        )}
-                      </div>
-                      <p className="mb-2 text-lg font-bold text-primary">
-                        {planItem.pricePerMonth === 0
-                          ? 'Miễn phí'
-                          : `${formatVND(planItem.pricePerMonth)}/tháng`}
-                      </p>
-                      <p className="mb-2 text-xs text-muted-foreground">
-                        {formatPlanQuotaSubtitle(planItem)}
-                      </p>
-                      <ul className="space-y-1">
-                        {getPlanFeatureLines(plan).map((f) => (
-                          <li
-                            key={f.text}
-                            className={cn(
-                              'flex items-center gap-1.5 text-xs',
-                              f.inherited ? 'font-medium text-foreground' : 'text-muted-foreground',
-                            )}
-                          >
-                            <span className="text-primary">✓</span> {f.text}
-                          </li>
-                        ))}
-                      </ul>
-                    </button>
-                  );
-                })}
+                      >
+                        <div className="mb-2 flex flex-wrap items-center justify-between gap-x-2 gap-y-1">
+                          <span className="font-semibold">
+                            {PLAN_LABEL[plan as SubscriptionPlan] ?? plan}
+                          </span>
+                          {isCurrent && (
+                            <Badge variant="secondary" className="shrink-0 text-[10px]">
+                              Hiện tại
+                            </Badge>
+                          )}
+                          {isLower && (
+                            <Badge
+                              variant="outline"
+                              className="shrink-0 text-[10px] text-muted-foreground"
+                            >
+                              Không khả dụng
+                            </Badge>
+                          )}
+                        </div>
+                        <p className="mb-2 text-lg font-bold text-primary break-words">
+                          {planItem.pricePerMonth === 0
+                            ? 'Miễn phí'
+                            : `${formatVND(planItem.pricePerMonth)}/tháng`}
+                        </p>
+                        <div className="mb-2 space-y-0.5 text-xs text-muted-foreground break-words">
+                          <p>{formatPlanQuotaSubtitle(planItem)}</p>
+                          <p>{formatCopilotQuota(planItem.copilotQuota, plan)}</p>
+                        </div>
+                        <ul className="space-y-1">
+                          {getPlanFeatureLines(plan).map((f) => (
+                            <li
+                              key={f.text}
+                              className={cn(
+                                'flex items-start gap-1.5 text-xs break-words',
+                                f.inherited
+                                  ? 'font-medium text-foreground'
+                                  : 'text-muted-foreground',
+                              )}
+                            >
+                              <span className="shrink-0 text-primary">✓</span>
+                              <span>{f.text}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </button>
+                    );
+                  })}
+            </div>
           </div>
-          <DialogFooter>
+          <DialogFooter className="mt-4 shrink-0 gap-2.5 border-t border-border pt-4 sm:gap-2">
             <Button variant="ghost" onClick={() => setUpgradeOpen(false)}>
               Hủy
             </Button>

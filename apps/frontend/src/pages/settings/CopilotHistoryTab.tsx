@@ -3,6 +3,7 @@ import { SubscriptionPlan } from '@xcash/shared-types';
 import { Bot, ChevronRight, ExternalLink, MessageSquare, X } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { CopilotQuotaSummary } from '@/components/copilot/CopilotQuotaSummary';
 import { EmptyState } from '@/components/shared/EmptyState';
 import { PlanGate } from '@/components/shared/PlanGate';
 import { TableSkeleton } from '@/components/shared/TableSkeleton';
@@ -35,6 +36,32 @@ function formatDateTimeVN(iso: string) {
     hour: '2-digit',
     minute: '2-digit',
   });
+}
+
+const PREVIEW_MAX_LENGTH = 100;
+
+/** Plain-text preview for conversation list — strips markdown and truncates with ellipsis. */
+function formatMessagePreview(text: string) {
+  const plain = text
+    .replace(/!\[([^\]]*)\]\([^)]+\)/g, '$1')
+    .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
+    .replace(/\*\*([^*]+)\*\*/g, '$1')
+    .replace(/__([^_]+)__/g, '$1')
+    .replace(/\*([^*]+)\*/g, '$1')
+    .replace(/_([^_]+)_/g, '$1')
+    .replace(/`([^`]+)`/g, '$1')
+    .replace(/^#{1,6}\s+/gm, '')
+    .replace(/^>\s+/gm, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  if (plain.length <= PREVIEW_MAX_LENGTH) return plain;
+
+  const slice = plain.slice(0, PREVIEW_MAX_LENGTH).trimEnd();
+  const lastSpace = slice.lastIndexOf(' ');
+  const trimmed =
+    lastSpace > PREVIEW_MAX_LENGTH * 0.6 ? slice.slice(0, lastSpace) : slice.replace(/\s+\S*$/, '');
+  return `${trimmed}...`;
 }
 
 function matchesDateRange(item: CopilotConversationSummary, from: string, to: string) {
@@ -79,41 +106,53 @@ function CopilotHistoryTable() {
   };
 
   if (isLoading) {
-    return <TableSkeleton rows={6} columns={4} />;
+    return (
+      <div className="space-y-4">
+        <CopilotQuotaSummary variant="card" />
+        <TableSkeleton rows={6} columns={4} />
+      </div>
+    );
   }
 
   if (isError) {
     return (
-      <EmptyState
-        icon={MessageSquare}
-        title="Không tải được lịch sử"
-        description="Vui lòng thử lại sau."
-        action={
-          <Button variant="outline" size="sm" onClick={() => refetch()}>
-            Thử lại
-          </Button>
-        }
-      />
+      <div className="space-y-4">
+        <CopilotQuotaSummary variant="card" />
+        <EmptyState
+          icon={MessageSquare}
+          title="Không tải được lịch sử"
+          description="Vui lòng thử lại sau."
+          action={
+            <Button variant="outline" size="sm" onClick={() => refetch()}>
+              Thử lại
+            </Button>
+          }
+        />
+      </div>
     );
   }
 
   if (items.length === 0) {
     return (
-      <EmptyState
-        icon={Bot}
-        title="Chưa có cuộc chat nào"
-        description="Bắt đầu trò chuyện với AI Copilot để xem lịch sử tại đây."
-        action={
-          <Button size="sm" onClick={() => navigate('/copilot')}>
-            Mở AI Copilot
-          </Button>
-        }
-      />
+      <div className="space-y-4">
+        <CopilotQuotaSummary variant="card" />
+        <EmptyState
+          icon={Bot}
+          title="Chưa có cuộc chat nào"
+          description="Bắt đầu trò chuyện với AI Copilot để xem lịch sử tại đây."
+          action={
+            <Button size="sm" onClick={() => navigate('/copilot')}>
+              Mở AI Copilot
+            </Button>
+          }
+        />
+      </div>
     );
   }
 
   return (
     <div className="space-y-4">
+      <CopilotQuotaSummary variant="card" />
       <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div className="grid gap-3 sm:grid-cols-2 sm:max-w-md">
           <div className="space-y-1.5">
@@ -157,7 +196,7 @@ function CopilotHistoryTable() {
               <TableRow>
                 <TableHead>Cập nhật</TableHead>
                 <TableHead>Tiêu đề</TableHead>
-                <TableHead className="text-right hidden sm:table-cell">Tin nhắn</TableHead>
+                <TableHead className="text-right hidden sm:table-cell">Số tin nhắn</TableHead>
                 <TableHead className="w-10" />
               </TableRow>
             </TableHeader>
@@ -176,7 +215,7 @@ function CopilotHistoryTable() {
                     <p className="font-medium truncate max-w-[200px] sm:max-w-md">{item.title}</p>
                     {item.lastMessage && (
                       <p className="mt-0.5 text-xs text-muted-foreground truncate max-w-[200px] sm:max-w-md">
-                        {item.lastMessage}
+                        {formatMessagePreview(item.lastMessage)}
                       </p>
                     )}
                   </TableCell>

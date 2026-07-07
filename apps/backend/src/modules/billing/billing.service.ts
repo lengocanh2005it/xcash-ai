@@ -30,6 +30,7 @@ export class BillingService {
       plan: p.plan,
       pricePerMonth: Number(p.pricePerMonth),
       transactionQuota: p.transactionQuota,
+      copilotQuota: p.copilotQuota,
       overagePricePerTransaction:
         p.overagePricePerTransaction !== null ? Number(p.overagePricePerTransaction) : null,
     }));

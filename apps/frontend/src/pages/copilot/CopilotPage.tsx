@@ -9,6 +9,8 @@ import {
   HelpCircle,
   Loader2,
   Menu,
+  PanelLeftClose,
+  PanelLeftOpen,
   Send,
   Square,
   StopCircle,
@@ -23,10 +25,13 @@ import type { CopilotActivity } from '@/components/copilot/CopilotSourceChips';
 import { CopilotSourceChips } from '@/components/copilot/CopilotSourceChips';
 import { HighlightedText } from '@/components/shared/HighlightedText';
 import { PlanGate } from '@/components/shared/PlanGate';
+import { ThemeToggle } from '@/components/shared/ThemeToggle';
+import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent } from '@/components/ui/sheet';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useAuthContext } from '@/contexts/auth-context';
 import { useCopilotConversations } from '@/hooks/useCopilotConversations';
+import { useSidebarCollapsed } from '@/hooks/useSidebarCollapsed';
 import { API_BASE_URL, api, getAccessToken } from '@/lib/api';
 import { cn } from '@/lib/utils';
 
@@ -93,7 +98,8 @@ function flushSsePending(pending: { buffer: string }): SseEvent[] {
 
 export default function CopilotPage() {
   const { user } = useAuthContext();
-  const { invalidateList, loadConversation, loadOlderMessages } = useCopilotConversations(user?.id);
+  const { invalidateList, loadConversation, loadOlderMessages, refreshListAfterChat } =
+    useCopilotConversations(user?.id);
 
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
@@ -105,6 +111,10 @@ export default function CopilotPage() {
   const [streamActivity, setStreamActivity] = useState<StreamActivity | undefined>();
   const [streamingContent, setStreamingContent] = useState('');
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [historyCollapsed, toggleHistoryCollapsed] = useSidebarCollapsed(
+    'xcash_copilot_history_collapsed',
+    true,
+  );
   const [canAbort, setCanAbort] = useState(false);
   const [activeConversationId, setActiveConversationId] = useState<string | null>(() => {
     if (!user?.id) return null;
@@ -136,8 +146,9 @@ export default function CopilotPage() {
     }
   }, []);
 
-  async function handleLoadConversation(id: string) {
-    setIsLoadingConversation(true);
+  async function handleLoadConversation(id: string, opts?: { showLoading?: boolean }) {
+    const showLoading = opts?.showLoading ?? true;
+    if (showLoading) setIsLoadingConversation(true);
     try {
       const conv = await loadConversation(id);
       setMessages(conv.messages.map(mapDto));
@@ -145,18 +156,17 @@ export default function CopilotPage() {
       setOldestMessageId(conv.oldestMessageId);
       setActiveConversationId(id);
       persistConversation(id);
-      // Scroll to bottom immediately after load
       requestAnimationFrame(() => {
         if (chatContainerRef.current) {
           chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
         }
       });
     } catch {
-      // Conversation may have been deleted; reset to welcome state
+      setMessages([]);
       setActiveConversationId(null);
       persistConversation(null);
     } finally {
-      setIsLoadingConversation(false);
+      if (showLoading) setIsLoadingConversation(false);
     }
   }
 
@@ -205,10 +215,10 @@ export default function CopilotPage() {
   // Scroll to bottom on new messages (not on prepend)
   // biome-ignore lint/correctness/useExhaustiveDependencies: scroll on new content
   useEffect(() => {
-    if (!justPrepended) {
+    if (!justPrepended && !isLoadingConversation) {
       bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
     }
-  }, [messages, isLoading, streamingContent]);
+  }, [messages, isLoading, streamingContent, isLoadingConversation]);
 
   function autoResize() {
     const el = textareaRef.current;
@@ -367,6 +377,8 @@ export default function CopilotPage() {
     setStreamActivity(undefined);
     setStreamingContent('');
 
+    const isNewConversation = !activeConversationId;
+
     let wasAborted = false;
     setCanAbort(true);
     try {
@@ -375,20 +387,38 @@ export default function CopilotPage() {
         wasAborted = true;
         return; // aborted — don't update conversation or invalidate
       }
+      const convId = newConvId ?? activeConversationId;
       if (newConvId && newConvId !== activeConversationId) {
         setActiveConversationId(newConvId);
         persistConversation(newConvId);
       }
-      invalidateList();
+      if (convId) {
+        refreshListAfterChat({
+          conversationId: convId,
+          firstMessage: text,
+          isNewConversation,
+        });
+      } else {
+        invalidateList();
+      }
     } catch {
       setCanAbort(false);
       try {
         const newConvId = await sendViaJson(text, [...prevMessages, userMsg], activeConversationId);
+        const convId = newConvId ?? activeConversationId;
         if (newConvId && newConvId !== activeConversationId) {
           setActiveConversationId(newConvId);
           persistConversation(newConvId);
         }
-        invalidateList();
+        if (convId) {
+          refreshListAfterChat({
+            conversationId: convId,
+            firstMessage: text,
+            isNewConversation,
+          });
+        } else {
+          invalidateList();
+        }
       } catch {
         setMessages((prev) => [
           ...prev,
@@ -426,9 +456,16 @@ export default function CopilotPage() {
   };
 
   const handleSelectConversation = (id: string) => {
+    if (id === activeConversationId && !isLoadingConversation) return;
     if (isLoading) abortRef.current?.abort();
     setSidebarOpen(false);
-    handleLoadConversation(id);
+    setIsLoadingConversation(true);
+    setMessages([]);
+    setHasMoreMessages(false);
+    setOldestMessageId(null);
+    void handleLoadConversation(id, { showLoading: false }).finally(() => {
+      setIsLoadingConversation(false);
+    });
   };
 
   const handleDeleteConversation = (id: string) => {
@@ -461,19 +498,66 @@ export default function CopilotPage() {
       <PlanGate minPlan={SubscriptionPlan.STARTER} featureName="AI Copilot">
         <div className="flex h-full min-h-0 flex-1">
           {/* ── Desktop sidebar (md+) ── */}
-          <aside className="hidden md:flex w-64 shrink-0 flex-col border-r border-border bg-muted/20">
-            {sidebarContent}
+          <aside
+            className={cn(
+              'hidden md:flex shrink-0 flex-col overflow-hidden border-border bg-background',
+              'transition-[width,border-color] duration-300 ease-in-out',
+              historyCollapsed ? 'w-0 border-r-0' : 'w-64 border-r border-sidebar-border/80',
+            )}
+            aria-hidden={historyCollapsed}
+          >
+            <div
+              className={cn(
+                'flex h-full w-64 min-w-64 flex-col',
+                'transition-opacity duration-300 ease-in-out',
+                historyCollapsed ? 'pointer-events-none opacity-0' : 'opacity-100',
+              )}
+            >
+              <div className="flex shrink-0 items-center justify-between border-b border-sidebar-border/80 px-3 py-2.5">
+                <span className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                  Lịch sử chat
+                </span>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-sm"
+                  className="text-muted-foreground"
+                  onClick={toggleHistoryCollapsed}
+                  aria-label="Thu gọn lịch sử chat"
+                  title="Thu gọn lịch sử chat"
+                >
+                  <PanelLeftClose className="size-4" />
+                </Button>
+              </div>
+              {sidebarContent}
+            </div>
           </aside>
 
           {/* ── Mobile sidebar (Sheet) ── */}
           <Sheet open={sidebarOpen} onOpenChange={setSidebarOpen}>
-            <SheetContent side="left" className="w-64 p-0">
+            <SheetContent side="left" className="w-64 border-sidebar-border/80 bg-background p-0">
               {sidebarContent}
             </SheetContent>
           </Sheet>
 
           {/* ── Chat area ── */}
           <div className="relative flex min-h-0 flex-1 flex-col bg-background">
+            {/* Desktop: nút mở lịch sử khi sidebar đã thu gọn */}
+            {historyCollapsed && (
+              <Button
+                type="button"
+                variant="outline"
+                size="icon-sm"
+                className="absolute top-3 left-3 z-10 hidden md:inline-flex text-muted-foreground shadow-sm"
+                onClick={toggleHistoryCollapsed}
+                aria-label="Mở lịch sử chat"
+                title="Mở lịch sử chat"
+              >
+                <PanelLeftOpen className="size-4" />
+              </Button>
+            )}
+            <ThemeToggle className="absolute top-3 right-4 z-10 hidden lg:inline-flex shadow-sm sm:right-5" />
+
             {/* Mobile header */}
             <div className="flex md:hidden items-center gap-2 border-b border-border px-4 py-2">
               <button
@@ -490,143 +574,149 @@ export default function CopilotPage() {
             {/* Messages area */}
             <div
               ref={chatContainerRef}
-              className="flex-1 overflow-y-auto"
+              className="relative flex-1 overflow-y-auto"
               role="log"
               aria-live="polite"
               aria-label="Lịch sử hội thoại AI Copilot"
+              aria-busy={isLoadingConversation}
             >
-              {/* Loading conversation skeleton */}
-              {isLoadingConversation && (
-                <div className="mx-auto w-full max-w-3xl px-4 py-6 flex flex-col gap-6">
-                  {[1, 2, 3].map((i) => (
-                    <div key={i} className="flex gap-3">
-                      <Skeleton className="size-7 rounded-full shrink-0" />
-                      <div className="flex-1 space-y-2">
-                        <Skeleton className="h-4 w-3/4" />
-                        <Skeleton className="h-4 w-1/2" />
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              {/* Welcome state */}
-              {isWelcome && !isLoadingConversation && (
-                <div className="flex flex-col items-center justify-center min-h-full px-4 py-12 gap-8">
-                  <div className="flex flex-col items-center gap-3 text-center">
-                    <div className="flex size-14 items-center justify-center rounded-2xl bg-primary text-primary-foreground shadow-md">
-                      <Bot className="size-7" />
-                    </div>
-                    <div>
-                      <h1 className="text-2xl font-semibold tracking-tight">AI Copilot</h1>
-                      <p className="mt-1 text-sm text-muted-foreground max-w-sm">
-                        Hỏi đáp tài chính bằng ngôn ngữ tự nhiên — doanh thu, chi phí, định khoản
-                        TT133, liên kết ngân hàng.
-                      </p>
+              {isLoadingConversation ? (
+                <div className="mx-auto flex min-h-full w-full max-w-3xl flex-col justify-center gap-6 px-4 py-8">
+                  <div className="flex justify-end gap-3">
+                    <Skeleton className="h-12 w-[55%] rounded-2xl rounded-tr-sm" />
+                  </div>
+                  <div className="flex gap-3">
+                    <Skeleton className="size-8 shrink-0 rounded-full" />
+                    <div className="flex-1 space-y-2">
+                      <Skeleton className="h-20 w-full rounded-2xl rounded-tl-sm" />
+                      <Skeleton className="h-3 w-2/5" />
                     </div>
                   </div>
-                  <div className="grid grid-cols-2 gap-2 w-full max-w-xl">
-                    {SUGGESTIONS.map(({ icon: Icon, text }) => (
-                      <button
-                        key={text}
-                        type="button"
-                        onClick={() => sendMessage(text)}
-                        className="flex items-start gap-3 rounded-xl border border-border bg-muted/40 hover:bg-muted/70 px-4 py-3 text-left text-sm transition-colors group"
-                      >
-                        <Icon className="size-4 shrink-0 mt-0.5 text-muted-foreground group-hover:text-foreground transition-colors" />
-                        <span className="text-muted-foreground group-hover:text-foreground transition-colors leading-snug">
-                          {text}
-                        </span>
-                      </button>
-                    ))}
+                  <div className="flex justify-end gap-3">
+                    <Skeleton className="h-10 w-[40%] rounded-2xl rounded-tr-sm" />
                   </div>
                 </div>
-              )}
-
-              {/* Message list */}
-              {!isWelcome && !isLoadingConversation && (
-                <div className="mx-auto w-full max-w-3xl px-4 py-6 flex flex-col gap-6">
-                  {/* Sentinel for loading older messages */}
-                  <div ref={sentinelRef} className="h-1" />
-
-                  {/* Loading older indicator */}
-                  {isLoadingOlder && (
-                    <div className="flex flex-col gap-3">
-                      {[1, 2].map((i) => (
-                        <div key={i} className="flex gap-3">
-                          <Skeleton className="size-7 rounded-full shrink-0" />
-                          <div className="flex-1 space-y-2">
-                            <Skeleton className="h-4 w-2/3" />
-                            <Skeleton className="h-4 w-1/3" />
-                          </div>
+              ) : (
+                <>
+                  {/* Welcome state */}
+                  {isWelcome && (
+                    <div className="flex flex-col items-center justify-center min-h-full px-4 py-12 gap-8">
+                      <div className="flex flex-col items-center gap-3 text-center">
+                        <div className="flex size-14 items-center justify-center rounded-2xl bg-primary text-primary-foreground shadow-md">
+                          <Bot className="size-7" />
                         </div>
-                      ))}
-                    </div>
-                  )}
-
-                  {messages.map((msg) =>
-                    msg.role === 'user' ? (
-                      <div key={msg.id} className="flex justify-end">
-                        <div className="max-w-[75%] rounded-2xl rounded-tr-none bg-muted px-4 py-3 text-sm">
-                          {msg.content}
+                        <div>
+                          <h1 className="text-2xl font-semibold tracking-tight">AI Copilot</h1>
+                          <p className="mt-1 text-sm text-muted-foreground max-w-sm">
+                            Hỏi đáp tài chính bằng ngôn ngữ tự nhiên — doanh thu, chi phí, định
+                            khoản TT133, liên kết ngân hàng.
+                          </p>
                         </div>
                       </div>
-                    ) : (
-                      <div key={msg.id} className="flex gap-3 group/msg">
-                        <div className="flex size-7 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground mt-0.5">
-                          <Bot className="size-4" />
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <div className="text-sm leading-relaxed whitespace-pre-wrap">
-                            <HighlightedText text={msg.content} />
-                          </div>
-                          {msg.activities && msg.activities.length > 0 && (
-                            <CopilotSourceChips activities={msg.activities} />
-                          )}
-                          {msg.isPartial && (
-                            <span className="mt-1 inline-flex items-center gap-1 text-[11px] text-muted-foreground">
-                              <StopCircle className="size-3" />
-                              Đã dừng
+                      <div className="grid grid-cols-2 gap-2 w-full max-w-xl">
+                        {SUGGESTIONS.map(({ icon: Icon, text }) => (
+                          <button
+                            key={text}
+                            type="button"
+                            onClick={() => sendMessage(text)}
+                            className="flex items-start gap-3 rounded-xl border border-border bg-muted/40 hover:bg-muted/70 px-4 py-3 text-left text-sm transition-colors group"
+                          >
+                            <Icon className="size-4 shrink-0 mt-0.5 text-muted-foreground group-hover:text-foreground transition-colors" />
+                            <span className="text-muted-foreground group-hover:text-foreground transition-colors leading-snug">
+                              {text}
                             </span>
-                          )}
-                          <div className="mt-1.5 flex opacity-100 md:opacity-0 md:group-hover/msg:opacity-100 transition-opacity">
-                            <CopilotMessageActions content={msg.content} />
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Message list */}
+                  {!isWelcome && (
+                    <div className="mx-auto w-full max-w-3xl px-4 py-6 flex flex-col gap-6">
+                      {/* Sentinel for loading older messages */}
+                      <div ref={sentinelRef} className="h-1" />
+
+                      {/* Loading older indicator */}
+                      {isLoadingOlder && (
+                        <div className="flex flex-col gap-3">
+                          {[1, 2].map((i) => (
+                            <div key={i} className="flex gap-3">
+                              <Skeleton className="size-7 rounded-full shrink-0" />
+                              <div className="flex-1 space-y-2">
+                                <Skeleton className="h-4 w-2/3" />
+                                <Skeleton className="h-4 w-1/3" />
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+
+                      {messages.map((msg) =>
+                        msg.role === 'user' ? (
+                          <div key={msg.id} className="flex justify-end">
+                            <div className="max-w-[75%] rounded-2xl rounded-tr-none bg-muted px-4 py-3 text-sm">
+                              {msg.content}
+                            </div>
+                          </div>
+                        ) : (
+                          <div key={msg.id} className="flex gap-3 group/msg">
+                            <div className="flex size-7 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground mt-0.5">
+                              <Bot className="size-4" />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <div className="text-sm leading-relaxed whitespace-pre-wrap">
+                                <HighlightedText text={msg.content} />
+                              </div>
+                              {msg.activities && msg.activities.length > 0 && (
+                                <CopilotSourceChips activities={msg.activities} />
+                              )}
+                              {msg.isPartial && (
+                                <span className="mt-1 inline-flex items-center gap-1 text-[11px] text-muted-foreground">
+                                  <StopCircle className="size-3" />
+                                  Đã dừng
+                                </span>
+                              )}
+                              <div className="mt-1.5 flex opacity-100 md:opacity-0 md:group-hover/msg:opacity-100 transition-opacity">
+                                <CopilotMessageActions content={msg.content} />
+                              </div>
+                            </div>
+                          </div>
+                        ),
+                      )}
+
+                      {/* Streaming bubble */}
+                      {isLoading && streamingContent && (
+                        <div className="flex gap-3">
+                          <div className="flex size-7 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground mt-0.5">
+                            <Bot className="size-4" />
+                          </div>
+                          <div className="flex-1 text-sm leading-relaxed whitespace-pre-wrap">
+                            <HighlightedText text={streamingContent} />
+                            <span className="inline-block w-0.5 h-4 bg-foreground/70 ml-0.5 animate-pulse align-middle" />
                           </div>
                         </div>
-                      </div>
-                    ),
-                  )}
+                      )}
 
-                  {/* Streaming bubble */}
-                  {isLoading && streamingContent && (
-                    <div className="flex gap-3">
-                      <div className="flex size-7 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground mt-0.5">
-                        <Bot className="size-4" />
-                      </div>
-                      <div className="flex-1 text-sm leading-relaxed whitespace-pre-wrap">
-                        <HighlightedText text={streamingContent} />
-                        <span className="inline-block w-0.5 h-4 bg-foreground/70 ml-0.5 animate-pulse align-middle" />
-                      </div>
+                      {/* Loading indicator (tool calls, no content yet) */}
+                      {isLoading && !streamingContent && (
+                        <div className="flex gap-3">
+                          <div className="flex size-7 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground mt-0.5">
+                            <Bot className="size-4" />
+                          </div>
+                          <div className="pt-1">
+                            <CopilotLoadingStatus activity={streamActivity} />
+                          </div>
+                        </div>
+                      )}
+
+                      <div ref={bottomRef} />
                     </div>
                   )}
 
-                  {/* Loading indicator (tool calls, no content yet) */}
-                  {isLoading && !streamingContent && (
-                    <div className="flex gap-3">
-                      <div className="flex size-7 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground mt-0.5">
-                        <Bot className="size-4" />
-                      </div>
-                      <div className="pt-1">
-                        <CopilotLoadingStatus activity={streamActivity} />
-                      </div>
-                    </div>
-                  )}
-
-                  <div ref={bottomRef} />
-                </div>
+                  {isWelcome && <div ref={bottomRef} />}
+                </>
               )}
-
-              {isWelcome && !isLoadingConversation && <div ref={bottomRef} />}
             </div>
 
             {/* ── Input area ── */}

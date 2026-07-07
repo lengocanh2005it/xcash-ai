@@ -9,12 +9,13 @@ import {
   UserCheck,
   Zap,
 } from 'lucide-react';
-import { PLAN_LABEL } from '@/lib/plan';
+import { formatCopilotQuota, formatTransactionQuota, PLAN_LABEL } from '@/lib/plan';
 
 export interface LandingPlan {
   plan: SubscriptionPlan;
   pricePerMonth: number;
   transactionQuota: number;
+  copilotQuota: number;
   overageHint?: string;
   highlight?: boolean;
   features: string[];
@@ -25,6 +26,7 @@ export const LANDING_PLANS: LandingPlan[] = [
     plan: SubscriptionPlan.FREE,
     pricePerMonth: 0,
     transactionQuota: 50,
+    copilotQuota: 0,
     features: [
       'Liên kết ngân hàng Cas Link',
       'AI định khoản TT133',
@@ -36,6 +38,7 @@ export const LANDING_PLANS: LandingPlan[] = [
     plan: SubscriptionPlan.STARTER,
     pricePerMonth: 299_000,
     transactionQuota: 500,
+    copilotQuota: 200,
     overageHint: 'Phí vượt 800đ/GD',
     features: [
       'Mọi tính năng gói Free',
@@ -48,6 +51,7 @@ export const LANDING_PLANS: LandingPlan[] = [
     plan: SubscriptionPlan.PRO,
     pricePerMonth: 799_000,
     transactionQuota: 2_000,
+    copilotQuota: 1000,
     overageHint: 'Phí vượt 600đ/GD',
     highlight: true,
     features: [
@@ -61,9 +65,10 @@ export const LANDING_PLANS: LandingPlan[] = [
     plan: SubscriptionPlan.ENTERPRISE,
     pricePerMonth: 2_500_000,
     transactionQuota: 999_999,
+    copilotQuota: -1,
     features: [
       'Mọi tính năng gói Pro',
-      'Quota gần như không giới hạn',
+      'Giao dịch & Copilot không giới hạn',
       'Hỗ trợ ưu tiên từ Cas Partner',
       'Đồng hành triển khai doanh nghiệp',
     ],
@@ -183,10 +188,7 @@ export function planDisplayName(plan: SubscriptionPlan): string {
   return PLAN_LABEL[plan];
 }
 
-export function formatPlanQuota(quota: number): string {
-  if (quota >= 999_999) return 'Không giới hạn GD';
-  return `${quota.toLocaleString('vi-VN')} GD/tháng`;
-}
+export { formatCopilotQuota, formatTransactionQuota as formatPlanQuota };
 
 export interface LandingStat {
   value: string;

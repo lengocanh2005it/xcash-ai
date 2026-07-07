@@ -12,6 +12,7 @@ import { formatVND } from '@/lib/format-vnd';
 import { cn } from '@/lib/utils';
 import {
   DEMO_TRANSACTIONS,
+  formatCopilotQuota,
   formatPlanQuota,
   LANDING_FEATURES,
   LANDING_PLANS,
@@ -422,9 +423,12 @@ function PricingSection() {
                     <span className="text-sm text-muted-foreground">/tháng</span>
                   ) : null}
                 </div>
-                <CardDescription className="mt-1">
-                  {formatPlanQuota(plan.transactionQuota)}
-                  {plan.overageHint ? ` · ${plan.overageHint}` : ''}
+                <CardDescription className="mt-1 space-y-0.5">
+                  <span className="block">
+                    {formatPlanQuota(plan.transactionQuota)}
+                    {plan.overageHint ? ` · ${plan.overageHint}` : ''}
+                  </span>
+                  <span className="block">{formatCopilotQuota(plan.copilotQuota, plan.plan)}</span>
                 </CardDescription>
               </CardHeader>
               <CardContent className="flex flex-1 flex-col">

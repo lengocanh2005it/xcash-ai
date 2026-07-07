@@ -171,6 +171,11 @@ export interface CopilotConversationsListResponse {
   items: CopilotConversationSummary[];
   hasMore: boolean;
   cursorNext: string | null;
+  /** Offset pagination (Settings history tab) */
+  total?: number;
+  page?: number;
+  limit?: number;
+  totalPages?: number;
 }
 
 export interface ApiResponse<T> {

@@ -1,15 +1,8 @@
 import type { CopilotConversationSummary } from '@xcash/shared-types';
 import { Loader2, MessageSquarePlus, MoreHorizontal, Pencil, Trash2 } from 'lucide-react';
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { CopilotQuotaSummary } from '@/components/copilot/CopilotQuotaSummary';
 import { Button } from '@/components/ui/button';
-import {
-  Dialog,
-  DialogContent,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
 import { useCopilotConversations } from '@/hooks/useCopilotConversations';
 import { cn } from '@/lib/utils';
 
@@ -18,7 +11,7 @@ interface Props {
   activeConversationId: string | null;
   onSelectConversation: (id: string) => void;
   onNewChat: () => void;
-  onDeleteConversation: (id: string) => void;
+  onRequestDelete: (item: CopilotConversationSummary) => void;
 }
 
 function toDateKey(d: Date) {
@@ -189,7 +182,7 @@ function ConversationItem({
               onClick={(e) => {
                 e.stopPropagation();
                 setMenuOpen(false);
-                onDelete();
+                requestAnimationFrame(() => onDelete());
               }}
             >
               <Trash2 className="size-3.5" />
@@ -207,46 +200,56 @@ export function CopilotSidebar({
   activeConversationId,
   onSelectConversation,
   onNewChat,
-  onDeleteConversation,
+  onRequestDelete,
 }: Props) {
-  const {
-    items,
-    deleteConversation,
-    renameConversation,
-    hasNextPage,
-    isFetchingNextPage,
-    fetchNextPage,
-  } = useCopilotConversations(userId);
-  const [deleteTarget, setDeleteTarget] = useState<CopilotConversationSummary | null>(null);
-  const loadMoreRef = useRef<HTMLDivElement>(null);
+  const { items, renameConversation, hasNextPage, isFetchingNextPage, fetchNextPage } =
+    useCopilotConversations(userId);
+  const [needsManualLoad, setNeedsManualLoad] = useState(false);
   const listScrollRef = useRef<HTMLDivElement>(null);
+  const loadingMoreRef = useRef(false);
 
   const groups = groupByDate(items);
-  // biome-ignore lint/correctness/useExhaustiveDependencies: re-bind observer when list grows
+
+  const updateManualLoadState = useCallback(() => {
+    const el = listScrollRef.current;
+    if (!el) return;
+    setNeedsManualLoad(hasNextPage && el.scrollHeight <= el.clientHeight + 2);
+  }, [hasNextPage]);
+
   useEffect(() => {
-    if (!hasNextPage || isFetchingNextPage || !loadMoreRef.current || !listScrollRef.current)
-      return;
-    const observer = new IntersectionObserver(
-      (entries) => {
-        if (entries[0]?.isIntersecting) void fetchNextPage();
-      },
-      { root: listScrollRef.current, threshold: 0.1 },
-    );
-    observer.observe(loadMoreRef.current);
-    return () => observer.disconnect();
+    updateManualLoadState();
+  }, [updateManualLoadState, items.length]);
+
+  useEffect(() => {
+    const el = listScrollRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(() => updateManualLoadState());
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [updateManualLoadState]);
+
+  // Chỉ gọi API trang tiếp theo khi user scroll gần cuối — không prefetch full lịch sử lúc mount.
+  useEffect(() => {
+    const el = listScrollRef.current;
+    if (!el || !hasNextPage || isFetchingNextPage) return;
+
+    const onScroll = () => {
+      if (loadingMoreRef.current || isFetchingNextPage) return;
+      if (el.scrollTop + el.clientHeight < el.scrollHeight - 64) return;
+      loadingMoreRef.current = true;
+      void fetchNextPage().finally(() => {
+        loadingMoreRef.current = false;
+      });
+    };
+
+    el.addEventListener('scroll', onScroll, { passive: true });
+    return () => el.removeEventListener('scroll', onScroll);
   }, [hasNextPage, isFetchingNextPage, fetchNextPage, items.length]);
 
-  const handleDelete = async () => {
-    if (!deleteTarget) return;
-    await deleteConversation(deleteTarget.id);
-    if (deleteTarget.id === activeConversationId) onDeleteConversation(deleteTarget.id);
-    setDeleteTarget(null);
-  };
-
   return (
-    <div className="flex h-full flex-col">
+    <div className="flex h-full min-h-0 flex-col overflow-hidden">
       {/* New chat button */}
-      <div className="p-3 pb-2">
+      <div className="shrink-0 p-3 pb-2">
         <Button
           variant="outline"
           size="sm"
@@ -259,7 +262,10 @@ export function CopilotSidebar({
       </div>
 
       {/* Conversations list */}
-      <div ref={listScrollRef} className="flex-1 overflow-y-auto px-2 pb-2">
+      <div
+        ref={listScrollRef}
+        className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-2 pb-2"
+      >
         {groups.length === 0 && (
           <p className="px-3 py-4 text-center text-xs text-muted-foreground">
             Chưa có cuộc chat nào
@@ -277,45 +283,37 @@ export function CopilotSidebar({
                 isActive={item.id === activeConversationId}
                 onSelect={() => onSelectConversation(item.id)}
                 onRename={(title) => renameConversation(item.id, title)}
-                onDelete={() => setDeleteTarget(item)}
+                onDelete={() => onRequestDelete(item)}
               />
             ))}
           </div>
         ))}
-        {hasNextPage && (
-          <div ref={loadMoreRef} className="flex justify-center py-2">
-            {isFetchingNextPage && (
-              <Loader2
-                className="size-4 animate-spin text-muted-foreground"
-                aria-label="Đang tải thêm"
-              />
-            )}
+        {isFetchingNextPage && (
+          <div className="flex justify-center py-2">
+            <Loader2
+              className="size-4 animate-spin text-muted-foreground"
+              aria-label="Đang tải thêm"
+            />
+          </div>
+        )}
+        {needsManualLoad && !isFetchingNextPage && (
+          <div className="flex justify-center py-2">
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="text-xs text-muted-foreground"
+              onClick={() => void fetchNextPage()}
+            >
+              Tải thêm
+            </Button>
           </div>
         )}
       </div>
 
-      <CopilotQuotaSummary variant="sidebar" />
-
-      {/* Delete confirm dialog */}
-      <Dialog open={!!deleteTarget} onOpenChange={(o) => !o && setDeleteTarget(null)}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Xóa cuộc trò chuyện?</DialogTitle>
-          </DialogHeader>
-          <p className="text-sm text-muted-foreground">
-            Cuộc chat <span className="font-medium text-foreground">"{deleteTarget?.title}"</span>{' '}
-            và toàn bộ tin nhắn sẽ bị xóa vĩnh viễn.
-          </p>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setDeleteTarget(null)}>
-              Hủy
-            </Button>
-            <Button variant="destructive" onClick={handleDelete}>
-              Xóa
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <div className="shrink-0">
+        <CopilotQuotaSummary variant="sidebar" />
+      </div>
     </div>
   );
 }

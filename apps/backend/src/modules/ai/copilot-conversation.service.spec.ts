@@ -11,6 +11,7 @@ describe('CopilotConversationService', () => {
     copilotConversation: {
       findFirst: jest.fn(),
       findMany: jest.fn(),
+      count: jest.fn(),
       create: jest.fn(),
       update: jest.fn(),
       delete: jest.fn(),
@@ -109,7 +110,7 @@ describe('CopilotConversationService', () => {
       },
     ]);
 
-    const result = await service.listConversations('tenant-1', 'user-1', 1);
+    const result = await service.listConversations('tenant-1', 'user-1', { limit: 1 });
 
     expect(result.hasMore).toBe(true);
     expect(result.cursorNext).toBe('conv-1');
@@ -118,6 +119,51 @@ describe('CopilotConversationService', () => {
       expect.objectContaining({
         take: 2,
         orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }],
+      }),
+    );
+  });
+
+  it('listConversations returns offset pagination metadata when page is set', async () => {
+    const updatedAt = new Date('2026-07-07T10:00:00.000Z');
+    prisma.copilotConversation.count.mockResolvedValue(25);
+    prisma.copilotConversation.findMany.mockResolvedValue([
+      {
+        id: 'conv-1',
+        title: 'Chat A',
+        createdAt: updatedAt,
+        updatedAt,
+        _count: { messages: 2 },
+        messages: [{ content: 'assistant reply', role: 'assistant' }],
+      },
+    ]);
+
+    const result = await service.listConversations('tenant-1', 'user-1', {
+      page: 2,
+      limit: 10,
+      fromDate: '2026-07-01',
+      toDate: '2026-07-07',
+    });
+
+    expect(result.total).toBe(25);
+    expect(result.page).toBe(2);
+    expect(result.limit).toBe(10);
+    expect(result.totalPages).toBe(3);
+    expect(result.hasMore).toBe(true);
+    expect(result.cursorNext).toBeNull();
+    expect(prisma.copilotConversation.count).toHaveBeenCalledWith({
+      where: {
+        tenantId: 'tenant-1',
+        userId: 'user-1',
+        updatedAt: {
+          gte: new Date('2026-07-01T00:00:00'),
+          lte: new Date('2026-07-07T23:59:59'),
+        },
+      },
+    });
+    expect(prisma.copilotConversation.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        skip: 10,
+        take: 10,
       }),
     );
   });

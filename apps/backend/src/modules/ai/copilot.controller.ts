@@ -101,12 +101,13 @@ export class CopilotController {
     @CurrentUser() user: AuthenticatedUser,
     @Query() query: ListConversationsQueryDto,
   ) {
-    return this.conversationService.listConversations(
-      user.tenantId!,
-      user.id,
-      query.limit,
-      query.before,
-    );
+    return this.conversationService.listConversations(user.tenantId!, user.id, {
+      limit: query.limit,
+      before: query.before,
+      page: query.page,
+      fromDate: query.fromDate,
+      toDate: query.toDate,
+    });
   }
 
   @Get('copilot/conversations/:id')

@@ -93,42 +93,105 @@ export class CopilotConversationService {
       .catch(() => {});
   }
 
+  private buildConversationWhere(
+    tenantId: string,
+    userId: string,
+    fromDate?: string,
+    toDate?: string,
+  ) {
+    const updatedAt: { gte?: Date; lte?: Date } = {};
+    if (fromDate) updatedAt.gte = new Date(`${fromDate}T00:00:00`);
+    if (toDate) updatedAt.lte = new Date(`${toDate}T23:59:59`);
+
+    return {
+      tenantId,
+      userId,
+      ...(fromDate || toDate ? { updatedAt } : {}),
+    };
+  }
+
+  private mapConversationRows(
+    conversations: Array<{
+      id: string;
+      title: string;
+      createdAt: Date;
+      updatedAt: Date;
+      _count: { messages: number };
+      messages: Array<{ content: string; role: string }>;
+    }>,
+  ) {
+    return conversations.map((c) => ({
+      id: c.id,
+      title: c.title,
+      createdAt: c.createdAt.toISOString(),
+      updatedAt: c.updatedAt.toISOString(),
+      messageCount: c._count.messages,
+      lastMessage: (
+        c.messages.find((m) => m.role === 'assistant') ?? c.messages[0]
+      )?.content?.slice(0, 80),
+    }));
+  }
+
   async listConversations(
     tenantId: string,
     userId: string,
-    limit = 20,
-    before?: string,
+    options: {
+      limit?: number;
+      before?: string;
+      page?: number;
+      fromDate?: string;
+      toDate?: string;
+    } = {},
   ): Promise<CopilotConversationsListResponse> {
-    const take = Math.min(limit, 50);
-    const conversations = await this.prisma.copilotConversation.findMany({
-      where: { tenantId, userId },
-      orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }],
-      ...(before ? { cursor: { id: before }, skip: 1 } : {}),
-      take: take + 1,
-      include: {
-        _count: { select: { messages: true } },
-        messages: {
-          orderBy: { createdAt: 'desc' },
-          take: 5,
-          select: { content: true, role: true },
-        },
+    const take = Math.min(options.limit ?? 20, 50);
+    const include = {
+      _count: { select: { messages: true } },
+      messages: {
+        orderBy: { createdAt: 'desc' as const },
+        take: 5,
+        select: { content: true, role: true },
       },
+    };
+
+    if (options.page != null) {
+      const where = this.buildConversationWhere(tenantId, userId, options.fromDate, options.toDate);
+      const skip = (options.page - 1) * take;
+      const [total, conversations] = await Promise.all([
+        this.prisma.copilotConversation.count({ where }),
+        this.prisma.copilotConversation.findMany({
+          where,
+          orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }],
+          skip,
+          take,
+          include,
+        }),
+      ]);
+      const totalPages = Math.max(1, Math.ceil(total / take));
+
+      return {
+        items: this.mapConversationRows(conversations),
+        hasMore: options.page < totalPages,
+        cursorNext: null,
+        total,
+        page: options.page,
+        limit: take,
+        totalPages,
+      };
+    }
+
+    const conversations = await this.prisma.copilotConversation.findMany({
+      where: this.buildConversationWhere(tenantId, userId),
+      orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }],
+      ...(options.before ? { cursor: { id: options.before }, skip: 1 } : {}),
+      take: take + 1,
+      include,
     });
 
     const hasMore = conversations.length > take;
     const items = hasMore ? conversations.slice(0, take) : conversations;
 
     return {
-      items: items.map((c) => ({
-        id: c.id,
-        title: c.title,
-        createdAt: c.createdAt.toISOString(),
-        updatedAt: c.updatedAt.toISOString(),
-        messageCount: c._count.messages,
-        lastMessage: (
-          c.messages.find((m) => m.role === 'assistant') ?? c.messages[0]
-        )?.content?.slice(0, 80),
-      })),
+      items: this.mapConversationRows(items),
       hasMore,
       cursorNext: hasMore ? (items[items.length - 1]?.id ?? null) : null,
     };

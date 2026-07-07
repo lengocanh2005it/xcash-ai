@@ -2,15 +2,15 @@
 
 > Mục đích: cho biết **chính xác** cái gì đã tồn tại trong repo ngay lúc này, để agent không cần `find`/`grep`/`ls` lại từ đầu mỗi session mới. File này phải được cập nhật mỗi khi có thay đổi cấu trúc đáng kể (thêm module, thêm page, đổi dependency lớn, thêm service hạ tầng). Nếu file này và thực tế code lệch nhau, **tin thực tế code**, và sửa lại file này ngay sau đó.
 
-Cập nhật lần cuối: **Copilot History (Phase 7 hoàn thành — Settings history tab)** — tab `Lịch sử Copilot` trong `SettingsPage` (`?tab=copilot-history`): bảng conversations của user hiện tại (reuse `useCopilotConversations` + `GET /ai/copilot/conversations`), lọc theo ngày (client-side trên `updatedAt`), nút Tải thêm (cursor), click row → `localStorage` + navigate `/copilot`; bọc `PlanGate` Starter+; **không** có admin xem chat user khác (privacy 7.1). Trước đó: gap-fix commit (sidebar infinite scroll, URL safe, JSON fallback UX, restore indexes migration `20260707100000`, `copilot-conversation.service.spec.ts`).
+Cập nhật lần cuối: **Copilot History (Phase 8 hoàn thành — verify + docs)** — `pnpm verify` pass (lint/type-check/test/build); checklist mục 8 trong `copilot-history-spec.md` đánh dấu xong; `copilot-conversation.service.spec.ts` (7 tests). Branch `feat/copilot-history`.
 
-Trước đó — **Copilot History (Phase 6 hoàn thành — performance hardening)** — parallel DB write, `CopilotThrottlerGuard`, Redis SSE limit, dangling message cleanup. Branch `feat/copilot-history`.
+Trước đó — **Phase 7 polish + UX hardening** — Settings tab phân trang server `?page=&limit=&fromDate=&toDate=`; sidebar scroll containment + load-more khi scroll (không prefetch); `ConfirmDialog` xóa conversation; `CopilotQuotaSummary` + copy quota rõ «lượt gửi câu hỏi» vs «tin nhắn bạn+AI»; migration seed `copilot_quota` (`20260707120000`).
 
 ---
 
 ## Repo đang ở giai đoạn nào
 
-**Trạng thái: Sprint 1–3 HOÀN THÀNH. Sprint 4 code feature HOÀN THÀNH** (Partner, billing, notification, auth security). **Branch `feat/excel-import`:** Excel Import hoàn tất (Phase 1–3). **Còn lại:** deploy VPS + SSL/nginx, docker-compose env production đầy đủ, final E2E QA thủ công, test notification Slack/Resend với credential thật.
+**Trạng thái: Sprint 1–3 HOÀN THÀNH. Sprint 4 code feature HOÀN THÀNH** (Partner, billing, notification, auth security). **Branch `feat/copilot-history`:** Copilot History Phase 1–8 hoàn tất (sidebar, Settings tab, verify, docs). **Branch `feat/excel-import`:** Excel Import hoàn tất (Phase 1–3). **Còn lại:** deploy VPS + SSL/nginx, docker-compose env production đầy đủ, final E2E QA thủ công, test notification Slack/Resend với credential thật.
 
 **Đã xong (Sprint 1–2):**
 - Auth, Onboarding (Cas Link), Banking webhook, Transaction module ✅
@@ -122,7 +122,7 @@ Trước đó — **Copilot History (Phase 6 hoàn thành — performance harden
 
 **Đã xong (Copilot History — Phase 1–3):**
 - **Phase 1 — Schema:** migration `20260707020628_add_copilot_conversations` — enum `CopilotMessageRole { user, assistant }`; model `copilot_conversations` (id, tenant_id, user_id, title, created_at, updated_at); model `copilot_messages` (id, conversation_id, role, content Text, activities Json?, is_partial Boolean, created_at); quan hệ cascade; index `[tenantId, userId, updatedAt DESC]` và `[conversationId, createdAt]` ✅
-- **Phase 2 — Backend CRUD:** `CopilotConversationService` — `findOrCreate()` (validate ownership 404, create if no ID), `saveUserMessage()`, `saveAssistantMessage()` (sanitize activities: max 10, snippet ≤300 ký tự, URLs ≤5), `getHistoryForContext()` (10 messages cuối, exclude current), `triggerAutoTitle()` (fire-and-forget LLM gpt-4o-mini ≤6 từ tiếng Việt, sanitize XSS chars), `listConversations()` cursor-based `?before=<uuid>&limit`, `getConversation()`, `renameConversation()`, `deleteConversation()`; DTO `ListConversationsQueryDto`, `GetConversationQueryDto`, `RenameConversationDto`; 4 endpoint mới (`GET/GET :id/PATCH :id/DELETE :id /ai/copilot/conversations`) ✅
+- **Phase 2 — Backend CRUD:** `CopilotConversationService` — `findOrCreate()` (validate ownership 404, create if no ID), `saveUserMessage()`, `saveAssistantMessage()` (sanitize activities: max 10, snippet ≤300 ký tự, URLs ≤5), `getHistoryForContext()` (10 messages cuối, exclude current), `triggerAutoTitle()` (fire-and-forget LLM gpt-4o-mini ≤6 từ tiếng Việt, sanitize XSS chars), `listConversations()` — **cursor** `?before=<uuid>&limit=` (sidebar) hoặc **offset** `?page=&limit=&fromDate=&toDate=` (Settings, trả `total/page/totalPages`), `getConversation()`, `renameConversation()`, `deleteConversation()`; DTO `ListConversationsQueryDto`, `GetConversationQueryDto`, `RenameConversationDto`; 4 endpoint mới (`GET/GET :id/PATCH :id/DELETE :id /ai/copilot/conversations`) ✅
 - **Phase 3 — Tích hợp + Security:** `chat()` và `streamChat()` gọi `findOrCreate` + `saveUserMessage` → khi `conversationId` có, dùng history từ DB thay vì FE-provided `history[]` (chặn injection); `saveAssistantMessage` + `triggerAutoTitle` fire-and-forget; response thêm `conversationId`; SSE setup (findOrCreate + saveUserMessage) trước `flushHeaders()` để lỗi 404 trả đúng HTTP code; DTO hardening: `ChatMessage.role` `@IsIn`, `content` `@MaxLength(2000)`, `history` `@ArrayMaxSize(20)`, `conversationId` `@IsOptional @IsUUID`; `CopilotQuotaGuard` chuyển từ controller-level sang method-level (chỉ trên `chat()` và `streamChat()`) để CRUD endpoint không bị chặn bởi quota ✅
 - **shared-types:** thêm `CopilotActivity` (canonical từ `openai.service.ts`), `CopilotConversationSummary`, `CopilotMessageDto`, `CopilotConversationDetail`, `CopilotConversationsListResponse`; `CopilotSourceChips.tsx` import `CopilotActivity` từ `@xcash/shared-types` thay vì định nghĩa local ✅
 - **`openai.service.ts`:** thêm `generateCopilotTitle(firstMessage: string): Promise<string>` — prompt "≤6 từ tiếng Việt", sanitize chars `<>"'\``, fallback `'Cuộc chat mới'` ✅
@@ -143,9 +143,20 @@ Trước đó — **Copilot History (Phase 6 hoàn thành — performance harden
 - **9.9 Dangling message cleanup:** `CopilotConversationService.deleteMessage(id)` — gọi khi AI call lỗi thật (không phải abort): `chat()` bọc try/catch quanh AI call, xóa `userMsg` rồi rethrow; `streamChat()` trong catch block, chỉ xóa nếu `!accumulatedContent.trim()` (có nội dung → coi như partial, giữ lại theo path abort) ✅
 
 **Đã xong (Copilot History — Phase 7 — Settings history tab):**
-- **`CopilotHistoryTab.tsx`:** Card + bảng ShadCN (cập nhật, tiêu đề, preview `lastMessage`, số tin nhắn); filter `Từ ngày`/`Đến ngày` debounced; empty/error/loading states; `PlanGate` Starter+; mở conversation → set `xcash_copilot_conv_{userId}` + `navigate('/copilot')` ✅
-- **`SettingsPage.tsx`:** tab mới `copilot-history` (icon `MessageSquare`), URL `?tab=copilot-history` ✅
+- **`CopilotHistoryTab.tsx`:** Card + bảng ShadCN; filter `Từ ngày`/`Đến ngày` debounced (server-side); phân trang 10/trang (`useCopilotHistoryPage` + `?page=&limit=`); cột «Tin nhắn (Bạn + AI)»; `CopilotQuotaSummary` card giải thích lượt vs tin nhắn; click row → `localStorage` + `/copilot` ✅
+- **`useCopilotHistoryPage.ts`:** React Query hook riêng cho Settings tab (offset pagination, tách khỏi sidebar infinite query) ✅
+- **`SettingsPage.tsx`:** tab `copilot-history` (icon `MessageSquare`), URL `?tab=copilot-history` ✅
 - **Privacy:** chỉ conversations của user đăng nhập — không admin audit cross-user (theo spec 7.1) ✅
+
+**Đã xong (Copilot History — Phase 8 — verify + docs):**
+- **`pnpm verify`** pass toàn monorepo sau toàn bộ thay đổi Copilot History ✅
+- **`copilot-conversation.service.spec.ts`:** ownership 404, create, sanitize activities, cursor list, offset list + date filter, `getHistoryForContext` exclude current message ✅
+- **Polish UX (post-Phase-7):** `CopilotSidebar` — `min-h-0` scroll list, quota footer cố định, scroll-near-bottom load-more (`COPILOT_SIDEBAR_PAGE_SIZE=20`), nút «Tải thêm» khi list chưa overflow; `CopilotPage` — `ConfirmDialog` xóa ở page level, sidebar collapse mặc định, theme toggle desktop, skeleton khi đổi conversation; `TenantLayout` `min-h-0` cho full-height pages ✅
+- **`listConversations()` mở rộng:** cursor mode (sidebar) + offset mode `?page=&fromDate=&toDate=` (Settings); `CopilotConversationsListResponse` thêm optional `total/page/limit/totalPages` ✅
+- **Migration `20260707120000_seed_copilot_quota_by_plan`:** seed đúng quota Free/Starter/Pro/Enterprise (fix Pro unlimited bug) ✅
+- **`CopilotQuotaSummary.tsx`:** component dùng chung sidebar + Settings card; Enterprise ẩn bar sidebar (`quota=-1`) ✅
+- **`lib/plan.ts`:** `formatCopilotQuota`, `resolveCopilotQuota` fallback khi API thiếu field ✅
+- **Docs:** `agent-docs/00-current-state.md` + checklist mục 8 `copilot-history-spec.md` cập nhật ✅
 
 **Đã xong (Copilot Quota — Phase 1–4):**
 - **Phase 1 — Schema:** migration `20260706143059_add_copilot_quota` — thêm `NotificationType.copilot_quota_warning` + `copilot_quota_exceeded`; cột `subscriptions.copilot_used_this_cycle` (Int, default 0); cột `plan_pricing.copilot_quota` (Int, default -1 = unlimited); seed `plan_pricing` copilotQuota (Free=0, Starter=200, Pro=1000, Enterprise=-1) ✅
@@ -216,7 +227,9 @@ paypilot-ai/                                   ← tên folder local có thể k
 │   │   │       ├── 20260704100000_add_user_avatar_url/ ← cột users.avatar_url ✅
 │   │   │       ├── 20260704162813_add_transaction_source_direction_import_batch/ ← enum TransactionSource/Direction, cột source/direction/importBatchId trên transactions ✅
 │   │   │       ├── 20260706143059_add_copilot_quota/ ← NotificationType enum thêm copilot_quota_warning/exceeded; subscriptions.copilot_used_this_cycle; plan_pricing.copilot_quota ✅
-│   │   │       └── 20260707020628_add_copilot_conversations/ ← enum CopilotMessageRole; model copilot_conversations + copilot_messages ✅
+│   │   │       ├── 20260707020628_add_copilot_conversations/ ← enum CopilotMessageRole; model copilot_conversations + copilot_messages ✅
+│   │   │       ├── 20260707100000_restore_copilot_conversation_indexes/ ← restore indexes nếu migration trước drop nhầm ✅
+│   │   │       └── 20260707120000_seed_copilot_quota_by_plan/ ← seed copilot_quota theo plan (Free=0, Starter=200, Pro=1000, Enterprise=-1) ✅
 │   │   ├── package.json
 │   │   ├── nest-cli.json
 │   │   ├── .swcrc
@@ -336,6 +349,7 @@ paypilot-ai/                                   ← tên folder local có thể k
 │           │   ├── api.ts                     # export: api, getApiData, postApiData, patchApiData, deleteApiData
 │           │   ├── remember-me.ts             # localStorage rememberMe + email
 │           │   ├── plan-labels.ts           # PLAN_LABELS + PLAN_ORDER dùng chung Partner pages ✅
+│           │   ├── plan.ts                  # formatCopilotQuota, resolveCopilotQuota ✅
 │           │   ├── date-range.ts            # dayIsoRange() cho query theo ngày ✅
 │           │   ├── dashboard-transactions.ts  # chart helpers (status breakdown, revenue trend 7 ngày)
 │           │   └── ...
@@ -345,14 +359,16 @@ paypilot-ai/                                   ← tên folder local có thể k
 │           ├── hooks/
 │           │   ├── useReviewCount.ts
 │           │   ├── useSidebarCollapsed.ts      # persist collapse sidebar localStorage ✅
-│           │   ├── useCopilotConversations.ts  # React Query CRUD conversations + loadConversation + loadOlderMessages (Phase 5) ✅
+│           │   ├── useCopilotConversations.ts  # infinite query sidebar (cursor, staleTime 30s) + refreshListAfterChat + quota optimistic ✅
+│           │   ├── useCopilotHistoryPage.ts    # offset pagination cho Settings CopilotHistoryTab ✅
 │           │   └── useNotifications.ts, useDebouncedValue
 │           ├── components/
 │           │   ├── copilot/
 │           │   │   ├── CopilotSourceChips.tsx    # Chip nguồn tham khảo (internal_data/knowledge/web_search) ✅
 │           │   │   ├── CopilotLoadingStatus.tsx  # Loading dots / tool activity indicator khi SSE streaming ✅
 │           │   │   ├── CopilotMessageActions.tsx # Copy button hover-reveal trên assistant messages (Phase 5) ✅
-│           │   │   └── CopilotSidebar.tsx        # Sidebar conversations grouped by date, rename/delete context menu, usage bar (Phase 5) ✅
+│           │   │   ├── CopilotQuotaSummary.tsx     # Quota bar sidebar + card Settings (ẩn khi unlimited) ✅
+│           │   │   └── CopilotSidebar.tsx        # Sidebar grouped by date, rename/delete menu, scroll load-more ✅
 │           │   ├── layout/Sidebar.tsx         # 8 nav item, badge review, NotificationBell, ProfileDialog (click user footer) ✅
 │           │   ├── profile/ProfileDialog.tsx  # Dialog hồ sơ cá nhân + doanh nghiệp + upload avatar + đổi mật khẩu ✅
 │           │   ├── profile/ChangePasswordPanel.tsx  # Form 2 bước đổi mật khẩu (nhúng trong ProfileDialog) ✅
@@ -437,7 +453,7 @@ paypilot-ai/                                   ← tên folder local có thể k
 | GET | `/reports/export` | Bearer JWT | Export Excel (.xlsx) |
 | GET | `/reports/comparison` | Bearer JWT | So sánh tháng này vs tháng trước |
 | GET | `/reports/top-accounts` | Bearer JWT | Top 5 TK chi/thu nhiều nhất |
-| GET | `/ai/copilot/conversations` | Bearer JWT (Starter+) | Danh sách conversations của user — cursor-based `?before=<uuid>&limit=` (default 20, max 50); trả `{ items, hasMore, cursorNext }` |
+| GET | `/ai/copilot/conversations` | Bearer JWT (Starter+) | Danh sách conversations của user — **cursor** `?before=<uuid>&limit=` (sidebar, default 20) → `{ items, hasMore, cursorNext }`; **offset** `?page=&limit=&fromDate=&toDate=` (Settings) → `{ items, total, page, limit, totalPages }` |
 | GET | `/ai/copilot/conversations/:id` | Bearer JWT (Starter+) | Chi tiết 1 conversation + messages cursor-based `?before=<uuid>&limit=` (default 10, max 50); trả `{ id, title, messages, hasMore, oldestMessageId }` |
 | PATCH | `/ai/copilot/conversations/:id` | Bearer JWT (Starter+) | Đổi tên conversation — body `{ title }` (1–100 ký tự, trim); 404 nếu không tìm thấy / không phải của user |
 | DELETE | `/ai/copilot/conversations/:id` | Bearer JWT (Starter+) | Xóa conversation + cascade messages; 204 No Content |

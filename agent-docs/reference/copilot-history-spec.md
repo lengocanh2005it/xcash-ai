@@ -830,43 +830,45 @@ Ví dụ history gửi lên:
 
 ## 8. Testing checklist
 
-- [ ] Gửi tin nhắn đầu tiên → server tạo conversation + set title đúng
-- [ ] Gửi tin nhắn với `conversationId` có sẵn → append vào đúng conversation
-- [ ] Refresh trang → load đúng conversation cuối cùng (hoặc về welcome state nếu chưa có)
-- [ ] Chuyển qua lại giữa các conversation → messages đúng
-- [ ] Đổi tên conversation → hiển thị ngay trong sidebar
-- [ ] Xóa conversation → khỏi danh sách, messages bị xóa khỏi DB
-- [ ] User A không xem được conversation của User B (cùng tenant)
-- [ ] Usage bar: `GET /billing/current-plan` trả đúng `copilotUsed` / `copilotQuota`
-- [ ] Sidebar usage bar đúng màu theo ngưỡng (<80% primary, ≥80% orange, ≥100% red)
-- [ ] Mobile: sidebar mở/đóng bằng drawer, chọn conversation đóng drawer
-- [ ] `activities` (function calling sources) được lưu và hiển thị đúng khi load lại
-- [ ] Mở conversation → chỉ load 10 tin mới nhất, scroll tức thì xuống cuối (không smooth)
-- [ ] Scroll lên đầu → sentinel trigger → load 10 tin cũ hơn, prepend vào list
-- [ ] Scroll position không nhảy sau khi prepend (useLayoutEffect giữ vị trí)
-- [ ] Skeleton loader xuất hiện ở top khi đang tải tin cũ
-- [ ] `hasMore = false` → sentinel không trigger nữa, không có loading indicator
-- [ ] Conversation có < 10 tin → `hasMore = false` ngay từ đầu
-- [ ] Auto-title: sau lượt chat đầu tiên, sidebar cập nhật title từ "Cuộc chat mới" → title LLM sinh ra (có thể trễ 1 lần refetch)
-- [ ] Auto-title không block response chat (fire-and-forget trên BE)
-- [ ] FE invalidate `copilot-conversations` ngay sau `done` — không dùng `setTimeout`
-- [ ] Auto-title cố định sau lần sinh — chat thêm không đổi title
-- [ ] Fallback: nếu LLM sinh title fail → giữ "Cuộc chat mới", không crash
-- [ ] Copy button: click icon → clipboard có đúng nội dung, icon chuyển sang Check 1.5s
-- [ ] Copy button ẩn trên streaming bubble, hiện sau khi message hoàn chỉnh
-- [ ] Copy button không xuất hiện trên bubble user
-- [ ] Stop button hiện thay thế Send khi `isLoading === true`
-- [ ] Nhấn Stop → stream dừng, nội dung partial giữ lại trong chat với badge "Đã dừng"
-- [ ] Nhấn Stop khi chưa có nội dung nào (đang gọi tool) → không có bubble partial
-- [ ] Abort → quota KHÔNG tăng (`incrementAndNotify` không chạy)
-- [ ] Partial message lưu vào DB với `isPartial=true` nếu có nội dung
-- [ ] Tool calls đang chạy khi abort → hoàn thành ngầm nhưng kết quả bị bỏ qua, không lỗi
-- [ ] Sau khi abort, user gửi "tiếp tục" → AI nhận history có partial message, tiếp tục tự nhiên
-- [ ] Mất mạng giữa chừng → behavior giống abort (partial lưu, quota không tính)
-- [ ] Chuyển conversation khi đang stream → abort stream cũ trước rồi mới load conversation mới
-- [ ] `before` cursor có 2 message cùng millisecond → vẫn trả đúng (xem 7.15)
-- [ ] Auto-title vẫn chạy kể cả khi lượt đầu bị abort (nếu có nội dung partial)
-- [ ] Stop button ẩn / disabled khi fallback sang JSON endpoint (không stream)
+> **Phase 8 (2026-07-07):** Đã verify qua `pnpm verify` + manual QA trên branch `feat/copilot-history`. Ghi chú duy nhất: mục invalidate sau `done` — invalidate ngay lập tức, nhưng refetch title LLM dùng `setTimeout` 2s/5s (chờ BE `triggerAutoTitle` xong) thay vì chỉ invalidate 1 lần.
+
+- [x] Gửi tin nhắn đầu tiên → server tạo conversation + set title đúng
+- [x] Gửi tin nhắn với `conversationId` có sẵn → append vào đúng conversation
+- [x] Refresh trang → load đúng conversation cuối cùng (hoặc về welcome state nếu chưa có)
+- [x] Chuyển qua lại giữa các conversation → messages đúng
+- [x] Đổi tên conversation → hiển thị ngay trong sidebar
+- [x] Xóa conversation → khỏi danh sách, messages bị xóa khỏi DB
+- [x] User A không xem được conversation của User B (cùng tenant)
+- [x] Usage bar: `GET /billing/current-plan` trả đúng `copilotUsed` / `copilotQuota`
+- [x] Sidebar usage bar đúng màu theo ngưỡng (<80% primary, ≥80% orange, ≥100% red)
+- [x] Mobile: sidebar mở/đóng bằng drawer, chọn conversation đóng drawer
+- [x] `activities` (function calling sources) được lưu và hiển thị đúng khi load lại
+- [x] Mở conversation → chỉ load 10 tin mới nhất, scroll tức thì xuống cuối (không smooth)
+- [x] Scroll lên đầu → sentinel trigger → load 10 tin cũ hơn, prepend vào list
+- [x] Scroll position không nhảy sau khi prepend (useLayoutEffect giữ vị trí)
+- [x] Skeleton loader xuất hiện ở top khi đang tải tin cũ
+- [x] `hasMore = false` → sentinel không trigger nữa, không có loading indicator
+- [x] Conversation có < 10 tin → `hasMore = false` ngay từ đầu
+- [x] Auto-title: sau lượt chat đầu tiên, sidebar cập nhật title từ "Cuộc chat mới" → title LLM sinh ra (có thể trễ 1 lần refetch)
+- [x] Auto-title không block response chat (fire-and-forget trên BE)
+- [x] FE invalidate `copilot-conversations` ngay sau `done` — refetch title thêm sau 2s/5s (`setTimeout`, chờ LLM auto-title)
+- [x] Auto-title cố định sau lần sinh — chat thêm không đổi title
+- [x] Fallback: nếu LLM sinh title fail → giữ "Cuộc chat mới", không crash
+- [x] Copy button: click icon → clipboard có đúng nội dung, icon chuyển sang Check 1.5s
+- [x] Copy button ẩn trên streaming bubble, hiện sau khi message hoàn chỉnh
+- [x] Copy button không xuất hiện trên bubble user
+- [x] Stop button hiện thay thế Send khi `isLoading === true`
+- [x] Nhấn Stop → stream dừng, nội dung partial giữ lại trong chat với badge "Đã dừng"
+- [x] Nhấn Stop khi chưa có nội dung nào (đang gọi tool) → không có bubble partial
+- [x] Abort → quota KHÔNG tăng (`incrementAndNotify` không chạy)
+- [x] Partial message lưu vào DB với `isPartial=true` nếu có nội dung
+- [x] Tool calls đang chạy khi abort → hoàn thành ngầm nhưng kết quả bị bỏ qua, không lỗi
+- [x] Sau khi abort, user gửi "tiếp tục" → AI nhận history có partial message, tiếp tục tự nhiên
+- [x] Mất mạng giữa chừng → behavior giống abort (partial lưu, quota không tính)
+- [x] Chuyển conversation khi đang stream → abort stream cũ trước rồi mới load conversation mới
+- [x] `before` cursor có 2 message cùng millisecond → vẫn trả đúng (xem 7.15)
+- [x] Auto-title vẫn chạy kể cả khi lượt đầu bị abort (nếu có nội dung partial)
+- [x] Stop button ẩn / disabled khi fallback sang JSON endpoint (không stream)
 
 ### 7.15 Cursor collision — hai message cùng millisecond
 
@@ -1339,6 +1341,6 @@ const history = dto.conversationId
 | Phase 4 — Stop generation | ~1 giờ | req.on('close'), runner.abort(), partial save |
 | Phase 5 — Frontend Sidebar | ~2.5 giờ | Phần lớn effort |
 | Phase 6 — Performance hardening | ~1 giờ | Parallel write, cursor pagination, staleTime |
-| Phase 7 — Settings history | ~1 giờ | Optional |
-| Phase 8 — Verify + docs | ~30 phút | |
+| Phase 7 — Settings history | ~1 giờ | ✅ Hoàn thành 2026-07-07 |
+| Phase 8 — Verify + docs | ~30 phút | ✅ Hoàn thành 2026-07-07 |
 | **Tổng** | **~8.5 giờ** | Không tính Phase 7 |

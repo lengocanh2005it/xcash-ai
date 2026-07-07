@@ -1,7 +1,6 @@
-import type { CopilotConversationSummary } from '@xcash/shared-types';
 import { SubscriptionPlan } from '@xcash/shared-types';
-import { Bot, ChevronRight, ExternalLink, MessageSquare, X } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { Bot, ChevronLeft, ChevronRight, ExternalLink, MessageSquare, X } from 'lucide-react';
+import { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { CopilotQuotaSummary } from '@/components/copilot/CopilotQuotaSummary';
 import { EmptyState } from '@/components/shared/EmptyState';
@@ -20,12 +19,12 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { useAuth } from '@/hooks/useAuth';
-import { useCopilotConversations } from '@/hooks/useCopilotConversations';
+import { useCopilotHistoryPage } from '@/hooks/useCopilotHistoryPage';
 import { useDebouncedValue } from '@/hooks/useDebouncedValue';
 import { formatDateVN } from '@/lib/dashboard-transactions';
-import { cn } from '@/lib/utils';
 
 const STORAGE_KEY_PREFIX = 'xcash_copilot_conv_';
+const PAGE_LIMIT = 10;
 
 function formatDateTimeVN(iso: string) {
   const date = new Date(iso);
@@ -64,35 +63,32 @@ function formatMessagePreview(text: string) {
   return `${trimmed}...`;
 }
 
-function matchesDateRange(item: CopilotConversationSummary, from: string, to: string) {
-  const updated = new Date(item.updatedAt);
-  if (from) {
-    const fromDate = new Date(`${from}T00:00:00`);
-    if (updated < fromDate) return false;
-  }
-  if (to) {
-    const toDate = new Date(`${to}T23:59:59`);
-    if (updated > toDate) return false;
-  }
-  return true;
-}
-
 function CopilotHistoryTable() {
   const { user } = useAuth();
   const navigate = useNavigate();
   const [fromDate, setFromDate] = useState('');
   const [toDate, setToDate] = useState('');
+  const [page, setPage] = useState(1);
   const debouncedFrom = useDebouncedValue(fromDate, 400);
   const debouncedTo = useDebouncedValue(toDate, 400);
   const hasDateFilter = Boolean(debouncedFrom || debouncedTo);
 
-  const { items, isLoading, isError, refetch, hasNextPage, isFetchingNextPage, fetchNextPage } =
-    useCopilotConversations(user?.id);
+  const resetPage = useCallback(() => setPage(1), []);
+  useEffect(() => {
+    resetPage();
+  }, [debouncedFrom, debouncedTo, resetPage]);
 
-  const filteredItems = useMemo(
-    () => items.filter((item) => matchesDateRange(item, debouncedFrom, debouncedTo)),
-    [items, debouncedFrom, debouncedTo],
-  );
+  const { data, isLoading, isError, refetch } = useCopilotHistoryPage({
+    userId: user?.id,
+    page,
+    fromDate: debouncedFrom || undefined,
+    toDate: debouncedTo || undefined,
+    limit: PAGE_LIMIT,
+  });
+
+  const items = data?.items ?? [];
+  const total = data?.total ?? 0;
+  const totalPages = data?.totalPages ?? 1;
 
   const openConversation = (id: string) => {
     if (!user?.id) return;
@@ -132,7 +128,7 @@ function CopilotHistoryTable() {
     );
   }
 
-  if (items.length === 0) {
+  if (!hasDateFilter && total === 0) {
     return (
       <div className="space-y-4">
         <CopilotQuotaSummary variant="card" />
@@ -182,26 +178,30 @@ function CopilotHistoryTable() {
         )}
       </div>
 
-      {hasDateFilter && filteredItems.length === 0 && (
+      {hasDateFilter && items.length === 0 && (
         <p className="text-sm text-muted-foreground">
           Không có cuộc chat nào trong khoảng thời gian đã chọn.
-          {hasNextPage ? ' Thử tải thêm hoặc mở rộng khoảng ngày.' : null}
         </p>
       )}
 
-      {filteredItems.length > 0 && (
+      {items.length > 0 && (
         <div className="rounded-lg border">
           <Table>
             <TableHeader>
               <TableRow>
                 <TableHead>Cập nhật</TableHead>
                 <TableHead>Tiêu đề</TableHead>
-                <TableHead className="text-right hidden sm:table-cell">Số tin nhắn</TableHead>
+                <TableHead className="text-right hidden sm:table-cell">
+                  <span className="block">Tin nhắn</span>
+                  <span className="block text-[10px] font-normal normal-case text-muted-foreground">
+                    Bạn + AI
+                  </span>
+                </TableHead>
                 <TableHead className="w-10" />
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filteredItems.map((item) => (
+              {items.map((item) => (
                 <TableRow
                   key={item.id}
                   className="cursor-pointer hover:bg-muted/50"
@@ -232,18 +232,34 @@ function CopilotHistoryTable() {
         </div>
       )}
 
-      {hasNextPage && (
-        <div className="flex justify-center">
-          <Button
-            variant="outline"
-            size="sm"
-            className="gap-1.5"
-            disabled={isFetchingNextPage}
-            onClick={() => fetchNextPage()}
-          >
-            {isFetchingNextPage ? 'Đang tải...' : 'Tải thêm'}
-            <ChevronRight className={cn('size-4', isFetchingNextPage && 'animate-pulse')} />
-          </Button>
+      {total > 0 && (
+        <div className="flex items-center justify-between pt-1">
+          <p className="text-xs text-muted-foreground">
+            {total} kết quả
+            {totalPages > 1 ? ` · Trang ${page}/${totalPages}` : null}
+          </p>
+          {totalPages > 1 && (
+            <div className="flex gap-1">
+              <Button
+                size="icon"
+                variant="outline"
+                className="size-7"
+                disabled={page <= 1}
+                onClick={() => setPage((p) => p - 1)}
+              >
+                <ChevronLeft className="size-3.5" />
+              </Button>
+              <Button
+                size="icon"
+                variant="outline"
+                className="size-7"
+                disabled={page >= totalPages}
+                onClick={() => setPage((p) => p + 1)}
+              >
+                <ChevronRight className="size-3.5" />
+              </Button>
+            </div>
+          )}
         </div>
       )}
     </div>

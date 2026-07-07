@@ -21,6 +21,21 @@ export class ListConversationsQueryDto {
   @Min(1)
   @Max(50)
   limit?: number;
+
+  /** Offset pagination for Settings history tab (mutually exclusive with `before`) */
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  page?: number;
+
+  @IsOptional()
+  @IsString()
+  fromDate?: string;
+
+  @IsOptional()
+  @IsString()
+  toDate?: string;
 }
 
 export class GetConversationQueryDto {

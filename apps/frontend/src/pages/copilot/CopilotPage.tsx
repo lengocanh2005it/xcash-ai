@@ -1,4 +1,4 @@
-import type { CopilotMessageDto } from '@xcash/shared-types';
+import type { CopilotConversationSummary, CopilotMessageDto } from '@xcash/shared-types';
 import { SubscriptionPlan } from '@xcash/shared-types';
 import {
   BarChart2,
@@ -23,6 +23,7 @@ import { CopilotMessageActions } from '@/components/copilot/CopilotMessageAction
 import { CopilotSidebar } from '@/components/copilot/CopilotSidebar';
 import type { CopilotActivity } from '@/components/copilot/CopilotSourceChips';
 import { CopilotSourceChips } from '@/components/copilot/CopilotSourceChips';
+import { ConfirmDialog } from '@/components/shared/ConfirmDialog';
 import { HighlightedText } from '@/components/shared/HighlightedText';
 import { PlanGate } from '@/components/shared/PlanGate';
 import { ThemeToggle } from '@/components/shared/ThemeToggle';
@@ -98,8 +99,13 @@ function flushSsePending(pending: { buffer: string }): SseEvent[] {
 
 export default function CopilotPage() {
   const { user } = useAuthContext();
-  const { invalidateList, loadConversation, loadOlderMessages, refreshListAfterChat } =
-    useCopilotConversations(user?.id);
+  const {
+    invalidateList,
+    loadConversation,
+    loadOlderMessages,
+    refreshListAfterChat,
+    deleteConversation,
+  } = useCopilotConversations(user?.id);
 
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
@@ -111,6 +117,8 @@ export default function CopilotPage() {
   const [streamActivity, setStreamActivity] = useState<StreamActivity | undefined>();
   const [streamingContent, setStreamingContent] = useState('');
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [pendingDelete, setPendingDelete] = useState<CopilotConversationSummary | null>(null);
+  const [isDeletingConversation, setIsDeletingConversation] = useState(false);
   const [historyCollapsed, toggleHistoryCollapsed] = useSidebarCollapsed(
     'xcash_copilot_history_collapsed',
     true,
@@ -476,6 +484,18 @@ export default function CopilotPage() {
     }
   };
 
+  const confirmDeleteConversation = async () => {
+    if (!pendingDelete) return;
+    setIsDeletingConversation(true);
+    try {
+      await deleteConversation(pendingDelete.id);
+      handleDeleteConversation(pendingDelete.id);
+      setPendingDelete(null);
+    } finally {
+      setIsDeletingConversation(false);
+    }
+  };
+
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
@@ -489,14 +509,14 @@ export default function CopilotPage() {
       activeConversationId={activeConversationId}
       onSelectConversation={handleSelectConversation}
       onNewChat={handleNewChat}
-      onDeleteConversation={handleDeleteConversation}
+      onRequestDelete={setPendingDelete}
     />
   );
 
   return (
-    <div className="relative flex h-full min-h-full flex-col">
+    <div className="relative flex h-full min-h-0 flex-col overflow-hidden">
       <PlanGate minPlan={SubscriptionPlan.STARTER} featureName="AI Copilot">
-        <div className="flex h-full min-h-0 flex-1">
+        <div className="flex min-h-0 flex-1 overflow-hidden">
           {/* ── Desktop sidebar (md+) ── */}
           <aside
             className={cn(
@@ -508,7 +528,7 @@ export default function CopilotPage() {
           >
             <div
               className={cn(
-                'flex h-full w-64 min-w-64 flex-col',
+                'flex h-full min-h-0 w-64 min-w-64 flex-col overflow-hidden',
                 'transition-opacity duration-300 ease-in-out',
                 historyCollapsed ? 'pointer-events-none opacity-0' : 'opacity-100',
               )}
@@ -529,14 +549,17 @@ export default function CopilotPage() {
                   <PanelLeftClose className="size-4" />
                 </Button>
               </div>
-              {sidebarContent}
+              <div className="min-h-0 flex-1 overflow-hidden">{sidebarContent}</div>
             </div>
           </aside>
 
           {/* ── Mobile sidebar (Sheet) ── */}
           <Sheet open={sidebarOpen} onOpenChange={setSidebarOpen}>
-            <SheetContent side="left" className="w-64 border-sidebar-border/80 bg-background p-0">
-              {sidebarContent}
+            <SheetContent
+              side="left"
+              className="flex h-full w-64 min-h-0 flex-col gap-0 overflow-hidden border-sidebar-border/80 bg-background p-0"
+            >
+              <div className="min-h-0 flex-1 overflow-hidden">{sidebarContent}</div>
             </SheetContent>
           </Sheet>
 
@@ -778,6 +801,21 @@ export default function CopilotPage() {
           </div>
         </div>
       </PlanGate>
+
+      <ConfirmDialog
+        open={pendingDelete !== null}
+        onOpenChange={(open) => !open && !isDeletingConversation && setPendingDelete(null)}
+        title="Xóa cuộc trò chuyện?"
+        description={
+          pendingDelete
+            ? `Cuộc chat "${pendingDelete.title}" và toàn bộ tin nhắn sẽ bị xóa vĩnh viễn. Hành động này không thể hoàn tác.`
+            : ''
+        }
+        confirmLabel="Xóa"
+        variant="destructive"
+        loading={isDeletingConversation}
+        onConfirm={() => void confirmDeleteConversation()}
+      />
     </div>
   );
 }

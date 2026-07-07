@@ -7,6 +7,9 @@ import type {
 import { useCallback, useMemo } from 'react';
 import { api } from '@/lib/api';
 
+/** Sidebar infinite scroll — one API page per fetch, not full history. */
+export const COPILOT_SIDEBAR_PAGE_SIZE = 20;
+
 function provisionalTitleFromMessage(text: string): string {
   const plain = text.trim().replace(/\s+/g, ' ');
   if (!plain) return 'Cuộc chat mới';
@@ -59,10 +62,11 @@ export function useCopilotConversations(userId?: string) {
     queryKey: ['copilot-conversations', userId],
     queryFn: async ({ pageParam }) => {
       const before = pageParam as string | undefined;
-      const url = before
-        ? `/ai/copilot/conversations?before=${before}`
-        : '/ai/copilot/conversations';
-      const res = await api.get<{ data: CopilotConversationsListResponse }>(url);
+      const params = new URLSearchParams({ limit: String(COPILOT_SIDEBAR_PAGE_SIZE) });
+      if (before) params.set('before', before);
+      const res = await api.get<{ data: CopilotConversationsListResponse }>(
+        `/ai/copilot/conversations?${params}`,
+      );
       return res.data.data;
     },
     initialPageParam: undefined as string | undefined,

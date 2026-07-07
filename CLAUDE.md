@@ -55,3 +55,17 @@ pnpm verify                # lint + type-check + test + build — CHẠY LỆNH 
 Repo dùng **Biome** (không dùng ESLint/Prettier/oxlint) cho cả lint và format, cấu hình tại `biome.json` ở root, áp dụng chung cho mọi package.
 
 Chi tiết đầy đủ về cấu trúc thư mục, cách thêm app/package mới — xem [`agent-docs/01-monorepo-structure.md`](./agent-docs/01-monorepo-structure.md).
+
+## Agent skills
+
+### Issue tracker
+
+Issues sống trong GitHub Issues (`lengocanh2005it/xcash-ai`), thao tác qua `gh` CLI; PR ngoài cũng được `/triage` gom vào cùng hàng đợi labels/states như issue. Xem [`docs/agents/issue-tracker.md`](./docs/agents/issue-tracker.md).
+
+### Triage labels
+
+Dùng đúng 5 nhãn mặc định: `needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`. Xem [`docs/agents/triage-labels.md`](./docs/agents/triage-labels.md).
+
+### Domain docs
+
+Single-context — thay vì `CONTEXT.md`/`docs/adr/` chung, repo dùng sẵn `agent-docs/` (đặc biệt `agent-docs/reference/`) làm nguồn sự thật nghiệp vụ. Xem [`docs/agents/domain.md`](./docs/agents/domain.md).

@@ -22,6 +22,7 @@ import {
   DashboardPage,
   OnboardingCallbackPage,
   OnboardingPage,
+  PartnerAiCostsPage,
   PartnerAuditPage,
   PartnerDashboardPage,
   PartnerPaymentsPage,
@@ -130,6 +131,7 @@ function App() {
                   <Route path="/partner/payments" element={<PartnerPaymentsPage />} />
                   <Route path="/partner/audit-logs" element={<PartnerAuditPage />} />
                   <Route path="/partner/plans" element={<PartnerPlansPage />} />
+                  <Route path="/partner/ai-costs" element={<PartnerAiCostsPage />} />
                 </Route>
 
                 <Route

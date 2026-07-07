@@ -101,6 +101,7 @@ model Tenant {
   notifications        Notification[]
   importBatches        TransactionImportBatch[]
   copilotConversations CopilotConversation[]
+  aiUsageLogs          AiUsageLog[]
 
   @@map("tenants")
 }
@@ -337,6 +338,13 @@ enum CopilotMessageRole {
   assistant
 }
 
+enum AiCallType {
+  classify
+  copilot
+  embedding
+  title_gen
+}
+
 model CopilotConversation {
   id        String   @id @default(uuid())
   tenantId  String   @map("tenant_id")
@@ -366,6 +374,24 @@ model CopilotMessage {
 
   @@index([conversationId, createdAt])
   @@map("copilot_messages")
+}
+
+model AiUsageLog {
+  id             String      @id @default(uuid())
+  tenantId       String      @map("tenant_id")
+  callType       AiCallType  @map("call_type")
+  model          String
+  tokensIn       Int         @map("tokens_in")
+  tokensOut      Int         @default(0) @map("tokens_out")
+  transactionId  String?     @map("transaction_id")
+  conversationId String?     @map("conversation_id")
+  createdAt      DateTime    @default(now()) @map("created_at")
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, createdAt])
+  @@index([callType, createdAt])
+  @@map("ai_usage_logs")
 }
 
 model KnowledgeEmbedding {

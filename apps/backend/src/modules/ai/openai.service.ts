@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { CopilotActivity } from '@xcash/shared-types';
 import OpenAI from 'openai';
+import { AiUsageLogService } from './ai-usage-log.service';
 import { buildActivities } from './copilot-activity.helper';
 import type { CopilotToolService } from './copilot-tool.service';
 import { buildCopilotTools } from './copilot-tools.factory';
@@ -28,7 +29,10 @@ export class OpenAiService {
   private readonly embeddingModel: string;
   private readonly chatModel: string;
 
-  constructor(private readonly configService: ConfigService) {
+  constructor(
+    private readonly configService: ConfigService,
+    private readonly aiUsageLogService: AiUsageLogService,
+  ) {
     const apiKey = this.configService.get<string>('OPENAI_API_KEY', '');
     this.embeddingModel = this.configService.get<string>(
       'OPENAI_EMBEDDING_MODEL',
@@ -48,7 +52,11 @@ export class OpenAiService {
     return this.client !== null;
   }
 
-  async createEmbedding(text: string): Promise<number[] | null> {
+  getChatModel(): string {
+    return this.chatModel;
+  }
+
+  async createEmbedding(text: string, tenantId?: string): Promise<number[] | null> {
     if (!this.client || !text.trim()) {
       return null;
     }
@@ -58,6 +66,16 @@ export class OpenAiService {
       input: text.trim(),
     });
 
+    if (tenantId && response.usage) {
+      this.aiUsageLogService.record({
+        tenantId,
+        callType: 'embedding',
+        model: this.embeddingModel,
+        tokensIn: response.usage.total_tokens,
+        tokensOut: 0,
+      });
+    }
+
     return response.data[0]?.embedding ?? null;
   }
 
@@ -65,6 +83,8 @@ export class OpenAiService {
     message: string,
     history: Array<{ role: 'user' | 'assistant'; content: string }>,
     financialContext: string,
+    tenantId?: string,
+    conversationId?: string,
   ): Promise<string> {
     if (!this.client) {
       return 'AI Copilot chưa được cấu hình. Vui lòng liên hệ quản trị viên.';
@@ -100,6 +120,18 @@ ${financialContext}`;
         temperature: 0.7,
         max_tokens: 500,
       });
+
+      if (tenantId && response.usage) {
+        this.aiUsageLogService.record({
+          tenantId,
+          callType: 'copilot',
+          model: this.chatModel,
+          tokensIn: response.usage.prompt_tokens,
+          tokensOut: response.usage.completion_tokens,
+          conversationId,
+        });
+      }
+
       return response.choices[0]?.message?.content ?? 'Xin lỗi, tôi không thể trả lời lúc này.';
     } catch (error) {
       this.logger.error(
@@ -115,6 +147,7 @@ ${financialContext}`;
     message: string,
     history: Array<{ role: 'user' | 'assistant'; content: string }>,
     toolService: CopilotToolService,
+    conversationId?: string,
   ): Promise<{ reply: string; activities: CopilotActivity[] }> {
     const calledTools: string[] = [];
     const resultsCapture = new Map<string, unknown>();
@@ -140,6 +173,16 @@ ${financialContext}`;
       });
 
       const reply = (await runner.finalContent()) ?? 'Xin lỗi, tôi không thể trả lời lúc này.';
+      const usage = await runner.totalUsage();
+      this.aiUsageLogService.record({
+        tenantId,
+        callType: 'copilot',
+        model: this.chatModel,
+        tokensIn: usage.prompt_tokens,
+        tokensOut: usage.completion_tokens,
+        conversationId,
+      });
+
       const activities = buildActivities(calledTools, resultsCapture);
       return { reply, activities };
     } catch (error) {
@@ -217,7 +260,11 @@ Không tiết lộ tên tool kỹ thuật, grantId, accessToken, JSON thô. Luô
     );
   }
 
-  async generateCopilotTitle(firstMessage: string): Promise<string> {
+  async generateCopilotTitle(
+    firstMessage: string,
+    tenantId?: string,
+    conversationId?: string,
+  ): Promise<string> {
     if (!this.client) return 'Cuộc chat mới';
     const safeInput = firstMessage.slice(0, 200);
     try {
@@ -234,6 +281,18 @@ Không tiết lộ tên tool kỹ thuật, grantId, accessToken, JSON thô. Luô
         temperature: 0,
         max_tokens: 20,
       });
+
+      if (tenantId && response.usage) {
+        this.aiUsageLogService.record({
+          tenantId,
+          callType: 'title_gen',
+          model: this.chatModel,
+          tokensIn: response.usage.prompt_tokens,
+          tokensOut: response.usage.completion_tokens,
+          conversationId,
+        });
+      }
+
       const raw = response.choices[0]?.message?.content ?? '';
       return (
         raw
@@ -255,6 +314,8 @@ Không tiết lộ tên tool kỹ thuật, grantId, accessToken, JSON thô. Luô
     senderAccount?: string | null,
     receiverAccount?: string | null,
     transactionDate?: Date | null,
+    tenantId?: string,
+    transactionId?: string,
   ): Promise<ClassificationResult | null> {
     if (!this.client) {
       return null;
@@ -322,6 +383,17 @@ Chiều: ${direction === 'in' ? 'Tiền VÀO tài khoản' : 'Tiền RA khỏi t
 
       const text = response.choices[0]?.message?.content;
       if (!text) return null;
+
+      if (tenantId && response.usage) {
+        this.aiUsageLogService.record({
+          tenantId,
+          callType: 'classify',
+          model: this.chatModel,
+          tokensIn: response.usage.prompt_tokens,
+          tokensOut: response.usage.completion_tokens,
+          transactionId,
+        });
+      }
 
       const parsed = JSON.parse(text) as {
         debitAccount: string;

@@ -1,6 +1,6 @@
 import { Body, Controller, Get, Param, Patch, Query, UseGuards } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
-import type { SubscriptionPlan } from '@prisma/client';
+import type { AiCallType, SubscriptionPlan } from '@prisma/client';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { JwtAuthGuard, PartnerGuard } from '../../common/guards/auth.guards';
 import type { AuthenticatedUser } from '../../common/types/authenticated-user.type';
@@ -93,6 +93,42 @@ export class PartnerController {
   @Patch('tenants/:id/activate')
   activate(@CurrentUser() user: AuthenticatedUser, @Param('id') id: string) {
     return this.service.activateTenant(id, user.id);
+  }
+
+  @Get('ai-costs')
+  getAiCosts(
+    @Query('fromDate') fromDate?: string,
+    @Query('toDate') toDate?: string,
+    @Query('tenantId') tenantId?: string,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+  ) {
+    return this.service.getAiCosts({
+      fromDate,
+      toDate,
+      tenantId,
+      page: page ? Number(page) : undefined,
+      limit: limit ? Number(limit) : undefined,
+    });
+  }
+
+  @Get('ai-costs/detail')
+  getAiCostDetail(
+    @Query('tenantId') tenantId: string,
+    @Query('callType') callType?: string,
+    @Query('fromDate') fromDate?: string,
+    @Query('toDate') toDate?: string,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+  ) {
+    return this.service.getAiCostDetail({
+      tenantId,
+      callType: callType as AiCallType | undefined,
+      fromDate,
+      toDate,
+      page: page ? Number(page) : undefined,
+      limit: limit ? Number(limit) : undefined,
+    });
   }
 
   @Get('plan-pricing')

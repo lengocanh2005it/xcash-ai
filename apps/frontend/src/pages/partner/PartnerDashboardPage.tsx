@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
-import { Building2, Percent, ShieldCheck, Wallet } from 'lucide-react';
+import { Bot, Building2, Percent, ShieldCheck, Wallet } from 'lucide-react';
 import { type ElementType, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   Bar,
   BarChart,
@@ -22,7 +23,7 @@ import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
 import { api } from '@/lib/api';
 import { formatVND, formatVNDAxis } from '@/lib/format-vnd';
-import { PLAN_LABELS, PLAN_ORDER } from '@/lib/plan-labels';
+import { PLAN_LABELS, PLAN_ORDER } from '@/lib/plans';
 import type { PartnerTenant } from '@/types/partner';
 
 interface PartnerStats {
@@ -129,14 +130,21 @@ function StatCard({
   label,
   value,
   hint,
+  isLoading,
+  onClick,
 }: {
   icon: ElementType;
   label: string;
   value: string;
   hint?: string;
+  isLoading?: boolean;
+  onClick?: () => void;
 }) {
   return (
-    <Card className="h-full py-0">
+    <Card
+      className={`h-full py-0 ${onClick ? 'cursor-pointer transition-shadow hover:shadow-md' : ''}`}
+      onClick={onClick}
+    >
       <CardContent className="px-5 py-4">
         <div className="flex items-center justify-between gap-3">
           <p className="text-sm font-medium text-muted-foreground">{label}</p>
@@ -144,9 +152,13 @@ function StatCard({
             <Icon className="size-4" />
           </div>
         </div>
-        <p className="mt-2 text-2xl font-semibold tabular-nums leading-tight sm:text-3xl">
-          {value}
-        </p>
+        {isLoading ? (
+          <Skeleton className="mt-2 h-8 w-28 rounded" />
+        ) : (
+          <p className="mt-2 text-2xl font-semibold tabular-nums leading-tight sm:text-3xl">
+            {value}
+          </p>
+        )}
         {hint ? (
           <p className="mt-1.5 text-xs leading-relaxed text-muted-foreground">{hint}</p>
         ) : null}
@@ -156,6 +168,7 @@ function StatCard({
 }
 
 export default function PartnerDashboardPage() {
+  const navigate = useNavigate();
   const [fromDate, setFromDate] = useState('');
   const [toDate, setToDate] = useState('');
   const hasDateFilter = fromDate !== '' || toDate !== '';
@@ -186,6 +199,19 @@ export default function PartnerDashboardPage() {
     queryFn: () =>
       api
         .get<{ data: RevenueTrendPoint[] }>('/partner/revenue-trend', { params: dateParams })
+        .then((r) => r.data.data),
+  });
+
+  const currentMonthStart = new Date(new Date().getFullYear(), new Date().getMonth(), 1)
+    .toISOString()
+    .slice(0, 10);
+  const { data: aiCosts, isLoading: loadingAiCosts } = useQuery({
+    queryKey: ['partner', 'ai-costs', currentMonthStart],
+    queryFn: () =>
+      api
+        .get<{ data: { grandTotalCostUsd: number } }>('/partner/ai-costs', {
+          params: { fromDate: currentMonthStart },
+        })
         .then((r) => r.data.data),
   });
 
@@ -287,25 +313,26 @@ export default function PartnerDashboardPage() {
       />
 
       <div className="space-y-6 p-4 sm:p-6">
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
           <StatCard
             icon={Building2}
             label="Tổng doanh nghiệp"
-            value={loadingStats ? '—' : String(stats?.totalTenants ?? 0)}
+            value={String(stats?.totalTenants ?? 0)}
+            isLoading={loadingStats}
             hint="Tổng số DN đã đăng ký toàn hệ thống (mọi gói, mọi trạng thái)"
           />
           <StatCard
             icon={ShieldCheck}
             label="Hoạt động / Đã khóa"
-            value={
-              loadingStats ? '—' : `${stats?.activeTenants ?? 0} / ${stats?.suspendedTenants ?? 0}`
-            }
+            value={`${stats?.activeTenants ?? 0} / ${stats?.suspendedTenants ?? 0}`}
+            isLoading={loadingStats}
             hint="DN đang dùng dịch vụ · DN bị khóa (subscription suspended)"
           />
           <StatCard
             icon={Wallet}
             label="Doanh thu định kỳ (MRR)"
-            value={loadingTenants ? '—' : formatVND(mrr)}
+            value={formatVND(mrr)}
+            isLoading={loadingTenants}
             hint={
               hasDateFilter
                 ? 'Tính tại thời điểm hiện tại — không theo kỳ lọc ngày'
@@ -315,12 +342,21 @@ export default function PartnerDashboardPage() {
           <StatCard
             icon={Percent}
             label="Độ chính xác AI"
-            value={loadingStats ? '—' : `${stats?.aiAccuracy ?? 0}%`}
+            value={`${stats?.aiAccuracy ?? 0}%`}
+            isLoading={loadingStats}
             hint={
               hasDateFilter
                 ? 'Tỷ lệ giao dịch AI tự định khoản (auto) trong kỳ đã chọn'
                 : 'Tỷ lệ giao dịch AI tự định khoản (auto) trên tổng đã định khoản trong tháng'
             }
+          />
+          <StatCard
+            icon={Bot}
+            label="Chi phí AI tháng này"
+            value={`$${(aiCosts?.grandTotalCostUsd ?? 0).toFixed(4)}`}
+            isLoading={loadingAiCosts}
+            hint="Tổng chi phí OpenAI API tháng hiện tại · click để xem chi tiết"
+            onClick={() => navigate('/partner/ai-costs')}
           />
         </div>
 

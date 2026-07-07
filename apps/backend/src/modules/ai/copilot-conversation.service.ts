@@ -81,9 +81,9 @@ export class CopilotConversationService {
     }));
   }
 
-  triggerAutoTitle(conversationId: string, firstMessage: string): void {
+  triggerAutoTitle(conversationId: string, firstMessage: string, tenantId?: string): void {
     void this.openAiService
-      .generateCopilotTitle(firstMessage)
+      .generateCopilotTitle(firstMessage, tenantId, conversationId)
       .then((title) =>
         this.prisma.copilotConversation.update({
           where: { id: conversationId },

@@ -40,6 +40,7 @@ import { CopilotThrottlerGuard } from '../../common/guards/copilot-throttler.gua
 import { PlanGuard } from '../../common/guards/plan.guard';
 import type { AuthenticatedUser } from '../../common/types/authenticated-user.type';
 import { RedisService } from '../../redis/redis.service';
+import { AiUsageLogService } from './ai-usage-log.service';
 import { buildActivities, getStreamingActivityMeta } from './copilot-activity.helper';
 import { CopilotContextService } from './copilot-context.service';
 import { CopilotConversationService } from './copilot-conversation.service';
@@ -84,6 +85,7 @@ class CopilotDto {
 export class CopilotController {
   constructor(
     private readonly openAiService: OpenAiService,
+    private readonly aiUsageLogService: AiUsageLogService,
     private readonly copilotContextService: CopilotContextService,
     private readonly copilotToolService: CopilotToolService,
     private readonly conversationService: CopilotConversationService,
@@ -177,12 +179,19 @@ export class CopilotController {
           dto.message,
           history,
           this.copilotToolService,
+          conversation.id,
         );
         reply = result.reply;
         activities = result.activities;
         meta = activities.length > 0 ? { activities } : undefined;
       } else {
-        reply = await this.openAiService.chatCopilot(dto.message, history, financialContext!);
+        reply = await this.openAiService.chatCopilot(
+          dto.message,
+          history,
+          financialContext!,
+          tenantId,
+          conversation.id,
+        );
       }
     } catch (err) {
       // Dangling user message — không có assistant reply để hiển thị, xóa luôn (9.9)
@@ -193,7 +202,8 @@ export class CopilotController {
     void this.conversationService
       .saveAssistantMessage(conversation.id, reply, activities)
       .catch(() => {});
-    if (isNewConv) this.conversationService.triggerAutoTitle(conversation.id, dto.message);
+    if (isNewConv)
+      this.conversationService.triggerAutoTitle(conversation.id, dto.message, tenantId);
     void this.copilotQuotaService.incrementAndNotify(tenantId, subMeta);
 
     return { reply, meta, conversationId: conversation.id };
@@ -296,13 +306,20 @@ export class CopilotController {
 
     try {
       if (!useFunctionCalling) {
-        const reply = await this.openAiService.chatCopilot(dto.message, history, financialContext!);
+        const reply = await this.openAiService.chatCopilot(
+          dto.message,
+          history,
+          financialContext!,
+          tenantId,
+          conversation.id,
+        );
         if (!wasAborted) {
           writeEvent('done', { reply, meta: undefined, conversationId: conversation.id });
           void this.conversationService
             .saveAssistantMessage(conversation.id, reply, [])
             .catch(() => {});
-          if (isNewConv) this.conversationService.triggerAutoTitle(conversation.id, dto.message);
+          if (isNewConv)
+            this.conversationService.triggerAutoTitle(conversation.id, dto.message, tenantId);
           await this.copilotQuotaService.incrementAndNotify(tenantId, subMeta);
         }
         return;
@@ -349,11 +366,21 @@ export class CopilotController {
       const meta = activities.length > 0 ? { activities } : undefined;
 
       if (!wasAborted) {
+        const usage = await runner.totalUsage();
+        this.aiUsageLogService.record({
+          tenantId,
+          callType: 'copilot',
+          model: this.openAiService.getChatModel(),
+          tokensIn: usage.prompt_tokens,
+          tokensOut: usage.completion_tokens,
+          conversationId: conversation.id,
+        });
         writeEvent('done', { reply, meta, conversationId: conversation.id });
         void this.conversationService
           .saveAssistantMessage(conversation.id, reply, activities)
           .catch(() => {});
-        if (isNewConv) this.conversationService.triggerAutoTitle(conversation.id, dto.message);
+        if (isNewConv)
+          this.conversationService.triggerAutoTitle(conversation.id, dto.message, tenantId);
         await this.copilotQuotaService.incrementAndNotify(tenantId, subMeta);
       }
     } catch {
@@ -374,7 +401,8 @@ export class CopilotController {
         void this.conversationService
           .saveAssistantMessage(conversation.id, accumulatedContent, [], true)
           .catch(() => {});
-        if (isNewConv) this.conversationService.triggerAutoTitle(conversation.id, dto.message);
+        if (isNewConv)
+          this.conversationService.triggerAutoTitle(conversation.id, dto.message, tenantId);
       }
       if (!res.writableEnded) res.end();
     }

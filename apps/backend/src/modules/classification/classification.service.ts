@@ -104,7 +104,7 @@ export class ClassificationService {
       });
     });
 
-    this.triggerEmbedding(classificationId, classification.transaction?.content);
+    this.triggerEmbedding(classificationId, classification.transaction?.content, tenantId);
   }
 
   async correct(
@@ -147,7 +147,7 @@ export class ClassificationService {
       });
     });
 
-    this.triggerEmbedding(classificationId, classification.transaction?.content);
+    this.triggerEmbedding(classificationId, classification.transaction?.content, tenantId);
   }
 
   async skip(tenantId: string, classificationId: string, userId: string) {
@@ -202,7 +202,7 @@ export class ClassificationService {
           status: TransactionStatus.classified,
         },
       });
-      this.triggerEmbedding(updated.id, transaction.content);
+      this.triggerEmbedding(updated.id, transaction.content, tenantId);
       return updated;
     }
 
@@ -220,7 +220,7 @@ export class ClassificationService {
         status: TransactionStatus.classified,
       },
     });
-    this.triggerEmbedding(created.id, transaction.content);
+    this.triggerEmbedding(created.id, transaction.content, tenantId);
     return created;
   }
 
@@ -233,10 +233,14 @@ export class ClassificationService {
     return classification;
   }
 
-  private triggerEmbedding(classificationId: string, content: string | null | undefined): void {
+  private triggerEmbedding(
+    classificationId: string,
+    content: string | null | undefined,
+    tenantId: string,
+  ): void {
     if (!content) return;
     this.embeddingService
-      .embedAndStoreClassification(classificationId, content)
+      .embedAndStoreClassification(classificationId, content, tenantId)
       .catch((err: unknown) =>
         this.logger.warn(`Embedding failed for classification ${classificationId}`, err),
       );

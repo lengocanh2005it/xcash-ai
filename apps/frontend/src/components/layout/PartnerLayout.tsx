@@ -1,4 +1,5 @@
 import {
+  Bot,
   Building2,
   Layers,
   LayoutDashboard,
@@ -28,6 +29,7 @@ const partnerNavItems = [
   { to: '/partner/payments', label: 'Lịch sử thanh toán', icon: Receipt },
   { to: '/partner/audit-logs', label: 'Nhật ký', icon: ScrollText },
   { to: '/partner/plans', label: 'Gói dịch vụ', icon: Layers },
+  { to: '/partner/ai-costs', label: 'Chi phí AI', icon: Bot },
 ];
 
 interface PartnerSidebarContentProps {

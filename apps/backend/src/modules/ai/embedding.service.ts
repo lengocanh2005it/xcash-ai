@@ -21,8 +21,12 @@ export class EmbeddingService {
     return `[${embedding.join(',')}]`;
   }
 
-  async embedAndStoreClassification(classificationId: string, content: string): Promise<void> {
-    const embedding = await this.openAiService.createEmbedding(content);
+  async embedAndStoreClassification(
+    classificationId: string,
+    content: string,
+    tenantId?: string,
+  ): Promise<void> {
+    const embedding = await this.openAiService.createEmbedding(content, tenantId);
     if (!embedding) return;
 
     const vectorLiteral = this.toVectorLiteral(embedding);
@@ -39,7 +43,7 @@ export class EmbeddingService {
     content: string,
     limit = 5,
   ): Promise<FewShotExample[]> {
-    const embedding = await this.openAiService.createEmbedding(content);
+    const embedding = await this.openAiService.createEmbedding(content, tenantId);
     if (!embedding) return [];
 
     const vectorLiteral = this.toVectorLiteral(embedding);

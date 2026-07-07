@@ -16,6 +16,7 @@ export const PartnerTenantsPage = lazy(() => import('@/pages/partner/PartnerTena
 export const PartnerPaymentsPage = lazy(() => import('@/pages/partner/PartnerPaymentsPage'));
 export const PartnerAuditPage = lazy(() => import('@/pages/partner/PartnerAuditPage'));
 export const PartnerPlansPage = lazy(() => import('@/pages/partner/PartnerPlansPage'));
+export const PartnerAiCostsPage = lazy(() => import('@/pages/partner/PartnerAiCostsPage'));
 
 /** Onboarding — ít truy cập sau lần đầu. */
 export const OnboardingPage = lazy(() => import('@/pages/onboarding/OnboardingPage'));

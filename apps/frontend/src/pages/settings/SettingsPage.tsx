@@ -9,6 +9,7 @@ import {
   CreditCard,
   Lock,
   Mail,
+  MessageSquare,
   ScrollText,
   Search,
   Sliders,
@@ -56,6 +57,7 @@ import { formatDateVN } from '@/lib/dashboard-transactions';
 import { formatVND } from '@/lib/format-vnd';
 import { hasPlanAccess, PLAN_LABEL } from '@/lib/plan';
 import { cn } from '@/lib/utils';
+import { CopilotHistoryTab } from '@/pages/settings/CopilotHistoryTab';
 
 // ─── Tab Threshold ────────────────────────────────────────────────
 function ThresholdTab() {
@@ -1786,6 +1788,12 @@ export default function SettingsPage() {
       component: <AuditLogTab />,
     },
     { value: 'billing', label: 'Gói dịch vụ', icon: CreditCard, component: <BillingTab /> },
+    {
+      value: 'copilot-history',
+      label: 'Lịch sử Copilot',
+      icon: MessageSquare,
+      component: <CopilotHistoryTab />,
+    },
   ];
 
   return (

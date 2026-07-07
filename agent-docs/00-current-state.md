@@ -2,9 +2,9 @@
 
 > Mục đích: cho biết **chính xác** cái gì đã tồn tại trong repo ngay lúc này, để agent không cần `find`/`grep`/`ls` lại từ đầu mỗi session mới. File này phải được cập nhật mỗi khi có thay đổi cấu trúc đáng kể (thêm module, thêm page, đổi dependency lớn, thêm service hạ tầng). Nếu file này và thực tế code lệch nhau, **tin thực tế code**, và sửa lại file này ngay sau đó.
 
-Cập nhật lần cuối: **Copilot History (Phase 6 hoàn thành — performance hardening)** — parallel DB write (song song `findOrCreate` + pre-fetch financial context flag=0), `CopilotThrottlerGuard` per-user rate limit (30/phút) trên `POST /ai/copilot`, Redis concurrent SSE limit (max 3/user) trên `/ai/copilot/stream` (`@SkipThrottle()` + `copilot:sse:active:{userId}`), dangling user message cleanup khi AI lỗi thật (không phải abort) trên cả 2 endpoint.
+Cập nhật lần cuối: **Copilot History (Phase 7 hoàn thành — Settings history tab)** — tab `Lịch sử Copilot` trong `SettingsPage` (`?tab=copilot-history`): bảng conversations của user hiện tại (reuse `useCopilotConversations` + `GET /ai/copilot/conversations`), lọc theo ngày (client-side trên `updatedAt`), nút Tải thêm (cursor), click row → `localStorage` + navigate `/copilot`; bọc `PlanGate` Starter+; **không** có admin xem chat user khác (privacy 7.1). Trước đó: gap-fix commit (sidebar infinite scroll, URL safe, JSON fallback UX, restore indexes migration `20260707100000`, `copilot-conversation.service.spec.ts`).
 
-Trước đó — **Copilot History (Phase 4–5 hoàn thành)** — Phase 4: stop generation backend (`wasAborted` + `req.on('close')` + `runner.abort()`, partial message `isPartial=true`, skip quota increment khi abort); Phase 5: frontend sidebar (`CopilotSidebar.tsx` grouped by date + context menu, `useCopilotConversations.ts` React Query CRUD, `CopilotMessageActions.tsx` copy button), `CopilotPage.tsx` rewrite (2-column layout, mobile Sheet, `localStorage` persistence `activeConversationId`, load history from DB, IntersectionObserver infinite scroll upward, `useLayoutEffect` restore scroll, stop button + "Đã dừng" badge). Branch `feat/copilot-history`.
+Trước đó — **Copilot History (Phase 6 hoàn thành — performance hardening)** — parallel DB write, `CopilotThrottlerGuard`, Redis SSE limit, dangling message cleanup. Branch `feat/copilot-history`.
 
 ---
 
@@ -30,7 +30,7 @@ Trước đó — **Copilot History (Phase 4–5 hoàn thành)** — Phase 4: st
 - Backend: `billing` module — current-plan + usage-history ✅
 - Backend: `report` module mở rộng — `GET /reports/comparison` (so tháng trước) + `GET /reports/top-accounts` (top 5 chi/thu) + `GET /reports/daily-trend` (thu/chi/activity theo ngày) + `GET /reports/status-breakdown` + `GET /reports/source-breakdown` (Dashboard charts) ✅
 - Backend: `GET /review/count` — đếm số GD đang chờ review, dùng cho polling notification (không dùng SSE vì `EventSource` chuẩn không gửi được header `Authorization: Bearer`) ✅
-- Frontend: `SettingsPage` (6 tab: Banking/Threshold/Notifications/Team/**Nhật ký**/Billing) ✅
+- Frontend: `SettingsPage` (7 tab: Banking/Threshold/Notifications/Team/**Nhật ký**/Billing/**Lịch sử Copilot**) ✅
 - Frontend: hook `useReviewCount` (poll 20s) → Sidebar hiện badge đỏ + toast khi review count tăng ✅
 - Frontend: `ReviewPage` — thêm `SwipeableReviewCard` cho mobile (vuốt phải confirm / vuốt trái skip), giữ bảng cũ cho desktop ✅
 - Frontend: ShadCN components mới — `progress.tsx`, `separator.tsx`, `switch.tsx`, `tabs.tsx` (dùng `radix-ui` umbrella package, pattern giống `select.tsx` — KHÔNG dùng `@radix-ui/react-*` riêng lẻ) ✅
@@ -141,6 +141,11 @@ Trước đó — **Copilot History (Phase 4–5 hoàn thành)** — Phase 4: st
 - **9.8 Per-user throttle:** `CopilotThrottlerGuard` (`common/guards/copilot-throttler.guard.ts`, extends `ThrottlerGuard`, track theo `userId`) áp dụng `@Throttle({ ttl: 60_000, limit: 30 })` trên `POST /ai/copilot` — tách biệt khỏi `TenantThrottlerGuard` global (track theo `tenantId`, có thể bị 1 user chat nhiều làm throttle cả tenant) ✅
 - **9.7 SSE concurrent limit:** `POST /ai/copilot/stream` gắn `@SkipThrottle()` (bỏ qua ThrottlerGuard global) + tự implement giới hạn Redis `copilot:sse:active:{userId}` (INCR + EXPIRE 120s, max 3 connection đồng thời) — trả `429` trước khi `flushHeaders()` nếu vượt; `streamChat()` tách thành wrapper (quản lý INCR/DECR) + `streamChatInternal()` (logic chat thật) ✅
 - **9.9 Dangling message cleanup:** `CopilotConversationService.deleteMessage(id)` — gọi khi AI call lỗi thật (không phải abort): `chat()` bọc try/catch quanh AI call, xóa `userMsg` rồi rethrow; `streamChat()` trong catch block, chỉ xóa nếu `!accumulatedContent.trim()` (có nội dung → coi như partial, giữ lại theo path abort) ✅
+
+**Đã xong (Copilot History — Phase 7 — Settings history tab):**
+- **`CopilotHistoryTab.tsx`:** Card + bảng ShadCN (cập nhật, tiêu đề, preview `lastMessage`, số tin nhắn); filter `Từ ngày`/`Đến ngày` debounced; empty/error/loading states; `PlanGate` Starter+; mở conversation → set `xcash_copilot_conv_{userId}` + `navigate('/copilot')` ✅
+- **`SettingsPage.tsx`:** tab mới `copilot-history` (icon `MessageSquare`), URL `?tab=copilot-history` ✅
+- **Privacy:** chỉ conversations của user đăng nhập — không admin audit cross-user (theo spec 7.1) ✅
 
 **Đã xong (Copilot Quota — Phase 1–4):**
 - **Phase 1 — Schema:** migration `20260706143059_add_copilot_quota` — thêm `NotificationType.copilot_quota_warning` + `copilot_quota_exceeded`; cột `subscriptions.copilot_used_this_cycle` (Int, default 0); cột `plan_pricing.copilot_quota` (Int, default -1 = unlimited); seed `plan_pricing` copilotQuota (Free=0, Starter=200, Pro=1000, Enterprise=-1) ✅
@@ -364,7 +369,8 @@ paypilot-ai/                                   ← tên folder local có thể k
 │           │   ├── reports/ReportsPage.tsx    # Báo cáo tháng + export Excel ✅
 │           │   ├── analytics/AnalyticsPage.tsx # So sánh tháng, BarChart thu/chi, top 5 danh mục ✅
 │           │   ├── copilot/CopilotPage.tsx    # AI Copilot chat — 2-column layout (sidebar+chat), mobile Sheet, localStorage persistence, history from DB, infinite scroll, stop button (Phase 4+5) ✅
-│           │   ├── settings/SettingsPage.tsx  # Tabs: Banking/Threshold/Notifications/Team/Nhật ký/Billing ✅
+│           │   ├── settings/SettingsPage.tsx  # Tabs: Banking/Threshold/Notifications/Team/Nhật ký/Billing/Lịch sử Copilot ✅
+│           │   ├── settings/CopilotHistoryTab.tsx  # Phase 7 — bảng lịch sử Copilot trong Settings ✅
 │           │   ├── components/audit/AuditLogPanel.tsx  # Bảng nhật ký dùng chung ✅
 │           │   └── partner/
 │           │       ├── PartnerLayout.tsx          # Sidebar: Dashboard/DN/Thanh toán/Nhật ký/Gói dịch vụ ✅

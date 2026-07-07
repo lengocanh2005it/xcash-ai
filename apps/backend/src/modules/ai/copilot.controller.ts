@@ -15,6 +15,7 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { ApiTags } from '@nestjs/swagger';
+import { SkipThrottle, Throttle } from '@nestjs/throttler';
 import { Type } from 'class-transformer';
 import {
   ArrayMaxSize,
@@ -35,9 +36,11 @@ import {
   COPILOT_SUBSCRIPTION_KEY,
   CopilotQuotaGuard,
 } from '../../common/guards/copilot-quota.guard';
+import { CopilotThrottlerGuard } from '../../common/guards/copilot-throttler.guard';
 import { PlanGuard } from '../../common/guards/plan.guard';
 import type { AuthenticatedUser } from '../../common/types/authenticated-user.type';
 import { PrismaService } from '../../prisma/prisma.service';
+import { RedisService } from '../../redis/redis.service';
 import { NotificationService } from '../notification/notification.service';
 import { CopilotContextService } from './copilot-context.service';
 import { CopilotConversationService } from './copilot-conversation.service';
@@ -87,6 +90,7 @@ export class CopilotController {
     private readonly configService: ConfigService,
     private readonly prisma: PrismaService,
     private readonly notificationService: NotificationService,
+    private readonly redisService: RedisService,
   ) {}
 
   // ── CRUD Conversations ──────────────────────────────────────────────────────
@@ -139,19 +143,23 @@ export class CopilotController {
 
   @Post('copilot')
   @RequiresPlan('starter')
-  @UseGuards(CopilotQuotaGuard)
+  @UseGuards(CopilotQuotaGuard, CopilotThrottlerGuard)
+  @Throttle({ default: { ttl: 60_000, limit: 30 } })
   async chat(@CurrentUser() user: AuthenticatedUser, @Body() dto: CopilotDto, @Req() req: Request) {
     const tenantId = user.tenantId!;
     const subMeta = (req as unknown as Record<string, unknown>)[COPILOT_SUBSCRIPTION_KEY] as
       | { id: string }
       | undefined;
     const isNewConv = !dto.conversationId;
+    const useFunctionCalling = this.configService.get<boolean>('COPILOT_USE_FUNCTION_CALLING');
 
-    const conversation = await this.conversationService.findOrCreate(
-      tenantId,
-      user.id,
-      dto.conversationId,
-    );
+    // Perf: chạy song song lookup conversation + pre-fetch financial context (flag=0)
+    const [conversation, financialContext] = await Promise.all([
+      this.conversationService.findOrCreate(tenantId, user.id, dto.conversationId),
+      useFunctionCalling
+        ? Promise.resolve(undefined)
+        : this.copilotContextService.getFinancialContext(tenantId),
+    ]);
     const userMsg = await this.conversationService.saveUserMessage(conversation.id, dto.message);
 
     const history = dto.conversationId
@@ -162,19 +170,24 @@ export class CopilotController {
     let activities: ReturnType<typeof buildActivities> = [];
     let meta: { activities: ReturnType<typeof buildActivities> } | undefined;
 
-    if (this.configService.get<boolean>('COPILOT_USE_FUNCTION_CALLING')) {
-      const result = await this.openAiService.chatCopilotWithTools(
-        tenantId,
-        dto.message,
-        history,
-        this.copilotToolService,
-      );
-      reply = result.reply;
-      activities = result.activities;
-      meta = activities.length > 0 ? { activities } : undefined;
-    } else {
-      const financialContext = await this.copilotContextService.getFinancialContext(tenantId);
-      reply = await this.openAiService.chatCopilot(dto.message, history, financialContext);
+    try {
+      if (useFunctionCalling) {
+        const result = await this.openAiService.chatCopilotWithTools(
+          tenantId,
+          dto.message,
+          history,
+          this.copilotToolService,
+        );
+        reply = result.reply;
+        activities = result.activities;
+        meta = activities.length > 0 ? { activities } : undefined;
+      } else {
+        reply = await this.openAiService.chatCopilot(dto.message, history, financialContext!);
+      }
+    } catch (err) {
+      // Dangling user message — không có assistant reply để hiển thị, xóa luôn (9.9)
+      await this.conversationService.deleteMessage(userMsg.id);
+      throw err;
     }
 
     void this.conversationService
@@ -191,6 +204,7 @@ export class CopilotController {
   @Post('copilot/stream')
   @RequiresPlan('starter')
   @UseGuards(CopilotQuotaGuard)
+  @SkipThrottle()
   async streamChat(
     @CurrentUser() user: AuthenticatedUser,
     @Body() dto: CopilotDto,
@@ -202,14 +216,55 @@ export class CopilotController {
       | { id: string }
       | undefined;
     const isNewConv = !dto.conversationId;
+    const useFunctionCalling = this.configService.get<boolean>('COPILOT_USE_FUNCTION_CALLING');
 
+    // Giới hạn SSE connection đồng thời per-user (Redis, max 3) — chặn 1 user mở quá nhiều tab
+    const sseKey = `copilot:sse:active:${user.id}`;
+    const activeConnections = await this.redisService.client.incr(sseKey);
+    await this.redisService.client.expire(sseKey, 120);
+    if (activeConnections > 3) {
+      await this.redisService.client.decr(sseKey);
+      res.status(429).json({
+        message: 'Quá nhiều cuộc trò chuyện đồng thời. Vui lòng đóng bớt tab.',
+      });
+      return;
+    }
+
+    try {
+      await this.streamChatInternal(
+        user,
+        dto,
+        req,
+        res,
+        tenantId,
+        subMeta,
+        isNewConv,
+        useFunctionCalling,
+      );
+    } finally {
+      await this.redisService.client.decr(sseKey);
+    }
+  }
+
+  private async streamChatInternal(
+    user: AuthenticatedUser,
+    dto: CopilotDto,
+    req: Request,
+    res: Response,
+    tenantId: string,
+    subMeta: { id: string } | undefined,
+    isNewConv: boolean,
+    useFunctionCalling: boolean | undefined,
+  ): Promise<void> {
     // Setup conversation + save user message BEFORE flushing SSE headers
     // so that errors (e.g. 404 invalid conversationId) return proper HTTP codes
-    const conversation = await this.conversationService.findOrCreate(
-      tenantId,
-      user.id,
-      dto.conversationId,
-    );
+    // Perf: chạy song song lookup conversation + pre-fetch financial context (flag=0)
+    const [conversation, financialContext] = await Promise.all([
+      this.conversationService.findOrCreate(tenantId, user.id, dto.conversationId),
+      useFunctionCalling
+        ? Promise.resolve(undefined)
+        : this.copilotContextService.getFinancialContext(tenantId),
+    ]);
     const userMsg = await this.conversationService.saveUserMessage(conversation.id, dto.message);
 
     const history = dto.conversationId
@@ -240,9 +295,8 @@ export class CopilotController {
     });
 
     try {
-      if (!this.configService.get<boolean>('COPILOT_USE_FUNCTION_CALLING')) {
-        const financialContext = await this.copilotContextService.getFinancialContext(tenantId);
-        const reply = await this.openAiService.chatCopilot(dto.message, history, financialContext);
+      if (!useFunctionCalling) {
+        const reply = await this.openAiService.chatCopilot(dto.message, history, financialContext!);
         if (!wasAborted) {
           writeEvent('done', { reply, meta: undefined, conversationId: conversation.id });
           void this.conversationService
@@ -304,6 +358,10 @@ export class CopilotController {
       }
     } catch {
       if (!wasAborted) {
+        // Lỗi thật (không phải abort) và chưa có nội dung nào — xóa dangling user message (9.9)
+        if (!accumulatedContent.trim()) {
+          await this.conversationService.deleteMessage(userMsg.id);
+        }
         writeEvent('done', {
           reply: 'Xin lỗi, có lỗi xảy ra. Vui lòng thử lại.',
           meta: undefined,

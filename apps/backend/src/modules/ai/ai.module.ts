@@ -1,6 +1,7 @@
 import { BullModule } from '@nestjs/bullmq';
 import { Module } from '@nestjs/common';
 import { CopilotQuotaGuard } from '../../common/guards/copilot-quota.guard';
+import { CopilotThrottlerGuard } from '../../common/guards/copilot-throttler.guard';
 import { PlanGuard } from '../../common/guards/plan.guard';
 import { PrismaModule } from '../../prisma/prisma.module';
 import { WEBHOOK_QUEUE } from '../../queue/queue.module';
@@ -35,6 +36,7 @@ import { OpenAiService } from './openai.service';
     CopilotToolService,
     PlanGuard,
     CopilotQuotaGuard,
+    CopilotThrottlerGuard,
   ],
   exports: [OpenAiService, EmbeddingService, ClassificationService],
 })

@@ -57,6 +57,10 @@ export class CopilotConversationService {
     });
   }
 
+  async deleteMessage(id: string): Promise<void> {
+    await this.prisma.copilotMessage.delete({ where: { id } }).catch(() => {});
+  }
+
   async getHistoryForContext(
     conversationId: string,
     excludeMessageId: string,

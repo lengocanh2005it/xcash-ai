@@ -1,4 +1,5 @@
 import type { ConfigService } from '@nestjs/config';
+import type { Role } from '@xcash/shared-types';
 import type { CopilotToolService } from './copilot-tool.service';
 
 type ToolDefinition = {
@@ -18,12 +19,14 @@ export function buildCopilotTools(
   toolService: CopilotToolService,
   configService?: ConfigService,
   resultsCapture?: Map<string, unknown>,
+  role?: Role,
 ): ToolDefinition[] {
   const cassoSearchEnabled = configService?.get<boolean>('COPILOT_CASSO_SEARCH_ENABLED') ?? false;
+  const actionToolsEnabled = configService?.get<boolean>('COPILOT_ACTION_TOOLS_ENABLED') ?? false;
   const bind =
     (name: string) =>
     async (args: Record<string, unknown>): Promise<unknown> => {
-      const result = await toolService.execute(tenantId, name, args);
+      const result = await toolService.execute(tenantId, name, args, role);
       resultsCapture?.set(name, result);
       return result;
     };
@@ -201,6 +204,32 @@ export function buildCopilotTools(
         function: bind('search_transactions'),
       },
     },
+    ...(actionToolsEnabled
+      ? [
+          {
+            type: 'function' as const,
+            function: {
+              name: 'propose_confirm_transaction_classification',
+              description:
+                'Chỉ dùng khi user yêu cầu rõ ràng xác nhận/duyệt một giao dịch cụ thể (đã biết transactionId hoặc vừa tìm ra qua search_transactions). KHÔNG tự ý gợi ý xác nhận khi user chỉ hỏi thông tin chung. Tool này CHỈ đọc dữ liệu và đề xuất — không tự ghi xác nhận, người dùng phải bấm nút xác nhận trên giao diện.',
+              strict: true,
+              parameters: {
+                type: 'object',
+                properties: {
+                  transactionId: {
+                    type: 'string',
+                    description: 'ID giao dịch cần đề xuất xác nhận',
+                  },
+                },
+                required: ['transactionId'],
+                additionalProperties: false,
+              },
+              parse: JSON.parse,
+              function: bind('propose_confirm_transaction_classification'),
+            },
+          },
+        ]
+      : []),
     ...(cassoSearchEnabled
       ? [
           {

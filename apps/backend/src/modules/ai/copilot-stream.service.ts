@@ -61,6 +61,7 @@ export class CopilotStreamService {
           history,
           this.copilotToolService,
           conversation.id,
+          user.role,
         );
         reply = result.reply;
         activities = result.activities;
@@ -162,6 +163,7 @@ export class CopilotStreamService {
         history,
         this.copilotToolService,
         resultsCapture,
+        user.role,
       );
 
       if (!runner) {

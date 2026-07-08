@@ -76,7 +76,7 @@ export class ClassificationService {
     return { items, total, page, limit };
   }
 
-  async confirm(tenantId: string, classificationId: string, userId: string) {
+  async confirm(tenantId: string, classificationId: string, userId: string, source?: 'copilot') {
     const classification = await this.findInQueue(tenantId, classificationId);
 
     await this.prisma.$transaction(async (tx) => {
@@ -99,7 +99,7 @@ export class ClassificationService {
           entityId: classificationId,
           action: 'review_confirmed',
           actor: userId,
-          afterState: { action: 'confirm' },
+          afterState: source ? { action: 'confirm', source } : { action: 'confirm' },
         },
       });
     });

@@ -1,12 +1,15 @@
 import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { tavily } from '@tavily/core';
+import { Role } from '@xcash/shared-types';
 import { PrismaService } from '../../prisma/prisma.service';
 import { RedisService } from '../../redis/redis.service';
 import { OnboardingService } from '../onboarding/onboarding.service';
 import { ReportService } from '../report/report.service';
 import { type KnowledgeSearchResult, searchKnowledgeByKeyword } from './knowledge';
 import { OpenAiService } from './openai.service';
+
+const CONFIRMABLE_ROLES = new Set<Role>([Role.ADMIN, Role.ACCOUNTANT]);
 
 type MonthSummary = Awaited<ReturnType<ReportService['getSummary']>>;
 
@@ -79,8 +82,75 @@ export class CopilotToolService {
     return payload;
   }
 
-  async execute(tenantId: string, name: string, args: Record<string, unknown>): Promise<unknown> {
+  async proposeConfirmTransactionClassification(
+    tenantId: string,
+    transactionId: string,
+    role: Role,
+  ) {
+    const classification = await this.prisma.transactionClassification.findFirst({
+      where: { tenantId, transactionId },
+      include: { transaction: { select: { content: true } } },
+    });
+
+    if (!classification) {
+      return {
+        transactionId,
+        classificationId: '',
+        debitAccount: '',
+        creditAccount: '',
+        confidence: 0,
+        status: 'not_found',
+        content: '',
+        amount: 0,
+        canConfirm: false,
+        reason: 'Không tìm thấy định khoản cho giao dịch này',
+      };
+    }
+
+    const base = {
+      transactionId,
+      classificationId: classification.id,
+      debitAccount: classification.debitAccount,
+      creditAccount: classification.creditAccount,
+      confidence: classification.confidenceScore,
+      status: classification.status,
+      content: classification.transaction.content,
+      amount: Number(classification.amount),
+    };
+
+    if (!CONFIRMABLE_ROLES.has(role)) {
+      return {
+        ...base,
+        canConfirm: false,
+        reason: 'Bạn không có quyền xác nhận giao dịch này (chỉ admin/kế toán)',
+      };
+    }
+
+    if (classification.status !== 'review') {
+      return {
+        ...base,
+        canConfirm: false,
+        reason: 'Giao dịch này đã được xử lý, không còn ở trạng thái chờ duyệt',
+      };
+    }
+
+    return { ...base, canConfirm: true };
+  }
+
+  async execute(
+    tenantId: string,
+    name: string,
+    args: Record<string, unknown>,
+    role?: Role,
+  ): Promise<unknown> {
     switch (name) {
+      case 'propose_confirm_transaction_classification':
+        return this.proposeConfirmTransactionClassification(
+          tenantId,
+          String(args.transactionId),
+          role ?? Role.VIEWER,
+        );
+
       case 'get_month_summary':
         return this.getMonthSummary(tenantId, Number(args.year), Number(args.month));
 

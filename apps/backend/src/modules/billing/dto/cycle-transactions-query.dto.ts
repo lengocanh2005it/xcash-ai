@@ -1,7 +1,7 @@
-import { Type } from 'class-transformer';
-import { IsInt, IsISO8601, IsOptional, IsString, Max, MaxLength, Min } from 'class-validator';
+import { IsISO8601, IsOptional, IsString, MaxLength } from 'class-validator';
+import { PaginationQueryDto } from '../../../common/dto/pagination-query.dto';
 
-export class CycleTransactionsQueryDto {
+export class CycleTransactionsQueryDto extends PaginationQueryDto {
   @IsISO8601()
   cycleStart!: string;
 
@@ -13,16 +13,5 @@ export class CycleTransactionsQueryDto {
   @MaxLength(200)
   search?: string;
 
-  @IsOptional()
-  @Type(() => Number)
-  @IsInt()
-  @Min(1)
-  @Max(100)
   limit?: number = 15;
-
-  @IsOptional()
-  @Type(() => Number)
-  @IsInt()
-  @Min(1)
-  page?: number = 1;
 }

@@ -6,6 +6,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { RedisService } from '../../redis/redis.service';
 import { OnboardingService } from '../onboarding/onboarding.service';
 import { ReportService } from '../report/report.service';
+import { COPILOT_TOOLS, type CopilotToolEntry } from './copilot-tool.registry';
 import { type KnowledgeSearchResult, searchKnowledgeByKeyword } from './knowledge';
 import { OpenAiService } from './openai.service';
 
@@ -17,6 +18,7 @@ type MonthSummary = Awaited<ReturnType<ReportService['getSummary']>>;
 export class CopilotToolService {
   private readonly logger = new Logger(CopilotToolService.name);
   private readonly tavilyClient: ReturnType<typeof tavily> | null;
+  private readonly registry: Map<string, CopilotToolEntry>;
 
   constructor(
     private readonly reportService: ReportService,
@@ -28,7 +30,12 @@ export class CopilotToolService {
   ) {
     const apiKey = configService.get<string>('TAVILY_API_KEY', '');
     this.tavilyClient = apiKey ? tavily({ apiKey }) : null;
+    this.registry = new Map(COPILOT_TOOLS.map((t) => [t.name, t]));
   }
+
+  // ---------------------------------------------------------------------------
+  // Tool implementations (public — called by registry execute closures)
+  // ---------------------------------------------------------------------------
 
   async getMonthSummary(tenantId: string, year: number, month: number) {
     const cacheKey = `copilot:tool:summary:${tenantId}:${year}-${month}`;
@@ -41,14 +48,36 @@ export class CopilotToolService {
     return data;
   }
 
-  private async getBankingStatus(tenantId: string) {
+  async getMonthComparison(tenantId: string, year: number, month: number) {
+    return this.reportService.getComparison(tenantId, year, month);
+  }
+
+  async getTopAccounts(tenantId: string, year: number, month: number, limit: number) {
+    return this.reportService.getTopAccounts(tenantId, year, month, limit);
+  }
+
+  async getReviewQueueCount(tenantId: string) {
+    return {
+      count: await this.prisma.transactionClassification.count({
+        where: { tenantId, status: 'review' },
+      }),
+    };
+  }
+
+  async lookupChartAccount(tenantId: string, accountCode: string) {
+    return this.prisma.chartOfAccount.findFirst({
+      where: { tenantId, accountCode },
+      select: { accountCode: true, accountName: true, accountType: true, isActive: true },
+    });
+  }
+
+  async getBankingStatus(tenantId: string) {
     const cacheKey = `copilot:tool:banking:${tenantId}`;
     const cached = await this.redisService.client.get(cacheKey);
     if (cached) return JSON.parse(cached) as object;
 
     const status = await this.onboardingService.getStatus(tenantId);
     const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
-    // GD từ Casso có grantId (non-null); GD import Excel có grantId = null
     const [lastCas, countLast7Days] = await Promise.all([
       this.prisma.transaction.findFirst({
         where: { tenantId, grantId: { not: null } },
@@ -80,6 +109,48 @@ export class CopilotToolService {
 
     await this.redisService.client.set(cacheKey, JSON.stringify(payload), 'EX', 60);
     return payload;
+  }
+
+  async searchTransactions(tenantId: string, args: Record<string, unknown>) {
+    const keyword = String(args.keyword ?? '');
+    const sourceArg = String(args.source ?? 'all');
+    const grantFilter =
+      sourceArg === 'cas'
+        ? { grantId: { not: null } }
+        : sourceArg === 'import'
+          ? { grantId: null }
+          : {};
+    const limit = Math.min(20, Math.max(1, Number(args.limit ?? 10)));
+    const items = await this.prisma.transaction.findMany({
+      where: {
+        tenantId,
+        ...grantFilter,
+        ...(keyword
+          ? {
+              OR: [
+                { content: { contains: keyword, mode: 'insensitive' } },
+                { senderAccount: { contains: keyword, mode: 'insensitive' } },
+              ],
+            }
+          : {}),
+      },
+      select: {
+        transactionId: true,
+        content: true,
+        amount: true,
+        transactionDate: true,
+        grantId: true,
+        classification: {
+          select: { debitAccount: true, creditAccount: true, status: true },
+        },
+      },
+      orderBy: { transactionDate: 'desc' },
+      take: limit,
+    });
+    return {
+      items: items.map((t) => ({ ...t, source: t.grantId ? 'cas' : 'import' })),
+      total: items.length,
+    };
   }
 
   async proposeConfirmTransactionClassification(
@@ -215,122 +286,11 @@ export class CopilotToolService {
     return { ...base, canCorrect: true };
   }
 
-  async execute(
-    tenantId: string,
-    name: string,
-    args: Record<string, unknown>,
-    role?: Role,
-  ): Promise<unknown> {
-    switch (name) {
-      case 'propose_confirm_transaction_classification':
-        return this.proposeConfirmTransactionClassification(
-          tenantId,
-          String(args.transactionId),
-          role ?? Role.VIEWER,
-        );
-
-      case 'propose_correct_transaction_classification':
-        return this.proposeCorrectTransactionClassification(
-          tenantId,
-          String(args.transactionId),
-          String(args.debitAccount),
-          String(args.creditAccount),
-          role ?? Role.VIEWER,
-        );
-
-      case 'get_month_summary':
-        return this.getMonthSummary(tenantId, Number(args.year), Number(args.month));
-
-      case 'get_month_comparison':
-        return this.reportService.getComparison(tenantId, Number(args.year), Number(args.month));
-
-      case 'get_top_accounts':
-        return this.reportService.getTopAccounts(
-          tenantId,
-          Number(args.year),
-          Number(args.month),
-          Math.min(10, Number(args.limit ?? 5)),
-        );
-
-      case 'get_review_queue_count':
-        return {
-          count: await this.prisma.transactionClassification.count({
-            where: { tenantId, status: 'review' },
-          }),
-        };
-
-      case 'lookup_chart_account':
-        return this.prisma.chartOfAccount.findFirst({
-          where: { tenantId, accountCode: String(args.accountCode) },
-          select: { accountCode: true, accountName: true, accountType: true, isActive: true },
-        });
-
-      case 'get_banking_status':
-        return this.getBankingStatus(tenantId);
-
-      case 'search_knowledge_base':
-        return this.searchKnowledge(String(args.query ?? ''));
-
-      case 'get_cas_integration_help':
-        return this.searchKnowledge(String(args.topic ?? ''));
-
-      case 'search_transactions': {
-        const keyword = String(args.keyword ?? '');
-        // source: 'cas' = GD từ Casso (grantId not null), 'import' = Excel (grantId null)
-        const sourceArg = String(args.source ?? 'all');
-        const grantFilter =
-          sourceArg === 'cas'
-            ? { grantId: { not: null } }
-            : sourceArg === 'import'
-              ? { grantId: null }
-              : {};
-        const limit = Math.min(20, Math.max(1, Number(args.limit ?? 10)));
-        const items = await this.prisma.transaction.findMany({
-          where: {
-            tenantId,
-            ...grantFilter,
-            ...(keyword
-              ? {
-                  OR: [
-                    { content: { contains: keyword, mode: 'insensitive' } },
-                    { senderAccount: { contains: keyword, mode: 'insensitive' } },
-                  ],
-                }
-              : {}),
-          },
-          select: {
-            transactionId: true,
-            content: true,
-            amount: true,
-            transactionDate: true,
-            grantId: true,
-            classification: {
-              select: { debitAccount: true, creditAccount: true, status: true },
-            },
-          },
-          orderBy: { transactionDate: 'desc' },
-          take: limit,
-        });
-        return {
-          items: items.map((t) => ({ ...t, source: t.grantId ? 'cas' : 'import' })),
-          total: items.length,
-        };
-      }
-
-      case 'search_casso_public':
-        return this.searchCassoPublic(String(args.query ?? ''));
-
-      default:
-        throw new BadRequestException(`Unknown copilot tool: ${name}`);
-    }
-  }
-
-  private async searchKnowledge(query: string): Promise<KnowledgeSearchResult> {
+  async searchKnowledge(query: string): Promise<KnowledgeSearchResult> {
     if (!query.trim()) return { sections: [], query, totalFound: 0 };
 
     if (!this.openAiService.isConfigured()) return searchKnowledgeByKeyword(query);
 
-    // Embed query rồi tìm trong pgvector
     try {
       const vector = await this.openAiService.createEmbedding(query);
       if (!vector) return searchKnowledgeByKeyword(query);
@@ -360,10 +320,9 @@ export class CopilotToolService {
     }
   }
 
-  private async searchCassoPublic(query: string) {
+  async searchCassoPublic(query: string) {
     if (!query.trim()) return { results: [], disclaimer: '' };
 
-    // Đảm bảo query luôn liên quan đến Casso
     const CASSO_KEYWORDS = ['casso', 'cas link', 'bankhub', 'cas balance'];
     const normalizedQuery = query.toLowerCase();
     const hasCassoKeyword = CASSO_KEYWORDS.some((kw) => normalizedQuery.includes(kw));
@@ -417,5 +376,28 @@ export class CopilotToolService {
 
     await this.redisService.client.set(cacheKey, JSON.stringify(payload), 'EX', 86400);
     return payload;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Dispatcher — registry lookup replaces switch
+  // ---------------------------------------------------------------------------
+
+  async execute(
+    tenantId: string,
+    name: string,
+    args: Record<string, unknown>,
+    role?: Role,
+  ): Promise<unknown> {
+    const entry = this.registry.get(name);
+    if (!entry) throw new BadRequestException(`Unknown copilot tool: ${name}`);
+    return entry.execute(this, tenantId, args, role);
+  }
+
+  // ---------------------------------------------------------------------------
+  // Registry accessors (used by factory + activity helper)
+  // ---------------------------------------------------------------------------
+
+  getRegistry(): Map<string, CopilotToolEntry> {
+    return this.registry;
   }
 }

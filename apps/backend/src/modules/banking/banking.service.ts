@@ -11,16 +11,12 @@ import {
 import { ConfigService } from '@nestjs/config';
 import { Prisma, SubscriptionPlan, TransactionDirection, TransactionSource } from '@prisma/client';
 import type { Queue } from 'bullmq';
-import {
-  isOveragePlan,
-  OVERAGE_PLANS,
-  QUOTA_WARNING_RATIO,
-} from '../../common/constants/quota-policy';
+import { isOveragePlan } from '../../common/constants/quota-policy';
+import { QuotaNotificationService } from '../../common/services/quota-notification.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import { WEBHOOK_QUEUE } from '../../queue/queue.module';
 import { RedisService } from '../../redis/redis.service';
 import { AI_CLASSIFY_JOB } from '../ai/classification.processor';
-import { NotificationService } from '../notification/notification.service';
 import type { CasWebhookDto } from './dto/banking.dto';
 
 export interface CasWebhookResult {
@@ -43,7 +39,7 @@ export class BankingService {
     private readonly prisma: PrismaService,
     private readonly redisService: RedisService,
     private readonly configService: ConfigService,
-    private readonly notificationService: NotificationService,
+    private readonly quotaNotificationService: QuotaNotificationService,
     @InjectQueue(WEBHOOK_QUEUE) private readonly webhookQueue: Queue,
   ) {}
 
@@ -224,9 +220,21 @@ export class BankingService {
 
     await this.webhookQueue.add(AI_CLASSIFY_JOB, { transactionDbId: saved.id });
 
-    void this.notifyQuotaUsage(subscription, grant.tenantId, isOverQuota).catch((err: unknown) =>
-      this.logger.warn(`Quota notification failed for tenant ${grant.tenantId}`, err),
-    );
+    void this.quotaNotificationService
+      .checkAndNotify({
+        tenantId: grant.tenantId,
+        oldUsed: subscription.transactionUsedThisCycle,
+        quota: subscription.transactionQuota,
+        plan: subscription.plan,
+        overagePricePerTransaction: subscription.overagePricePerTransaction
+          ? Number(subscription.overagePricePerTransaction)
+          : null,
+        cycleStart: subscription.currentCycleStart,
+        added: 1,
+      })
+      .catch((err: unknown) =>
+        this.logger.warn(`Quota notification failed for tenant ${grant.tenantId}`, err),
+      );
 
     return {
       duplicate: false,
@@ -234,45 +242,5 @@ export class BankingService {
       tenantId: saved.tenantId,
       status: saved.status,
     };
-  }
-
-  private async notifyQuotaUsage(
-    subscription: {
-      transactionUsedThisCycle: number;
-      transactionQuota: number;
-      currentCycleStart: Date;
-      plan: SubscriptionPlan;
-      overagePricePerTransaction: { toNumber?: () => number } | number | null;
-    },
-    tenantId: string,
-    isOverQuota: boolean,
-  ): Promise<void> {
-    const oldUsed = subscription.transactionUsedThisCycle;
-    const quota = subscription.transactionQuota;
-    const newUsed = oldUsed + 1;
-    const cycleStart = subscription.currentCycleStart;
-    const warningThreshold = Math.ceil(quota * QUOTA_WARNING_RATIO);
-
-    if (oldUsed < warningThreshold && newUsed >= warningThreshold) {
-      await this.notificationService.createQuotaWarning(tenantId, newUsed, quota, cycleStart);
-    }
-
-    if (oldUsed < quota && newUsed >= quota) {
-      await this.notificationService.createQuotaExceeded(tenantId, quota, cycleStart);
-    }
-
-    if (isOverQuota && isOveragePlan(subscription.plan)) {
-      const rawPrice = subscription.overagePricePerTransaction;
-      const price =
-        rawPrice === null || rawPrice === undefined
-          ? 0
-          : typeof rawPrice === 'number'
-            ? rawPrice
-            : (rawPrice.toNumber?.() ?? Number(rawPrice));
-
-      if (price > 0) {
-        await this.notificationService.createOverageStarted(tenantId, price, cycleStart);
-      }
-    }
   }
 }

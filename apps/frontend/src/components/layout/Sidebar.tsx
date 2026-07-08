@@ -9,16 +9,12 @@ import {
   LineChart,
   Lock,
   LogOut,
-  PanelLeftClose,
-  PanelLeftOpen,
   Receipt,
   Settings,
-  X,
 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
-import { Logo } from '@/components/brand/Logo';
 import { ProfileDialog } from '@/components/profile/ProfileDialog';
 import { NotificationBell } from '@/components/shared/NotificationBell';
 import { UserAvatar } from '@/components/shared/UserAvatar';
@@ -27,13 +23,13 @@ import { useAuth } from '@/hooks/useAuth';
 import { useReviewCount } from '@/hooks/useReviewCount';
 import { hasPlanAccess } from '@/lib/plan';
 import { cn } from '@/lib/utils';
+import { DesktopSidebarWrapper, MobileSidebarWrapper, SidebarShell } from './SidebarShell';
 
 interface NavItem {
   to: string;
   label: string;
   icon: LucideIcon;
   disabled?: boolean;
-  /** Gói tối thiểu để dùng — hiện icon khóa nếu chưa đủ. */
   minPlan?: SubscriptionPlan;
 }
 
@@ -150,119 +146,67 @@ export function SidebarContent({
   };
 
   return (
-    <div className="flex h-full min-h-0 w-full flex-1 flex-col">
-      <div
-        className={cn(
-          'border-b border-sidebar-border/80 px-3 py-4',
-          collapsed ? 'flex flex-col items-center gap-2' : 'px-4',
-        )}
-      >
-        <div
-          className={cn(
-            'flex w-full items-center',
-            collapsed ? 'flex-col gap-2' : 'justify-between gap-2',
-          )}
-        >
-          <div className={cn('flex min-w-0 items-center gap-3', collapsed && 'flex-col')}>
-            <Logo collapsed={collapsed} markSize={36} />
-          </div>
-
-          <div className={cn('flex shrink-0 items-center gap-1', collapsed && 'flex-col gap-2')}>
-            <NotificationBell align="left" />
-            {showCollapseToggle ? (
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon-sm"
-                className="text-muted-foreground"
-                onClick={onToggleCollapsed}
-                aria-label={collapsed ? 'Mở rộng sidebar' : 'Thu gọn sidebar'}
-                title={collapsed ? 'Mở rộng sidebar' : 'Thu gọn sidebar'}
-              >
-                {collapsed ? (
-                  <PanelLeftOpen className="size-4" />
-                ) : (
-                  <PanelLeftClose className="size-4" />
-                )}
-              </Button>
-            ) : null}
-            {showClose ? (
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon-sm"
-                onClick={onClose}
-                aria-label="Đóng menu"
-              >
-                <X className="size-4" />
-              </Button>
-            ) : null}
-          </div>
-        </div>
-      </div>
-
-      <nav className="flex-1 space-y-4 overflow-y-auto px-3 py-4">
-        <div className="space-y-1">
-          {!collapsed ? (
-            <p className="px-3 pb-1 text-[11px] font-medium tracking-wide text-muted-foreground uppercase">
-              Menu chính
-            </p>
-          ) : null}
-          {primaryNavItems.map((item) => (
-            <NavItemLink
-              key={item.to}
-              item={item}
-              collapsed={collapsed}
-              onNavigate={onNavigate}
-              badgeCount={item.to === '/review' ? reviewCount : undefined}
-              locked={item.minPlan ? !hasPlanAccess(user?.plan, item.minPlan) : false}
-            />
-          ))}
-        </div>
-      </nav>
-
-      <div className={cn('border-t border-sidebar-border/80 p-3', collapsed && 'px-2')}>
-        <div
-          className={cn(
-            'rounded-xl border border-sidebar-border/60 bg-background/70 p-3',
-            collapsed && 'flex flex-col items-center border-0 bg-transparent p-0',
-          )}
-        >
-          <button
-            type="button"
-            onClick={() => setProfileOpen(true)}
+    <>
+      <SidebarShell
+        collapsed={collapsed}
+        showCollapseToggle={showCollapseToggle}
+        onToggleCollapsed={onToggleCollapsed}
+        showClose={showClose}
+        onClose={onClose}
+        headerRight={<NotificationBell align="left" />}
+        navLabel="Menu chính"
+        navItems={primaryNavItems.map((item) => (
+          <NavItemLink
+            key={item.to}
+            item={item}
+            collapsed={collapsed}
+            onNavigate={onNavigate}
+            badgeCount={item.to === '/review' ? reviewCount : undefined}
+            locked={item.minPlan ? !hasPlanAccess(user?.plan, item.minPlan) : false}
+          />
+        ))}
+        footer={
+          <div
             className={cn(
-              'flex w-full items-center rounded-lg text-left transition-colors hover:bg-primary/5',
-              collapsed ? 'justify-center p-1' : 'mb-3 gap-3 p-1',
+              'rounded-xl border border-sidebar-border/60 bg-background/70 p-3',
+              collapsed && 'flex flex-col items-center border-0 bg-transparent p-0',
             )}
-            aria-label="Xem thông tin tài khoản"
-            title="Thông tin tài khoản"
           >
-            <UserAvatar name={user?.name} avatarUrl={user?.avatarUrl} />
-            {!collapsed ? (
-              <div className="min-w-0">
-                <p className="truncate text-sm font-medium">{user?.name}</p>
-                <p className="truncate text-xs text-muted-foreground">{user?.email}</p>
-              </div>
-            ) : null}
-          </button>
-          <Button
-            type="button"
-            variant="outline"
-            size={collapsed ? 'icon-sm' : 'sm'}
-            className={cn(!collapsed && 'w-full')}
-            onClick={handleLogout}
-            aria-label="Đăng xuất"
-            title={collapsed ? 'Đăng xuất' : undefined}
-          >
-            <LogOut className="size-4" />
-            {!collapsed ? 'Đăng xuất' : null}
-          </Button>
-        </div>
-      </div>
-
+            <button
+              type="button"
+              onClick={() => setProfileOpen(true)}
+              className={cn(
+                'flex w-full items-center rounded-lg text-left transition-colors hover:bg-primary/5',
+                collapsed ? 'justify-center p-1' : 'mb-3 gap-3 p-1',
+              )}
+              aria-label="Xem thông tin tài khoản"
+              title="Thông tin tài khoản"
+            >
+              <UserAvatar name={user?.name} avatarUrl={user?.avatarUrl} />
+              {!collapsed ? (
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-medium">{user?.name}</p>
+                  <p className="truncate text-xs text-muted-foreground">{user?.email}</p>
+                </div>
+              ) : null}
+            </button>
+            <Button
+              type="button"
+              variant="outline"
+              size={collapsed ? 'icon-sm' : 'sm'}
+              className={cn(!collapsed && 'w-full')}
+              onClick={handleLogout}
+              aria-label="Đăng xuất"
+              title={collapsed ? 'Đăng xuất' : undefined}
+            >
+              <LogOut className="size-4" />
+              {!collapsed ? 'Đăng xuất' : null}
+            </Button>
+          </div>
+        }
+      />
       <ProfileDialog open={profileOpen} onOpenChange={setProfileOpen} />
-    </div>
+    </>
   );
 }
 
@@ -273,18 +217,13 @@ interface DesktopSidebarProps {
 
 export function DesktopSidebar({ collapsed, onToggleCollapsed }: DesktopSidebarProps) {
   return (
-    <aside
-      className={cn(
-        'hidden shrink-0 flex-col overflow-hidden border-r border-sidebar-border bg-sidebar text-sidebar-foreground shadow-sm transition-[width] duration-200 lg:sticky lg:top-0 lg:flex lg:h-svh',
-        collapsed ? 'w-[4.5rem]' : 'w-64',
-      )}
-    >
+    <DesktopSidebarWrapper collapsed={collapsed}>
       <SidebarContent
         collapsed={collapsed}
         showCollapseToggle
         onToggleCollapsed={onToggleCollapsed}
       />
-    </aside>
+    </DesktopSidebarWrapper>
   );
 }
 
@@ -294,21 +233,9 @@ interface MobileSidebarProps {
 }
 
 export function MobileSidebar({ open, onClose }: MobileSidebarProps) {
-  if (!open) {
-    return null;
-  }
-
   return (
-    <>
-      <button
-        type="button"
-        className="fixed inset-0 z-40 bg-black/50 lg:hidden"
-        aria-label="Đóng menu"
-        onClick={onClose}
-      />
-      <aside className="fixed inset-y-0 left-0 z-50 flex w-[min(100vw-3rem,18rem)] flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground shadow-xl lg:hidden">
-        <SidebarContent onNavigate={onClose} showClose onClose={onClose} />
-      </aside>
-    </>
+    <MobileSidebarWrapper open={open} onClose={onClose}>
+      <SidebarContent onNavigate={onClose} showClose onClose={onClose} />
+    </MobileSidebarWrapper>
   );
 }

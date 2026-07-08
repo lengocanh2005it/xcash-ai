@@ -1,7 +1,10 @@
 import type { CopilotConversationsListResponse } from '@xcash/shared-types';
 import { SubscriptionPlan } from '@xcash/shared-types';
-import { Bot, ExternalLink, MessageSquare, X } from 'lucide-react';
+import axios from 'axios';
+import { Bot, ExternalLink, Loader2, MessageSquare, X } from 'lucide-react';
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { toast } from 'sonner';
 import { CopilotQuotaSummary } from '@/components/copilot/CopilotQuotaSummary';
 import { EmptyState } from '@/components/shared/EmptyState';
 import { PaginationBar } from '@/components/shared/PaginationBar';
@@ -56,6 +59,7 @@ function formatMessagePreview(text: string) {
 function CopilotHistoryTable() {
   const { user } = useAuth();
   const navigate = useNavigate();
+  const [openingId, setOpeningId] = useState<string | null>(null);
 
   const { data, filters, setFilter, resetFilters, page, setPage, isLoading, isError, refetch } =
     useFilteredPagination({
@@ -78,10 +82,27 @@ function CopilotHistoryTable() {
   const total = data?.total ?? 0;
   const totalPages = data?.totalPages ?? 1;
 
-  const openConversation = (id: string) => {
-    if (!user?.id) return;
-    localStorage.setItem(`${STORAGE_KEY_PREFIX}${user.id}`, id);
-    navigate('/copilot');
+  // Verify the conversation still exists before navigating — guards against a
+  // stale cached row whose conversation was already deleted elsewhere (e.g. the
+  // Copilot sidebar). Prevents a confusing empty Copilot screen and keeps the
+  // history list in sync by refetching when a dead row is clicked.
+  const openConversation = async (id: string) => {
+    if (!user?.id || openingId) return;
+    setOpeningId(id);
+    try {
+      await api.get(`/ai/copilot/conversations/${id}`);
+      localStorage.setItem(`${STORAGE_KEY_PREFIX}${user.id}`, id);
+      navigate('/copilot');
+    } catch (error) {
+      if (axios.isAxiosError(error) && error.response?.status === 404) {
+        toast.error('Cuộc trò chuyện không còn tồn tại hoặc đã bị xóa.');
+        void refetch();
+      } else {
+        toast.error('Không mở được cuộc trò chuyện, vui lòng thử lại.');
+      }
+    } finally {
+      setOpeningId(null);
+    }
   };
 
   const clearFilters = () => resetFilters();
@@ -176,13 +197,18 @@ function CopilotHistoryTable() {
             {items.map((item) => (
               <Card
                 key={item.id}
-                className="cursor-pointer py-4 hover:bg-muted/50 transition-colors"
+                aria-busy={openingId === item.id}
+                className="cursor-pointer py-4 hover:bg-muted/50 transition-colors aria-busy:pointer-events-none aria-busy:opacity-60"
                 onClick={() => openConversation(item.id)}
               >
                 <CardContent className="space-y-2 text-sm">
                   <div className="flex items-start justify-between gap-2">
                     <p className="font-medium truncate">{item.title}</p>
-                    <ExternalLink className="size-4 shrink-0 text-muted-foreground" />
+                    {openingId === item.id ? (
+                      <Loader2 className="size-4 shrink-0 animate-spin text-muted-foreground" />
+                    ) : (
+                      <ExternalLink className="size-4 shrink-0 text-muted-foreground" />
+                    )}
                   </div>
                   {item.lastMessage && (
                     <p className="text-xs text-muted-foreground truncate">
@@ -222,7 +248,8 @@ function CopilotHistoryTable() {
                 {items.map((item) => (
                   <TableRow
                     key={item.id}
-                    className="cursor-pointer hover:bg-muted/50"
+                    aria-busy={openingId === item.id}
+                    className="cursor-pointer hover:bg-muted/50 aria-busy:pointer-events-none aria-busy:opacity-60"
                     onClick={() => openConversation(item.id)}
                   >
                     <TableCell className="whitespace-nowrap text-muted-foreground">
@@ -238,7 +265,11 @@ function CopilotHistoryTable() {
                     </TableCell>
                     <TableCell className="text-right tabular-nums">{item.messageCount}</TableCell>
                     <TableCell>
-                      <ExternalLink className="size-4 text-muted-foreground" />
+                      {openingId === item.id ? (
+                        <Loader2 className="size-4 animate-spin text-muted-foreground" />
+                      ) : (
+                        <ExternalLink className="size-4 text-muted-foreground" />
+                      )}
                     </TableCell>
                   </TableRow>
                 ))}

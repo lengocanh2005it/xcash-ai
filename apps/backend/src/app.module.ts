@@ -2,6 +2,7 @@ import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { APP_FILTER, APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
 import { ThrottlerModule } from '@nestjs/throttler';
+import { CommonServicesModule } from './common/common-services.module';
 import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
 import { TenantThrottlerGuard } from './common/guards/tenant-throttler.guard';
 import { ResponseInterceptor } from './common/interceptors/response.interceptor';
@@ -48,6 +49,7 @@ import { StorageModule } from './storage/storage.module';
         ],
       }),
     }),
+    CommonServicesModule,
     PrismaModule,
     StorageModule,
     RedisModule,

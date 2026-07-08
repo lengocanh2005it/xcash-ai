@@ -1,33 +1,15 @@
-import { Transform, Type } from 'class-transformer';
-import {
-  IsInt,
-  IsOptional,
-  IsString,
-  IsUUID,
-  Max,
-  MaxLength,
-  Min,
-  MinLength,
-} from 'class-validator';
+import { Transform } from 'class-transformer';
+import { IsOptional, IsString, IsUUID, Max, MaxLength, MinLength } from 'class-validator';
+import { PaginationQueryDto } from '../../../common/dto/pagination-query.dto';
 
-export class ListConversationsQueryDto {
+export class ListConversationsQueryDto extends PaginationQueryDto {
   @IsOptional()
   @IsUUID()
   before?: string;
 
   @IsOptional()
-  @Type(() => Number)
-  @IsInt()
-  @Min(1)
   @Max(50)
-  limit?: number;
-
-  /** Offset pagination for Settings history tab (mutually exclusive with `before`) */
-  @IsOptional()
-  @Type(() => Number)
-  @IsInt()
-  @Min(1)
-  page?: number;
+  declare limit?: number;
 
   @IsOptional()
   @IsString()
@@ -44,11 +26,8 @@ export class GetConversationQueryDto {
   before?: string;
 
   @IsOptional()
-  @Type(() => Number)
-  @IsInt()
-  @Min(1)
   @Max(50)
-  limit?: number;
+  declare limit?: number;
 }
 
 export class RenameConversationDto {

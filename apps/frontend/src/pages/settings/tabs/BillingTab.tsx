@@ -1,20 +1,12 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { SubscriptionPlan } from '@xcash/shared-types';
 import { AlertTriangle } from 'lucide-react';
-import { QRCodeSVG } from 'qrcode.react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import {
-  Dialog,
-  DialogContent,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
 import { Progress } from '@/components/ui/progress';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
@@ -22,7 +14,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { api } from '@/lib/api';
 import { formatDateVN } from '@/lib/date';
 import { formatVND } from '@/lib/format-vnd';
-import { formatCopilotQuota, PLAN_LABEL } from '@/lib/plan';
+import { PLAN_LABEL } from '@/lib/plan';
 import { canViewBilling, isAdmin } from '@/lib/rbac';
 import { cn } from '@/lib/utils';
 import type {
@@ -32,13 +24,12 @@ import type {
   PlanData,
   UpgradeResult,
 } from '@/types/api/billing';
-import {
-  formatPlanQuotaSubtitle,
-  getPlanFeatureLines,
-  PLAN_ORDER,
-} from './billing/billing-constants';
+import { PLAN_ORDER } from './billing/billing-constants';
 import { CycleTransactionsDialog } from './billing/CycleTransactionsDialog';
+import { OveragePaymentDialog } from './billing/OveragePaymentDialog';
+import { PaymentDialog } from './billing/PaymentDialog';
 import { PaymentHistoryTable } from './billing/PaymentHistoryTable';
+import { UpgradeDialog } from './billing/UpgradeDialog';
 
 export function BillingTab() {
   const qc = useQueryClient();
@@ -377,248 +368,35 @@ export function BillingTab() {
         </div>
       )}
 
-      {/* Dialog chọn gói */}
-      <Dialog open={upgradeOpen} onOpenChange={setUpgradeOpen}>
-        <DialogContent className="flex max-h-[min(88dvh,100%)] w-[min(42rem,calc(100vw-2.5rem))] max-w-2xl flex-col gap-0 overflow-hidden px-5 py-5 top-[6dvh] translate-y-0 sm:top-[50%] sm:translate-y-[-50%] sm:px-6 sm:py-6">
-          <DialogHeader className="shrink-0 pb-3 pr-8">
-            <DialogTitle>Chọn gói dịch vụ</DialogTitle>
-          </DialogHeader>
-          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-0.5 pb-2">
-            <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2">
-              {loadingPlans
-                ? Array.from({ length: 4 }).map((_, i) => (
-                    // biome-ignore lint/suspicious/noArrayIndexKey: skeleton placeholder
-                    <Skeleton key={i} className="h-48 w-full rounded-xl" />
-                  ))
-                : (availablePlans ?? []).map((planItem) => {
-                    const plan = planItem.plan;
-                    const isCurrent = data?.plan === plan;
-                    const currentPlanItem = availablePlans?.find((p) => p.plan === data?.plan);
-                    const isLower =
-                      !isCurrent &&
-                      currentPlanItem != null &&
-                      planItem.pricePerMonth < currentPlanItem.pricePerMonth;
-                    const isDisabled = isCurrent || isLower;
-                    const isSelected = selectedPlan === plan;
-                    return (
-                      <button
-                        key={plan}
-                        type="button"
-                        disabled={isDisabled}
-                        onClick={() => setSelectedPlan(plan)}
-                        className={cn(
-                          'w-full min-w-0 rounded-xl border p-4 text-left transition-all',
-                          isDisabled
-                            ? 'cursor-not-allowed border-primary/40 bg-primary/5 opacity-60'
-                            : isSelected
-                              ? 'border-primary ring-1 ring-primary'
-                              : 'hover:border-primary/50',
-                        )}
-                      >
-                        <div className="mb-2 flex flex-wrap items-center justify-between gap-x-2 gap-y-1">
-                          <span className="font-semibold">
-                            {PLAN_LABEL[plan as SubscriptionPlan] ?? plan}
-                          </span>
-                          {isCurrent && (
-                            <Badge variant="secondary" className="shrink-0 text-[10px]">
-                              Hiện tại
-                            </Badge>
-                          )}
-                          {isLower && (
-                            <Badge
-                              variant="outline"
-                              className="shrink-0 text-[10px] text-muted-foreground"
-                            >
-                              Không khả dụng
-                            </Badge>
-                          )}
-                        </div>
-                        <p className="mb-2 text-lg font-bold text-primary break-words">
-                          {planItem.pricePerMonth === 0
-                            ? 'Miễn phí'
-                            : `${formatVND(planItem.pricePerMonth)}/tháng`}
-                        </p>
-                        <div className="mb-2 space-y-0.5 text-xs text-muted-foreground break-words">
-                          <p>{formatPlanQuotaSubtitle(planItem)}</p>
-                          <p>{formatCopilotQuota(planItem.copilotQuota, plan)}</p>
-                        </div>
-                        <ul className="space-y-1">
-                          {getPlanFeatureLines(plan).map((f) => (
-                            <li
-                              key={f.text}
-                              className={cn(
-                                'flex items-start gap-1.5 text-xs break-words',
-                                f.inherited
-                                  ? 'font-medium text-foreground'
-                                  : 'text-muted-foreground',
-                              )}
-                            >
-                              <span className="shrink-0 text-primary">✓</span>
-                              <span>{f.text}</span>
-                            </li>
-                          ))}
-                        </ul>
-                      </button>
-                    );
-                  })}
-            </div>
-          </div>
-          <DialogFooter className="mt-4 shrink-0 gap-2.5 border-t border-border pt-4 sm:gap-2">
-            <Button variant="ghost" onClick={() => setUpgradeOpen(false)}>
-              Hủy
-            </Button>
-            <Button
-              disabled={!selectedPlan || upgradeMutation.isPending}
-              onClick={() => selectedPlan && upgradeMutation.mutate(selectedPlan)}
-            >
-              {upgradeMutation.isPending ? 'Đang tạo đơn...' : 'Tiếp tục thanh toán'}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <UpgradeDialog
+        open={upgradeOpen}
+        onOpenChange={setUpgradeOpen}
+        availablePlans={availablePlans}
+        loadingPlans={loadingPlans}
+        selectedPlan={selectedPlan}
+        onSelectPlan={setSelectedPlan}
+        onUpgrade={() => selectedPlan && upgradeMutation.mutate(selectedPlan)}
+        isPending={upgradeMutation.isPending}
+        currentPlan={data?.plan}
+      />
 
-      {/* Dialog thanh toán */}
-      <Dialog open={paymentOpen} onOpenChange={setPaymentOpen}>
-        <DialogContent
-          className="max-w-sm"
-          onInteractOutside={(e) => e.preventDefault()}
-          onEscapeKeyDown={(e) => e.preventDefault()}
-        >
-          <DialogHeader>
-            <DialogTitle>Thanh toán nâng cấp gói</DialogTitle>
-          </DialogHeader>
-          {upgradeResult && (
-            <div className="space-y-4 text-center">
-              <p className="text-sm text-muted-foreground">
-                Số tiền:{' '}
-                <span className="font-semibold text-foreground">
-                  {formatVND(upgradeResult.amount)}
-                </span>
-              </p>
+      <PaymentDialog
+        open={paymentOpen}
+        onOpenChange={setPaymentOpen}
+        upgradeResult={upgradeResult}
+        onMockConfirm={() => mockConfirmMutation.mutate(upgradeResult!.orderCode)}
+        isPending={mockConfirmMutation.isPending}
+        isDev={isDev}
+      />
 
-              {upgradeResult.qrCode ? (
-                <div className="mx-auto w-fit rounded-lg border p-3">
-                  <QRCodeSVG value={upgradeResult.qrCode} size={176} />
-                </div>
-              ) : (
-                <div className="flex h-48 items-center justify-center rounded-lg border bg-muted text-xs text-muted-foreground">
-                  {upgradeResult.isMock ? 'QR mock — chưa có PayOS key thật' : 'Đang tải QR...'}
-                </div>
-              )}
-
-              <Button
-                variant="outline"
-                className="w-full"
-                onClick={() => window.open(upgradeResult.checkoutUrl, '_blank')}
-              >
-                Mở trang thanh toán PayOS
-              </Button>
-
-              <p className="text-xs text-muted-foreground">
-                Hệ thống tự cập nhật sau khi thanh toán xong. Có thể đóng cửa sổ này rồi quay lại
-                sau.
-              </p>
-
-              {isDev && (
-                <Button
-                  variant="secondary"
-                  className="w-full"
-                  disabled={mockConfirmMutation.isPending}
-                  onClick={() => mockConfirmMutation.mutate(upgradeResult.orderCode)}
-                >
-                  {mockConfirmMutation.isPending
-                    ? 'Đang xử lý...'
-                    : '🧪 Demo: Giả lập thanh toán thành công'}
-                </Button>
-              )}
-            </div>
-          )}
-          <DialogFooter className="sm:justify-center">
-            <Button
-              variant="outline"
-              className="w-full sm:w-auto"
-              onClick={() => setPaymentOpen(false)}
-            >
-              Đóng — thanh toán sau
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Dialog thanh toán phí vượt quota */}
-      <Dialog open={overagePaymentOpen} onOpenChange={setOveragePaymentOpen}>
-        <DialogContent
-          className="max-w-sm"
-          onInteractOutside={(e) => e.preventDefault()}
-          onEscapeKeyDown={(e) => e.preventDefault()}
-        >
-          <DialogHeader>
-            <DialogTitle>Thanh toán phí vượt quota</DialogTitle>
-          </DialogHeader>
-          {overageResult && (
-            <div className="space-y-4 text-center">
-              <p className="text-sm text-muted-foreground">
-                Số giao dịch vượt:{' '}
-                <span className="font-semibold text-foreground">
-                  {overageResult.overageCount} GD
-                </span>
-              </p>
-              <p className="text-sm text-muted-foreground">
-                Số tiền:{' '}
-                <span className="font-semibold text-foreground">
-                  {formatVND(overageResult.amount)}
-                </span>
-              </p>
-
-              {overageResult.qrCode ? (
-                <div className="mx-auto w-fit rounded-lg border p-3">
-                  <QRCodeSVG value={overageResult.qrCode} size={176} />
-                </div>
-              ) : (
-                <div className="flex h-36 items-center justify-center rounded-lg border bg-muted text-xs text-muted-foreground">
-                  {overageResult.isMock ? 'QR mock — chưa có PayOS key thật' : 'Đang tải QR...'}
-                </div>
-              )}
-
-              {overageResult.checkoutUrl && (
-                <Button
-                  variant="outline"
-                  className="w-full"
-                  onClick={() => window.open(overageResult.checkoutUrl!, '_blank')}
-                >
-                  Mở trang thanh toán PayOS
-                </Button>
-              )}
-
-              <p className="text-xs text-muted-foreground">
-                Hệ thống tự cập nhật sau khi thanh toán xong.
-              </p>
-
-              {isDev && (
-                <Button
-                  variant="secondary"
-                  className="w-full"
-                  disabled={mockConfirmOverageMutation.isPending}
-                  onClick={() => mockConfirmOverageMutation.mutate(overageResult.orderCode)}
-                >
-                  {mockConfirmOverageMutation.isPending
-                    ? 'Đang xử lý...'
-                    : '🧪 Demo: Giả lập thanh toán thành công'}
-                </Button>
-              )}
-            </div>
-          )}
-          <DialogFooter className="sm:justify-center">
-            <Button
-              variant="outline"
-              className="w-full sm:w-auto"
-              onClick={() => setOveragePaymentOpen(false)}
-            >
-              Đóng — thanh toán sau
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <OveragePaymentDialog
+        open={overagePaymentOpen}
+        onOpenChange={setOveragePaymentOpen}
+        overageResult={overageResult}
+        onMockConfirm={() => mockConfirmOverageMutation.mutate(overageResult!.orderCode)}
+        isPending={mockConfirmOverageMutation.isPending}
+        isDev={isDev}
+      />
 
       {data && (
         <CycleTransactionsDialog

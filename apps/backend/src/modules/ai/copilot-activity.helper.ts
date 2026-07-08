@@ -1,115 +1,20 @@
 import type { CopilotActivity } from '@xcash/shared-types';
+import { ACTION_CARD_TOOLS, COPILOT_TOOLS } from './copilot-tool.registry';
 
 export type { CopilotActivity };
 
 type ToolActivityMeta = Omit<CopilotActivity, 'urls'>;
 
-const ACTION_CARD_TOOLS = new Set([
-  'propose_confirm_transaction_classification',
-  'propose_correct_transaction_classification',
-]);
-
-const TOOL_ACTIVITIES: Record<string, { final: ToolActivityMeta; streaming: ToolActivityMeta }> = {
-  get_month_summary: {
-    final: { kind: 'internal_data', label: 'Báo cáo tháng', source: 'X-Cash AI' },
-    streaming: {
-      kind: 'internal_data',
-      label: 'Đang tra cứu báo cáo tháng…',
-      source: 'X-Cash AI',
-    },
-  },
-  get_month_comparison: {
-    final: { kind: 'internal_data', label: 'So sánh tháng', source: 'X-Cash AI' },
-    streaming: { kind: 'internal_data', label: 'Đang so sánh tháng…', source: 'X-Cash AI' },
-  },
-  get_top_accounts: {
-    final: { kind: 'internal_data', label: 'Top tài khoản', source: 'X-Cash AI' },
-    streaming: {
-      kind: 'internal_data',
-      label: 'Đang tra cứu top tài khoản…',
-      source: 'X-Cash AI',
-    },
-  },
-  get_review_queue_count: {
-    final: { kind: 'internal_data', label: 'Hàng đợi xét duyệt', source: 'X-Cash AI' },
-    streaming: {
-      kind: 'internal_data',
-      label: 'Đang đếm hàng đợi xét duyệt…',
-      source: 'X-Cash AI',
-    },
-  },
-  lookup_chart_account: {
-    final: { kind: 'internal_data', label: 'Hệ thống tài khoản TT133', source: 'X-Cash AI' },
-    streaming: {
-      kind: 'internal_data',
-      label: 'Đang tra cứu tài khoản TT133…',
-      source: 'X-Cash AI',
-    },
-  },
-  get_banking_status: {
-    final: { kind: 'internal_data', label: 'Liên kết ngân hàng', source: 'X-Cash AI' },
-    streaming: {
-      kind: 'internal_data',
-      label: 'Đang kiểm tra liên kết ngân hàng…',
-      source: 'X-Cash AI',
-    },
-  },
-  search_knowledge_base: {
-    final: { kind: 'knowledge', label: 'Tài liệu hướng dẫn', source: 'X-Cash AI' },
-    streaming: {
-      kind: 'knowledge',
-      label: 'Đang tra cứu tài liệu hướng dẫn…',
-      source: 'X-Cash AI',
-    },
-  },
-  get_cas_integration_help: {
-    final: { kind: 'knowledge', label: 'Hướng dẫn Casso', source: 'X-Cash AI' },
-    streaming: {
-      kind: 'knowledge',
-      label: 'Đang tra cứu hướng dẫn Casso…',
-      source: 'X-Cash AI',
-    },
-  },
-  search_transactions: {
-    final: { kind: 'internal_data', label: 'Giao dịch', source: 'X-Cash AI' },
-    streaming: {
-      kind: 'internal_data',
-      label: 'Đang tìm kiếm giao dịch…',
-      source: 'X-Cash AI',
-    },
-  },
-  search_casso_public: {
-    final: { kind: 'web_search', label: 'Tìm trên web', source: 'casso.vn' },
-    streaming: {
-      kind: 'web_search',
-      label: 'Đang tìm trên web (casso.vn)…',
-      source: 'casso.vn',
-    },
-  },
-  propose_confirm_transaction_classification: {
-    final: { kind: 'action_card', label: 'Đề xuất xác nhận giao dịch', source: 'X-Cash AI' },
-    streaming: {
-      kind: 'action_card',
-      label: 'Đang chuẩn bị đề xuất xác nhận…',
-      source: 'X-Cash AI',
-    },
-  },
-  propose_correct_transaction_classification: {
-    final: { kind: 'action_card', label: 'Đề xuất sửa định khoản', source: 'X-Cash AI' },
-    streaming: {
-      kind: 'action_card',
-      label: 'Đang chuẩn bị đề xuất sửa định khoản…',
-      source: 'X-Cash AI',
-    },
-  },
-};
-
 const ACTIVITY_MAP: Record<string, ToolActivityMeta> = Object.fromEntries(
-  Object.entries(TOOL_ACTIVITIES).map(([name, meta]) => [name, meta.final]),
+  COPILOT_TOOLS.map((t) => [t.name, t.activity.final]),
+);
+
+const STREAMING_ACTIVITY_MAP: Record<string, ToolActivityMeta> = Object.fromEntries(
+  COPILOT_TOOLS.map((t) => [t.name, t.activity.streaming]),
 );
 
 export function getStreamingActivityMeta(toolName: string): ToolActivityMeta | undefined {
-  return TOOL_ACTIVITIES[toolName]?.streaming;
+  return STREAMING_ACTIVITY_MAP[toolName];
 }
 
 function formatSnippet(name: string, data: unknown): string | undefined {
@@ -181,8 +86,7 @@ function formatSnippet(name: string, data: unknown): string | undefined {
         const grantList = d.grants?.map((g) => `${g.bankName} ${g.accountNumber}`).join(', ') ?? '';
         return `Đã liên kết: ${grantList}\n7 ngày qua: ${d.recentCasActivity?.countLast7Days ?? 0} giao dịch từ Casso`;
       }
-      case 'search_knowledge_base':
-      case 'get_cas_integration_help': {
+      case 'search_knowledge_base': {
         const d = data as { sections?: Array<{ title: string; content: string }> } | null;
         if (!d?.sections?.length) return undefined;
         const first = d.sections[0];
@@ -249,8 +153,7 @@ export function buildActivities(
       continue;
     }
 
-    // Expand knowledge search into one chip per section found
-    if (name === 'search_knowledge_base' || name === 'get_cas_integration_help') {
+    if (name === 'search_knowledge_base') {
       const data = resultsCapture?.get(name) as
         | { sections?: Array<{ id: string; title: string; content: string }> }
         | undefined;

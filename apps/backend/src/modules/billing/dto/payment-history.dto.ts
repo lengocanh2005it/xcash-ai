@@ -1,7 +1,7 @@
-import { Transform } from 'class-transformer';
-import { IsIn, IsInt, IsOptional, IsString, Max, Min } from 'class-validator';
+import { IsIn, IsOptional, IsString } from 'class-validator';
+import { PaginationQueryDto } from '../../../common/dto/pagination-query.dto';
 
-export class PaymentHistoryDto {
+export class PaymentHistoryDto extends PaginationQueryDto {
   @IsOptional()
   @IsIn(['upgrade', 'overage'])
   orderType?: 'upgrade' | 'overage';
@@ -17,17 +17,4 @@ export class PaymentHistoryDto {
   @IsOptional()
   @IsString()
   toDate?: string;
-
-  @IsOptional()
-  @Transform(({ value }: { value: unknown }) => Number(value))
-  @IsInt()
-  @Min(1)
-  @Max(100)
-  limit?: number = 20;
-
-  @IsOptional()
-  @Transform(({ value }: { value: unknown }) => Number(value))
-  @IsInt()
-  @Min(1)
-  page?: number = 1;
 }

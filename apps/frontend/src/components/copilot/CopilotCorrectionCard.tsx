@@ -46,6 +46,15 @@ export function CopilotCorrectionCard({
 
   const canCorrectNow = actionCard.canCorrect && status === 'review' && !checking;
 
+  if (status === 'not_found') {
+    return (
+      <div className="mt-2 max-w-sm rounded-lg border bg-muted/40 p-3 text-sm space-y-1">
+        <span className="font-medium">Đề xuất sửa định khoản</span>
+        <p className="text-xs text-muted-foreground">{actionCard.reason}</p>
+      </div>
+    );
+  }
+
   return (
     <div className="mt-2 max-w-sm rounded-lg border bg-muted/40 p-3 text-sm space-y-2">
       <div className="flex items-center justify-between gap-2">

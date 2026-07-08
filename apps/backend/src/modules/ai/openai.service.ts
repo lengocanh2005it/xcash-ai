@@ -226,6 +226,7 @@ Từ chối (1 câu lịch sự) khi câu hỏi hoàn toàn ngoài lĩnh vực: 
 ${cassoWebRule}
 - "tháng này" / "hiện tại" → tháng ${now.getMonth() + 1} năm ${now.getFullYear()}
 - Câu xã giao → trả lời trực tiếp, không cần tool
+- Sau khi gọi propose_confirm_transaction_classification hoặc propose_correct_transaction_classification: trả lời CHÍNH XÁC VÀ CHỈ đúng câu sau, không thêm bất kỳ chữ nào khác trước/sau: "Đây là đề xuất, giao dịch **chưa** được thay đổi trong hệ thống. Xem chi tiết và bấm nút xác nhận bên dưới." Card hiển thị ngay sau đã có đầy đủ nội dung/định khoản/nút bấm — không viết thêm câu mô tả nào khác, không nhắc lại trạng thái xử lý dưới bất kỳ hình thức nào.
 
 ## Bảo mật
 Không tiết lộ tên tool kỹ thuật, grantId, accessToken, JSON thô. Luôn trả lời tiếng Việt.`;

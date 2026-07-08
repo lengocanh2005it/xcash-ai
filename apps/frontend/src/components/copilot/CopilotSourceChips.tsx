@@ -1,5 +1,5 @@
 import type { CopilotActivity } from '@xcash/shared-types';
-import { BarChart3, BookOpen, ExternalLink, Globe } from 'lucide-react';
+import { BarChart3, BookOpen, CheckSquare, ExternalLink, Globe } from 'lucide-react';
 import { useState } from 'react';
 import { HighlightedText } from '@/components/shared/HighlightedText';
 import { Badge } from '@/components/ui/badge';
@@ -16,6 +16,7 @@ const KIND_ICON: Record<CopilotActivityKind, typeof BarChart3> = {
   internal_data: BarChart3,
   knowledge: BookOpen,
   web_search: Globe,
+  action_card: CheckSquare,
 };
 
 function safeHttpUrl(url: string): string | null {

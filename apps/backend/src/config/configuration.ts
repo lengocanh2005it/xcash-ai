@@ -70,5 +70,6 @@ export default () => ({
     10,
   ),
   COPILOT_CASSO_SEARCH_ENABLED: process.env.COPILOT_CASSO_SEARCH_ENABLED === '1',
+  COPILOT_ACTION_TOOLS_ENABLED: process.env.COPILOT_ACTION_TOOLS_ENABLED === '1',
   TAVILY_API_KEY: process.env.TAVILY_API_KEY ?? '',
 });

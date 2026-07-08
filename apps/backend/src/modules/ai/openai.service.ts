@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import type { CopilotActivity } from '@xcash/shared-types';
+import type { CopilotActivity, Role } from '@xcash/shared-types';
 import OpenAI from 'openai';
 import { AiUsageLogService } from './ai-usage-log.service';
 import { buildActivities } from './copilot-activity.helper';
@@ -148,6 +148,7 @@ ${financialContext}`;
     history: Array<{ role: 'user' | 'assistant'; content: string }>,
     toolService: CopilotToolService,
     conversationId?: string,
+    role?: Role,
   ): Promise<{ reply: string; activities: CopilotActivity[] }> {
     const calledTools: string[] = [];
     const resultsCapture = new Map<string, unknown>();
@@ -159,6 +160,7 @@ ${financialContext}`;
         history,
         toolService,
         resultsCapture,
+        role,
       );
       if (!runner) {
         return {
@@ -235,12 +237,19 @@ Không tiết lộ tên tool kỹ thuật, grantId, accessToken, JSON thô. Luô
     history: Array<{ role: 'user' | 'assistant'; content: string }>,
     toolService: CopilotToolService,
     resultsCapture?: Map<string, unknown>,
+    role?: Role,
   ) {
     if (!this.client) return null;
 
     const cassoSearchEnabled =
       this.configService.get<boolean>('COPILOT_CASSO_SEARCH_ENABLED') ?? false;
-    const tools = buildCopilotTools(tenantId, toolService, this.configService, resultsCapture);
+    const tools = buildCopilotTools(
+      tenantId,
+      toolService,
+      this.configService,
+      resultsCapture,
+      role,
+    );
     return this.client.chat.completions.runTools(
       {
         model: this.chatModel,

@@ -1,4 +1,5 @@
 import { Bot, StopCircle } from 'lucide-react';
+import { CopilotActionCard } from '@/components/copilot/CopilotActionCard';
 import { CopilotMessageActions } from '@/components/copilot/CopilotMessageActions';
 import type { CopilotActivity } from '@/components/copilot/CopilotSourceChips';
 import { CopilotSourceChips } from '@/components/copilot/CopilotSourceChips';
@@ -33,7 +34,17 @@ export function CopilotMessageBubble({ msg }: { msg: Message }) {
           <HighlightedText text={msg.content} />
         </div>
         {msg.activities && msg.activities.length > 0 && (
-          <CopilotSourceChips activities={msg.activities} />
+          <>
+            <CopilotSourceChips
+              activities={msg.activities.filter((a) => a.kind !== 'action_card')}
+            />
+            {msg.activities
+              .filter((a) => a.kind === 'action_card' && a.actionCard)
+              .map((a) => (
+                // biome-ignore lint/style/noNonNullAssertion: filtered above
+                <CopilotActionCard key={a.actionCard!.transactionId} actionCard={a.actionCard!} />
+              ))}
+          </>
         )}
         {msg.isPartial && (
           <span className="mt-1 inline-flex items-center gap-1 text-[11px] text-muted-foreground">

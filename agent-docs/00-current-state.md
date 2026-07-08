@@ -2,7 +2,9 @@
 
 > Mục đích: cho biết **chính xác** cái gì đã tồn tại trong repo ngay lúc này, để agent không cần `find`/`grep`/`ls` lại từ đầu mỗi session mới. File này phải được cập nhật mỗi khi có thay đổi cấu trúc đáng kể (thêm module, thêm page, đổi dependency lớn, thêm service hạ tầng). Nếu file này và thực tế code lệch nhau, **tin thực tế code**, và sửa lại file này ngay sau đó.
 
-Cập nhật lần cuối: **UI/UX polish** — 10 issues: PaymentStatusBadge shared component, ErrorRetryCard shared component, useCopilotChat hook (CopilotPage ~650→~440 lines), BillingTab split (4 files), CopilotHistoryTab mobile layout, NotificationBell empty state, TransactionStatusBadge adoption (CycleTransactionsDialog), responsive tables (AccountsPage, PaymentHistoryTable, PartnerAiCostsPage×2, PartnerPlansPage, AuditLogPanel). `pnpm verify` pass 10/10.
+Cập nhật lần cuối: **Copilot action-tool đầu tiên — `propose_confirm_transaction_classification`** (branch `feat/copilot-confirm-action`, PR đã tạo). Tool read-only/dry-run, gated `COPILOT_ACTION_TOOLS_ENABLED` (default 0); FE render "action card" trong chat (`CopilotActionCard.tsx`) — re-check status live qua `useQuery`, xác nhận qua `useMutation` gọi thẳng `POST /review/:id/confirm` (không qua AI); endpoint đó nhận thêm optional `source?: 'copilot'` để audit trail. `CopilotActivity` (shared-types) thêm variant `kind: 'action_card'` + field `actionCard`. `getReviewQueue()` giờ select thêm `transaction.id`; `ReviewPage` có cột "Mã GD" (`CopyIdButton.tsx`, copy-to-clipboard) để lấy transactionId dán vào Copilot. `pnpm verify` pass 10/10.
+
+Trước đó — **UI/UX polish** — 10 issues: PaymentStatusBadge shared component, ErrorRetryCard shared component, useCopilotChat hook (CopilotPage ~650→~440 lines), BillingTab split (4 files), CopilotHistoryTab mobile layout, NotificationBell empty state, TransactionStatusBadge adoption (CycleTransactionsDialog), responsive tables (AccountsPage, PaymentHistoryTable, PartnerAiCostsPage×2, PartnerPlansPage, AuditLogPanel). `pnpm verify` pass 10/10.
 
 Trước đó — **Architecture refactoring + FE polish** — Backend: CopilotStreamService (deps 8→3), PartnerService split 4 services + date util. Frontend: typed API helpers (getApiData/postApiData/putApiData/deleteApiData), PaginationBar adoption (9 pages), StatCard unification, CopilotPage split (3 sub-components + SSE utils), shared API types (review/analytics/reports/billing), SettingsPage tabs split, dead code removal. `pnpm verify` pass 10/10.
 
@@ -80,7 +82,7 @@ Trước đó — **Phase 7 polish + UX hardening** — Settings tab phân trang
 - **Fix RolesGuard @Public():** `RolesGuard.canActivate` giờ kiểm tra `IS_PUBLIC_KEY` trước — route `@Public()` bypass hoàn toàn, sửa lỗi SSE stream `/notifications/stream?token=` trả 401 ✅
 
 **Đã xong (Copilot Function Calling — Phase 1a–1d):**
-- Backend: migrate `POST /ai/copilot` sang OpenAI `runTools` — 7 tools ban đầu (thay `get_cas_integration_help` bằng `search_knowledge_base` + pgvector sau); hiện factory có 8 tool cố định + `search_casso_public` tùy chọn ✅
+- Backend: migrate `POST /ai/copilot` sang OpenAI `runTools` — 7 tools ban đầu (thay `get_cas_integration_help` bằng `search_knowledge_base` + pgvector sau); hiện factory có 8 tool cố định + `search_casso_public` tùy chọn + `propose_confirm_transaction_classification` tùy chọn (action-tool, xem block riêng bên dưới) ✅
 - Backend: `CopilotToolService` (execute + Redis cache per-tool), `buildCopilotTools` factory, `copilot-cas-faq.ts` (FAQ tĩnh Cas Link), `CopilotContextService` sửa lỗi `formatFinancialContext` không tồn tại ✅
 - Backend: `OpenAiService.chatCopilotWithTools()` trả `{ reply, activities }` — track tool calls qua `runner.on('functionToolCall')`, map sang `CopilotActivity[]` với nhãn tiếng Việt ✅
 - Backend: Feature flag `COPILOT_USE_FUNCTION_CALLING=1` — khi bật dùng `runTools`, khi tắt fallback về `CopilotContextService` + `chatCopilot()` cũ ✅
@@ -242,6 +244,20 @@ Trước đó — **Phase 7 polish + UX hardening** — Settings tab phân trang
 - **NotificationBell empty state:** nâng cấp từ plain text sang visual empty state với icon Bell + subtitle "Thông báo mới sẽ xuất hiện ở đây" ✅
 - **Responsive tables (5 pages):** `AccountsPage` (4 cols), `PaymentHistoryTable` (7 cols), `PartnerAiCostsPage` summary (5 cols) + detail (7 cols), `PartnerPlansPage` (6 cols), `AuditLogPanel` (5-6 cols) — mobile card layout + desktop table ✅
 
+**Đã xong (Copilot action-tool đầu tiên — confirm_transaction_classification):**
+- Backend: tool mới `propose_confirm_transaction_classification` trong `CopilotToolService` — read-only/dry-run, đọc `TransactionClassification` theo `transactionId`, trả `{ transactionId, classificationId, debitAccount, creditAccount, confidence, status, content, amount, canConfirm, reason? }`; `canConfirm=false` (không throw) khi role không phải `admin`/`accountant` (`CONFIRMABLE_ROLES`), khi `status !== 'review'`, hoặc khi không tìm thấy classification ✅
+- Backend: đăng ký tool qua `buildCopilotTools()` gated bởi flag mới `COPILOT_ACTION_TOOLS_ENABLED` (default `0`); `role: Role` được thread xuyên suốt `CopilotToolService.execute()` → `buildCopilotTools()` → `OpenAiService.createCopilotRunner()`/`chatCopilotWithTools()` → `CopilotStreamService` (lấy từ `user.role`) ✅
+- Backend: `ClassificationService.confirm()` nhận thêm tham số optional `source?: 'copilot'`, ghi vào `auditLog.afterState` nếu có — hành vi cũ giữ nguyên khi không truyền; DTO `ConfirmClassificationDto` (`{ source?: 'copilot' }`) thêm vào `POST /review/:id/confirm` ✅
+- Backend: `getReviewQueue()` select thêm `transaction.id` (trước đây API không expose transactionId nào để user copy dùng cho Copilot) ✅
+- shared-types: `CopilotActivity.kind` thêm variant `'action_card'` + field optional `actionCard?: CopilotActionCardData` (interface mới, xem block shared-types bên dưới) ✅
+- Backend: `copilot-activity.helper.ts` — `TOOL_ACTIVITIES` thêm entry cho tool mới; `buildActivities()` xử lý riêng (không qua `formatSnippet`) để gắn `actionCard` payload từ `resultsCapture` ✅
+- Frontend: `CopilotActionCard.tsx` (mới) — card hiện trong chat, `useQuery` re-check status live (`GET /transactions/:id/classification`) trước khi cho phép bấm (không tin status đã lưu trong lịch sử), `useMutation` gọi `POST /review/:id/confirm` với `source: 'copilot'`, `onSuccess` invalidate `['review-queue']` + `['review', 'count']` + toast (đúng convention TanStack Query của repo) ✅
+- Frontend: `CopilotMessageBubble.tsx` tách activity `kind === 'action_card'` ra render `CopilotActionCard` riêng (không lẫn vào `CopilotSourceChips`); `CopilotSourceChips.tsx` thêm icon cho kind mới (`CheckSquare`) ✅
+- Frontend: `CopyIdButton.tsx` (mới, `components/shared/`) — copy-to-clipboard mã giao dịch rút gọn, dùng trong `ReviewPage.tsx` (cột "Mã GD" desktop table + mobile card) để user lấy transactionId dán vào Copilot ✅
+- Backend test: `copilot-tool.service.spec.ts` (3 case: review/non-review/viewer), `classification.service.spec.ts` (confirm với/không `source`) ✅
+- Env mới: `COPILOT_ACTION_TOOLS_ENABLED` (`.env.example` + `configuration.ts`, default `0`) ✅
+- PRD: [Issue #22](https://github.com/lengocanh2005it/xcash-ai/issues/22), branch `feat/copilot-confirm-action`, PR đã tạo (chưa merge) ✅
+
 **Chưa làm (Sprint 4 — còn lại):**
 - Bổ sung env production đầy đủ vào `docker-compose.yml` (OpenAI, Resend, PayOS, v.v.) + deploy lên VPS
 - SSL/HTTPS + nginx config production (domain thật, certbot) — template có tại `deploy/nginx/xcash.conf`
@@ -352,8 +368,9 @@ paypilot-ai/                                   ← tên folder local có thể k
 │   │           │   ├── copilot-activity.helper.ts # TOOL_ACTIVITIES, getStreamingActivityMeta(), buildActivities() — extracted from OpenAiService ✅
 │   │           │   ├── copilot-conversation.service.ts  # CRUD conversations + messages, cursor pagination, auto-title fire-and-forget, deleteMessage() dangling cleanup (Phase 6) ✅
 │   │           │   ├── copilot-context.service.ts # Fallback: preload summary tháng hiện tại (dùng khi flag=0)
-│   │           │   ├── copilot-tool.service.ts    # execute(tenantId, name, args) — 8 tools + Redis cache (+ search_casso_public khi bật)
-│   │           │   ├── copilot-tools.factory.ts   # buildCopilotTools() → 8 Tool[] (+ search_casso_public optional)
+│   │           │   ├── copilot-tool.service.ts    # execute(tenantId, name, args, role?) — 8 tools + Redis cache (+ search_casso_public + propose_confirm_transaction_classification khi bật) ✅
+│   │           │   ├── copilot-tool.service.spec.ts  # 3 test: review/non-review/viewer cho propose_confirm_transaction_classification ✅
+│   │           │   ├── copilot-tools.factory.ts   # buildCopilotTools() → 8 Tool[] (+ search_casso_public + action-tool optional, cả 2 gated bởi config flag riêng) ✅
 │   │           │   ├── copilot-cas-faq.ts         # FAQ tĩnh Casso/Cas Link (4 topics)
 │   │           │   └── dto/
 │   │           │       └── copilot-conversation.dto.ts  # ListConversationsQueryDto, GetConversationQueryDto, RenameConversationDto ✅
@@ -364,10 +381,11 @@ paypilot-ai/                                   ← tên folder local có thể k
 │   │           │   ├── tt133-seed.ts          # ~60 tài khoản TT133
 │   │           │   └── dto/account.dto.ts
 │   │           ├── classification/            # Human Review queue + review count ✅
-│   │           │   ├── classification.controller.ts  # + GET /review/count
-│   │           │   ├── classification.service.ts      # + getReviewCount()
+│   │           │   ├── classification.controller.ts  # + GET /review/count; POST /review/:id/confirm nhận body ConfirmClassificationDto { source?: 'copilot' } ✅
+│   │           │   ├── classification.service.ts      # + getReviewCount(); confirm() nhận source? optional cho audit trail; getReviewQueue() select thêm transaction.id ✅
+│   │           │   ├── classification.service.spec.ts # confirm(): 404 khi ngoài queue, audit log có/không source ✅
 │   │           │   ├── classification.module.ts
-│   │           │   └── dto/review.dto.ts
+│   │           │   └── dto/review.dto.ts              # CorrectClassificationDto, ConfirmClassificationDto ✅
 │   │           ├── report/                    # Tổng hợp + export Excel + so sánh tháng + top accounts ✅
 │   │           │   ├── report.controller.ts   # + GET /reports/comparison, /reports/top-accounts
 │   │           │   ├── report.service.ts       # + getComparison(), getTopAccounts(), fetchExportData() (extracted for reuse) ✅
@@ -468,7 +486,8 @@ paypilot-ai/                                   ← tên folder local có thể k
 │           │   │   ├── CopilotChatInput.tsx       # Chat input + auto-resize textarea + send/stop buttons ✅
 │           │   │   ├── CopilotMessageBubble.tsx  # Message rendering + source chips + copy button + partial badge ✅
 │           │   │   ├── CopilotWelcomeState.tsx   # Welcome screen + suggestion chips ✅
-│           │   │   ├── CopilotSourceChips.tsx    # Chip nguồn tham khảo (internal_data/knowledge/web_search) ✅
+│           │   │   ├── CopilotSourceChips.tsx    # Chip nguồn tham khảo (internal_data/knowledge/web_search); kind action_card có icon riêng nhưng render qua CopilotActionCard, không qua chip này ✅
+│           │   │   ├── CopilotActionCard.tsx     # Card đề xuất xác nhận giao dịch — useQuery re-check status live + useMutation POST /review/:id/confirm ✅
 │           │   │   ├── CopilotLoadingStatus.tsx  # Loading dots / tool activity indicator khi SSE streaming ✅
 │           │   │   ├── CopilotMessageActions.tsx # Copy button hover-reveal trên assistant messages (Phase 5) ✅
 │           │   │   ├── CopilotQuotaSummary.tsx     # Quota bar sidebar + card Settings (ẩn khi unlimited) ✅
@@ -482,6 +501,7 @@ paypilot-ai/                                   ← tên folder local có thể k
 │           │   │   ├── PaymentStatusBadge.tsx  # Unified payment status badge (paid/pending/failed/expired/active/suspended) ✅
 │           │   │   ├── TransactionStatusBadge.tsx # Unified transaction status badge (pending/classified/review/skipped) ✅
 │           │   │   ├── ErrorRetryCard.tsx      # Shared error card with title, description, retry button ✅
+│           │   │   ├── CopyIdButton.tsx        # Copy-to-clipboard mã ID rút gọn (dùng ở ReviewPage cột "Mã GD") ✅
 │           │   │   ├── PlanGate.tsx            # Plan upgrade gate ✅
 │           │   │   ├── WelcomeTour.tsx         # 4-step welcome dialog ✅
 │           │   │   ├── UserAvatar.tsx          # User avatar component ✅
@@ -717,12 +737,20 @@ export enum AccountType {
   EXPENSE = 'expense',
 }
 
+export interface CopilotActionCardData {
+  tool: 'propose_confirm_transaction_classification';
+  transactionId: string; classificationId: string;
+  debitAccount: string; creditAccount: string;
+  confidence: number; status: string; content: string; amount: number;
+  canConfirm: boolean; reason?: string;
+}
 export interface CopilotActivity {
-  kind: 'internal_data' | 'knowledge' | 'web_search';
+  kind: 'internal_data' | 'knowledge' | 'web_search' | 'action_card';
   label: string;
   source?: string;
   urls?: string[];
   snippet?: string;
+  actionCard?: CopilotActionCardData;
 }
 export interface CopilotConversationSummary {
   id: string; title: string; createdAt: string; updatedAt: string;
@@ -789,6 +817,8 @@ postinstall      → prisma generate
 - **`search_transactions` tool:** Prisma trực tiếp — `content`+`senderAccount` ILIKE keyword; `source` optional (`cas` → `grantId: { not: null }`, `import` → `grantId: null`, `all`/bỏ trống = không lọc source); limit 1–20 (required trong schema).
 - **`search_casso_public` tool (Phase 3):** Tavily `@tavily/core` singleton trong `CopilotToolService`, query thêm `site:casso.vn`, cache 24h theo base64(query) key. Chỉ active khi `COPILOT_CASSO_SEARCH_ENABLED=1` + `TAVILY_API_KEY` set. `buildCopilotTools()` nhận `configService?` để kiểm tra flag — nếu không truyền (backward compat) thì tool không xuất hiện. `TOOL_ACTIVITIES` có entry `web_search` cho tool này.
 - **Copilot tools cache keys:** `copilot:tool:summary:{tenantId}:{y}-{m}` TTL=300s; `copilot:tool:banking:{tenantId}` TTL=60s. Key cũ `copilot:context:{tenantId}:{y}-{m}` còn dùng khi flag=0 (fallback).
+- **`propose_confirm_transaction_classification` tool (action-tool đầu tiên):** dry-run — KHÔNG BAO GIỜ ghi DB. Chỉ đọc `TransactionClassification` theo `transactionId`. Gated bởi `COPILOT_ACTION_TOOLS_ENABLED` (default `0`), theo đúng pattern `cassoSearchEnabled` (đọc qua `configService?.get()` trong `buildCopilotTools()`, không truyền = tool không xuất hiện). `canConfirm: false` (không throw) trong 3 case: role không phải `admin`/`accountant`, `status !== 'review'`, hoặc không tìm thấy classification (case này trả thêm placeholder rỗng cho các field bắt buộc của `CopilotActionCardData` để không vỡ contract type — xem code review đã catch bug FE dùng `classificationId` rỗng làm React `key`, giờ FE dùng `transactionId` làm key thay thế). Việc ghi DB thật luôn đi qua `POST /review/:id/confirm` có sẵn, do FE gọi trực tiếp khi user bấm nút trên `CopilotActionCard` — AI không có quyền tự thực thi side-effect.
+- **Vì sao cần cột "Mã GD" (`CopyIdButton`) ở `ReviewPage`:** tool cần `transactionId` chính xác để hoạt động; test thực tế cho thấy nếu chỉ dựa vào model tự suy ra ID từ nội dung tiếng Việt (có dấu, dễ gõ sai) thì Copilot từ chối vì thiếu thông tin cụ thể — user cần copy đúng ID để dán vào chat. Đây là gap phát hiện khi test tay, không phải thiết kế ban đầu.
 - **Copilot conversation history:** khi `POST /ai/copilot` hoặc `POST /ai/copilot/stream` nhận `conversationId`, backend dùng history từ DB (không dùng FE-provided `history[]`) — chặn injection tấn công qua history. Conversation tự tạo (`findOrCreate`) nếu không có `conversationId`; `saveAssistantMessage` + `triggerAutoTitle` đều fire-and-forget. SSE: setup conversation + saveUserMessage trước `res.flushHeaders()` để lỗi 404 trả đúng HTTP code, không bị nuốt vào SSE stream.
 - **Copilot stop generation (Phase 4):** `wasAborted` flag set bởi `req.on('close')` — track sau `res.flushHeaders()` (pre-flush close không trigger). `runnerInstance?.abort()` dừng OpenAI stream runner. `accumulatedContent` tích lũy delta ngay cả khi runner chạy — nếu abort với content > blank → `saveAssistantMessage(..., isPartial=true)`. `incrementAndNotify` bỏ qua khi abort (quota không tính). FE: `sendViaStream()` trả `null` khi `AbortError` (không throw) → `sendMessage()` nhận null = aborted, không fallback JSON, không retry.
 - **Copilot `isPartial` bubble:** `Message` interface FE thêm `isPartial?: boolean`. Khi `sendViaStream()` catch `AbortError`, push bubble `{ role: 'assistant', content: accumulatedContent, isPartial: true }` vào state. Khi load từ DB, `mapDto(m)` map `m.isPartial` vào Message. Bubble có `isPartial=true` render badge "Đã dừng" (StopCircle icon) dưới content.

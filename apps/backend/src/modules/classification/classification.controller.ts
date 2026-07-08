@@ -16,7 +16,7 @@ import { Roles } from '../../common/decorators/roles.decorator';
 import { JwtAuthGuard, RolesGuard } from '../../common/guards/auth.guards';
 import type { AuthenticatedUser } from '../../common/types/authenticated-user.type';
 import { ClassificationService } from './classification.service';
-import { CorrectClassificationDto } from './dto/review.dto';
+import { ConfirmClassificationDto, CorrectClassificationDto } from './dto/review.dto';
 
 @ApiTags('review')
 @Controller()
@@ -62,8 +62,12 @@ export class ClassificationController {
 
   @Post('review/:id/confirm')
   @Roles(Role.ADMIN, Role.ACCOUNTANT)
-  confirm(@CurrentUser() user: AuthenticatedUser, @Param('id') classificationId: string) {
-    return this.service.confirm(user.tenantId!, classificationId, user.id);
+  confirm(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id') classificationId: string,
+    @Body() dto: ConfirmClassificationDto,
+  ) {
+    return this.service.confirm(user.tenantId!, classificationId, user.id, dto.source);
   }
 
   @Post('review/:id/correct')

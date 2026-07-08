@@ -89,6 +89,35 @@ describe('CopilotConversationService', () => {
     );
   });
 
+  it('saveAssistantMessage giữ nguyên actionCard cho variant action_card', async () => {
+    prisma.copilotMessage.create.mockResolvedValue({ id: 'msg-2' });
+
+    const actionCard = {
+      tool: 'propose_confirm_transaction_classification' as const,
+      transactionId: 'txn-1',
+      classificationId: 'class-1',
+      debitAccount: '642',
+      creditAccount: '112',
+      confidence: 92,
+      status: 'review',
+      content: 'Thanh toán điện nước',
+      amount: 150000,
+      canConfirm: true,
+    };
+
+    await service.saveAssistantMessage('conv-1', 'reply', [
+      { kind: 'action_card', label: 'Đề xuất xác nhận giao dịch', source: 'X-Cash AI', actionCard },
+    ]);
+
+    expect(prisma.copilotMessage.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          activities: [expect.objectContaining({ actionCard })],
+        }),
+      }),
+    );
+  });
+
   it('listConversations returns cursor pagination metadata', async () => {
     const updatedAt = new Date('2026-07-07T10:00:00.000Z');
     prisma.copilotConversation.findMany.mockResolvedValue([

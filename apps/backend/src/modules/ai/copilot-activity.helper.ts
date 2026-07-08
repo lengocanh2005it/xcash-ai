@@ -81,6 +81,14 @@ const TOOL_ACTIVITIES: Record<string, { final: ToolActivityMeta; streaming: Tool
       source: 'casso.vn',
     },
   },
+  propose_confirm_transaction_classification: {
+    final: { kind: 'action_card', label: 'Đề xuất xác nhận giao dịch', source: 'X-Cash AI' },
+    streaming: {
+      kind: 'action_card',
+      label: 'Đang chuẩn bị đề xuất xác nhận…',
+      source: 'X-Cash AI',
+    },
+  },
 };
 
 const ACTIVITY_MAP: Record<string, ToolActivityMeta> = Object.fromEntries(
@@ -212,6 +220,16 @@ export function buildActivities(
   const result: CopilotActivity[] = [];
 
   for (const name of calledTools) {
+    if (name === 'propose_confirm_transaction_classification') {
+      const key = `action_card:${name}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      const meta = ACTIVITY_MAP[name];
+      const data = resultsCapture?.get(name) as CopilotActivity['actionCard'] | undefined;
+      if (meta && data) result.push({ ...meta, actionCard: { ...data, tool: name } });
+      continue;
+    }
+
     // Expand knowledge search into one chip per section found
     if (name === 'search_knowledge_base' || name === 'get_cas_integration_help') {
       const data = resultsCapture?.get(name) as

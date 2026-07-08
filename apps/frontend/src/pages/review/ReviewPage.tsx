@@ -6,6 +6,7 @@ import { toast } from 'sonner';
 import { Header } from '@/components/layout/Header';
 import { ConfidenceBadge } from '@/components/shared/ConfidenceBadge';
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog';
+import { CopyIdButton } from '@/components/shared/CopyIdButton';
 import { EmptyState } from '@/components/shared/EmptyState';
 import { PaginationBar } from '@/components/shared/PaginationBar';
 import { TableSkeleton } from '@/components/shared/TableSkeleton';
@@ -123,9 +124,12 @@ function SwipeableReviewCard({
           </span>
           <span className="font-mono">{formatAmount(item.transaction.amount)}</span>
         </div>
-        <p className="font-mono text-sm font-medium">
-          {item.debitAccount} / {item.creditAccount}
-        </p>
+        <div className="flex items-center justify-between">
+          <p className="font-mono text-sm font-medium">
+            {item.debitAccount} / {item.creditAccount}
+          </p>
+          <CopyIdButton id={item.transaction.id} />
+        </div>
       </div>
     );
   }
@@ -206,6 +210,9 @@ function SwipeableReviewCard({
           <span className="font-mono text-sm font-medium">
             {item.debitAccount} / {item.creditAccount}
           </span>
+          <CopyIdButton id={item.transaction.id} />
+        </div>
+        <div className="flex items-center justify-end">
           <Button
             size="icon-sm"
             variant="ghost"
@@ -406,6 +413,7 @@ export default function ReviewPage() {
                   <table className="w-full text-sm">
                     <thead>
                       <tr className="border-b text-left text-muted-foreground">
+                        <th className="pb-3 pr-4 font-medium">Mã GD</th>
                         <th className="pb-3 pr-4 font-medium">Ngày</th>
                         <th className="pb-3 pr-4 font-medium">Nội dung</th>
                         <th className="pb-3 pr-4 font-medium">Số tiền</th>
@@ -418,6 +426,9 @@ export default function ReviewPage() {
                     <tbody className="divide-y">
                       {data.items.map((item) => (
                         <tr key={item.id} className="hover:bg-muted/30">
+                          <td className="py-3 pr-4">
+                            <CopyIdButton id={item.transaction.id} />
+                          </td>
                           <td className="py-3 pr-4 text-muted-foreground">
                             {formatDateVN(item.transaction.transactionDate)}
                           </td>

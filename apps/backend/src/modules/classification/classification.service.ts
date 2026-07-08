@@ -63,7 +63,7 @@ export class ClassificationService {
         where,
         include: {
           transaction: {
-            select: { content: true, amount: true, transactionDate: true, grantId: true },
+            select: { id: true, content: true, amount: true, transactionDate: true, grantId: true },
           },
         },
         orderBy: [{ transaction: { transactionDate: 'desc' } }, { createdAt: 'desc' }],

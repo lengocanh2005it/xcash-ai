@@ -5,6 +5,7 @@ export interface ClassificationItem {
   confidenceScore: number;
   reason: string | null;
   transaction: {
+    id: string;
     content: string | null;
     amount: string;
     transactionDate: string;

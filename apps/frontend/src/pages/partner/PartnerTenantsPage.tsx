@@ -6,6 +6,7 @@ import { Header } from '@/components/layout/Header';
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog';
 import { EmptyState } from '@/components/shared/EmptyState';
 import { PaginationBar } from '@/components/shared/PaginationBar';
+import { PaymentStatusBadge } from '@/components/shared/PaymentStatusBadge';
 import { SummaryCard } from '@/components/shared/SummaryCard';
 import { TableSkeleton } from '@/components/shared/TableSkeleton';
 import { Badge } from '@/components/ui/badge';
@@ -298,15 +299,9 @@ export default function PartnerTenantsPage() {
                       <CardContent className="space-y-3 text-sm">
                         <div className="flex items-start justify-between gap-2">
                           <p className="font-medium">{t.businessName}</p>
-                          {t.status === 'suspended' ? (
-                            <Badge className="bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400">
-                              Đã khóa
-                            </Badge>
-                          ) : (
-                            <Badge className="bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400">
-                              Hoạt động
-                            </Badge>
-                          )}
+                          <PaymentStatusBadge
+                            status={t.status === 'suspended' ? 'suspended' : 'active'}
+                          />
                         </div>
                         <div className="flex flex-wrap items-center gap-2">
                           <Badge variant="secondary">
@@ -386,15 +381,9 @@ export default function PartnerTenantsPage() {
                             </Badge>
                           </TableCell>
                           <TableCell>
-                            {t.status === 'suspended' ? (
-                              <Badge className="bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400">
-                                Đã khóa
-                              </Badge>
-                            ) : (
-                              <Badge className="bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400">
-                                Hoạt động
-                              </Badge>
-                            )}
+                            <PaymentStatusBadge
+                              status={t.status === 'suspended' ? 'suspended' : 'active'}
+                            />
                           </TableCell>
                           <TableCell>{t.transactionsThisMonth}</TableCell>
                           <TableCell>{formatVND(t.revenuePerMonth)}</TableCell>

@@ -231,51 +231,107 @@ export default function PartnerPlansPage() {
             {loadingPricing ? (
               <TableSkeleton rows={4} columns={4} />
             ) : (
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Gói</TableHead>
-                    <TableHead>Giá/tháng</TableHead>
-                    <TableHead>Quota GD/tháng</TableHead>
-                    <TableHead>Copilot/tháng</TableHead>
-                    <TableHead>Phí vượt/GD</TableHead>
-                    <TableHead className="text-right">Thao tác</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
+              <>
+                {/* Mobile card layout */}
+                <div className="space-y-2 lg:hidden">
                   {(planPricing ?? []).map((p) => (
-                    <TableRow key={p.plan}>
-                      <TableCell className="font-medium">{PLAN_LABELS[p.plan] ?? p.plan}</TableCell>
-                      <TableCell>{formatVND(p.pricePerMonth)}</TableCell>
-                      <TableCell>
-                        {p.plan === 'enterprise' ? 'Không giới hạn' : p.transactionQuota}
-                      </TableCell>
-                      <TableCell>
-                        {p.copilotQuota === -1
-                          ? 'Không giới hạn'
-                          : p.copilotQuota === 0
-                            ? 'Không có'
-                            : p.copilotQuota}
-                      </TableCell>
-                      <TableCell>
-                        {p.overagePricePerTransaction != null
-                          ? formatVND(p.overagePricePerTransaction)
-                          : '—'}
-                      </TableCell>
-                      <TableCell className="text-right">
+                    <div key={p.plan} className="rounded-lg border p-3 space-y-1.5">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="font-medium text-sm">{PLAN_LABELS[p.plan] ?? p.plan}</span>
                         {p.editable ? (
                           <Button size="sm" variant="outline" onClick={() => openEdit(p)}>
-                            <Pencil className="size-4" />
-                            Sửa
+                            <Pencil className="size-3" />
                           </Button>
                         ) : (
-                          <span className="text-xs text-muted-foreground">Cố định</span>
+                          <span className="text-[10px] text-muted-foreground">Cố định</span>
                         )}
-                      </TableCell>
-                    </TableRow>
+                      </div>
+                      <div className="grid grid-cols-2 gap-1 text-xs text-muted-foreground">
+                        <span>
+                          Giá:{' '}
+                          <span className="font-medium text-foreground">
+                            {formatVND(p.pricePerMonth)}
+                          </span>
+                        </span>
+                        <span>
+                          GD:{' '}
+                          <span className="font-medium text-foreground">
+                            {p.plan === 'enterprise' ? 'Không giới hạn' : p.transactionQuota}
+                          </span>
+                        </span>
+                        <span>
+                          Copilot:{' '}
+                          <span className="font-medium text-foreground">
+                            {p.copilotQuota === -1
+                              ? 'Không giới hạn'
+                              : p.copilotQuota === 0
+                                ? 'Không có'
+                                : p.copilotQuota}
+                          </span>
+                        </span>
+                        <span>
+                          Vượt:{' '}
+                          <span className="font-medium text-foreground">
+                            {p.overagePricePerTransaction != null
+                              ? formatVND(p.overagePricePerTransaction)
+                              : '—'}
+                          </span>
+                        </span>
+                      </div>
+                    </div>
                   ))}
-                </TableBody>
-              </Table>
+                </div>
+                {/* Desktop table */}
+                <div className="hidden lg:block">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Gói</TableHead>
+                        <TableHead>Giá/tháng</TableHead>
+                        <TableHead>Quota GD/tháng</TableHead>
+                        <TableHead>Copilot/tháng</TableHead>
+                        <TableHead>Phí vượt/GD</TableHead>
+                        <TableHead className="text-right">Thao tác</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {(planPricing ?? []).map((p) => (
+                        <TableRow key={p.plan}>
+                          <TableCell className="font-medium">
+                            {PLAN_LABELS[p.plan] ?? p.plan}
+                          </TableCell>
+                          <TableCell>{formatVND(p.pricePerMonth)}</TableCell>
+                          <TableCell>
+                            {p.plan === 'enterprise' ? 'Không giới hạn' : p.transactionQuota}
+                          </TableCell>
+                          <TableCell>
+                            {p.copilotQuota === -1
+                              ? 'Không giới hạn'
+                              : p.copilotQuota === 0
+                                ? 'Không có'
+                                : p.copilotQuota}
+                          </TableCell>
+                          <TableCell>
+                            {p.overagePricePerTransaction != null
+                              ? formatVND(p.overagePricePerTransaction)
+                              : '—'}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            {p.editable ? (
+                              <Button size="sm" variant="outline" onClick={() => openEdit(p)}>
+                                <Pencil className="size-4" />
+                                Sửa
+                              </Button>
+                            ) : (
+                              <span className="text-xs text-muted-foreground">Cố định</span>
+                            )}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              </>
             )}
           </CardContent>
         </Card>

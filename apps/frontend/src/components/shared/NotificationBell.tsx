@@ -274,9 +274,13 @@ export function NotificationBell({ className, align = 'right' }: NotificationBel
             {isLoading ? (
               <p className="px-4 py-6 text-center text-sm text-muted-foreground">Đang tải...</p>
             ) : items.length === 0 ? (
-              <p className="px-4 py-6 text-center text-sm text-muted-foreground">
-                Chưa có thông báo nào
-              </p>
+              <div className="flex flex-col items-center gap-2 px-4 py-8 text-center">
+                <div className="flex size-10 items-center justify-center rounded-full bg-muted">
+                  <Bell className="size-5 text-muted-foreground" />
+                </div>
+                <p className="text-sm font-medium text-muted-foreground">Chưa có thông báo nào</p>
+                <p className="text-xs text-muted-foreground/70">Thông báo mới sẽ xuất hiện ở đây</p>
+              </div>
             ) : (
               <ul className="divide-y divide-border">
                 {items.map((notification) => (

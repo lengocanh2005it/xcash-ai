@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useMemo, useState } from 'react';
 import { Header } from '@/components/layout/Header';
 import { EmptyState } from '@/components/shared/EmptyState';
+import { ErrorRetryCard } from '@/components/shared/ErrorRetryCard';
 import { TableSkeleton } from '@/components/shared/TableSkeleton';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -46,7 +47,7 @@ const ACCOUNT_TYPE_LABELS: Record<string, { label: string; className: string }> 
 
 export default function AccountsPage() {
   const [search, setSearch] = useState('');
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['accounts'],
     queryFn: fetchAccounts,
   });
@@ -97,6 +98,8 @@ export default function AccountsPage() {
           <CardContent>
             {isLoading ? (
               <TableSkeleton rows={10} columns={4} />
+            ) : isError ? (
+              <ErrorRetryCard title="Không thể tải danh mục tài khoản" onRetry={() => refetch()} />
             ) : !data?.length ? (
               <EmptyState
                 title="Chưa có tài khoản"
@@ -125,7 +128,36 @@ export default function AccountsPage() {
                       <h3 className="mb-2 text-sm font-semibold text-muted-foreground uppercase tracking-wide">
                         Nhóm {group}
                       </h3>
-                      <div className="overflow-x-auto">
+                      {/* Mobile card layout */}
+                      <div className="space-y-2 lg:hidden">
+                        {accounts.map((a) => {
+                          const typeInfo = ACCOUNT_TYPE_LABELS[a.accountType];
+                          return (
+                            <div key={a.id} className="rounded-lg border p-3 space-y-1">
+                              <div className="flex items-center justify-between gap-2">
+                                <span className="font-mono font-medium text-sm">
+                                  {a.accountCode}
+                                </span>
+                                {typeInfo ? (
+                                  <span
+                                    className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${typeInfo.className}`}
+                                  >
+                                    {typeInfo.label}
+                                  </span>
+                                ) : (
+                                  <Badge variant="secondary">{a.accountType}</Badge>
+                                )}
+                              </div>
+                              <p className="text-sm text-muted-foreground">{a.accountName}</p>
+                              <p className="text-xs text-muted-foreground">
+                                TK cha: <span className="font-mono">{a.parentCode ?? '—'}</span>
+                              </p>
+                            </div>
+                          );
+                        })}
+                      </div>
+                      {/* Desktop table */}
+                      <div className="hidden overflow-x-auto lg:block">
                         <table className="w-full text-sm">
                           <thead>
                             <tr className="border-b text-left text-muted-foreground">

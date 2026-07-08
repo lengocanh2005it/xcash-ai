@@ -2,6 +2,7 @@ import { Receipt, Search, Wallet } from 'lucide-react';
 import { Header } from '@/components/layout/Header';
 import { EmptyState } from '@/components/shared/EmptyState';
 import { PaginationBar } from '@/components/shared/PaginationBar';
+import { PaymentStatusBadge } from '@/components/shared/PaymentStatusBadge';
 import { SummaryCard } from '@/components/shared/SummaryCard';
 import { TableSkeleton } from '@/components/shared/TableSkeleton';
 import { Badge } from '@/components/ui/badge';
@@ -28,24 +29,10 @@ import { api } from '@/lib/api';
 import { formatTransactionDateTime } from '@/lib/date';
 import { formatVND } from '@/lib/format-vnd';
 import { PLAN_LABELS } from '@/lib/plans';
-import type { PartnerPayment, PaymentsResponse } from '@/types/partner';
+import type { PaymentsResponse } from '@/types/partner';
 
 const PAGE_SIZE = 20;
 const SEARCH_DEBOUNCE_MS = 350;
-
-const STATUS_LABELS: Record<PartnerPayment['status'], string> = {
-  paid: 'Đã thanh toán',
-  pending: 'Chờ thanh toán',
-  expired: 'Hết hạn',
-  failed: 'Thất bại',
-};
-
-const STATUS_CLASSES: Record<PartnerPayment['status'], string> = {
-  paid: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400',
-  pending: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400',
-  expired: 'bg-muted text-muted-foreground',
-  failed: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400',
-};
 
 const ORDER_TYPE_LABELS: Record<string, string> = {
   upgrade: 'Nâng cấp',
@@ -233,9 +220,7 @@ export default function PartnerPaymentsPage() {
                       <CardContent className="space-y-2 text-sm">
                         <div className="flex items-start justify-between gap-2">
                           <p className="font-medium">{p.businessName}</p>
-                          <Badge className={STATUS_CLASSES[p.status]}>
-                            {STATUS_LABELS[p.status]}
-                          </Badge>
+                          <PaymentStatusBadge status={p.status} />
                         </div>
                         <p className="font-mono text-xs text-muted-foreground">{p.orderCode}</p>
                         <div className="flex flex-wrap items-center gap-2">
@@ -289,9 +274,7 @@ export default function PartnerPaymentsPage() {
                             {formatVND(p.amount)}
                           </TableCell>
                           <TableCell>
-                            <Badge className={STATUS_CLASSES[p.status]}>
-                              {STATUS_LABELS[p.status]}
-                            </Badge>
+                            <PaymentStatusBadge status={p.status} />
                           </TableCell>
                           <TableCell className="whitespace-nowrap text-muted-foreground">
                             {formatTransactionDateTime(p.paidAt ?? p.createdAt)}

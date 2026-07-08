@@ -300,53 +300,89 @@ export default function PartnerAiCostsPage() {
               />
             ) : (
               <>
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Doanh nghiệp</TableHead>
-                      <TableHead className="text-right">Tokens vào</TableHead>
-                      <TableHead className="text-right">Tokens ra</TableHead>
-                      <TableHead>Loại cuộc gọi</TableHead>
-                      <TableHead className="text-right">Chi phí (USD)</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {data.items.map((row) => (
-                      <TableRow
-                        key={row.tenantId}
-                        className="cursor-pointer hover:bg-muted/50"
-                        onClick={() => openDetail(row)}
-                      >
-                        <TableCell className="font-medium">{row.tenantName}</TableCell>
-                        <TableCell className="text-right text-sm text-muted-foreground tabular-nums">
-                          {row.totalTokensIn.toLocaleString('vi-VN')}
-                        </TableCell>
-                        <TableCell className="text-right text-sm text-muted-foreground tabular-nums">
-                          {row.totalTokensOut.toLocaleString('vi-VN')}
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex flex-wrap gap-1">
-                            {Object.entries(row.breakdown).map(([ct, b]) => (
-                              <Badge
-                                key={ct}
-                                variant="outline"
-                                className={`text-[11px] ${CALL_TYPE_COLORS[ct] ?? ''}`}
-                              >
-                                {CALL_TYPE_LABELS[ct] ?? ct} ×{b.callCount}
-                              </Badge>
-                            ))}
-                          </div>
-                        </TableCell>
-                        <TableCell className="text-right font-semibold tabular-nums">
-                          <div>{formatUsdCost(row.totalCostUsd)}</div>
-                          <div className="text-xs font-normal text-muted-foreground">
-                            ~{usdToVnd(row.totalCostUsd).toLocaleString('vi-VN')}đ
-                          </div>
-                        </TableCell>
+                {/* Mobile card layout */}
+                <div className="space-y-2 lg:hidden">
+                  {data.items.map((row) => (
+                    <button
+                      type="button"
+                      key={row.tenantId}
+                      className="w-full rounded-lg border p-3 text-left space-y-1.5 hover:bg-muted/50 transition-colors"
+                      onClick={() => openDetail(row)}
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="font-medium text-sm">{row.tenantName}</span>
+                        <span className="text-sm font-semibold tabular-nums">
+                          {formatUsdCost(row.totalCostUsd)}
+                        </span>
+                      </div>
+                      <div className="flex flex-wrap gap-1">
+                        {Object.entries(row.breakdown).map(([ct, b]) => (
+                          <Badge
+                            key={ct}
+                            variant="outline"
+                            className={`text-[10px] ${CALL_TYPE_COLORS[ct] ?? ''}`}
+                          >
+                            {CALL_TYPE_LABELS[ct] ?? ct} ×{b.callCount}
+                          </Badge>
+                        ))}
+                      </div>
+                      <div className="flex items-center justify-between text-xs text-muted-foreground">
+                        <span>In: {row.totalTokensIn.toLocaleString('vi-VN')}</span>
+                        <span>Ra: {row.totalTokensOut.toLocaleString('vi-VN')}</span>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+                {/* Desktop table */}
+                <div className="hidden lg:block">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Doanh nghiệp</TableHead>
+                        <TableHead className="text-right">Tokens vào</TableHead>
+                        <TableHead className="text-right">Tokens ra</TableHead>
+                        <TableHead>Loại cuộc gọi</TableHead>
+                        <TableHead className="text-right">Chi phí (USD)</TableHead>
                       </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
+                    </TableHeader>
+                    <TableBody>
+                      {data.items.map((row) => (
+                        <TableRow
+                          key={row.tenantId}
+                          className="cursor-pointer hover:bg-muted/50"
+                          onClick={() => openDetail(row)}
+                        >
+                          <TableCell className="font-medium">{row.tenantName}</TableCell>
+                          <TableCell className="text-right text-sm text-muted-foreground tabular-nums">
+                            {row.totalTokensIn.toLocaleString('vi-VN')}
+                          </TableCell>
+                          <TableCell className="text-right text-sm text-muted-foreground tabular-nums">
+                            {row.totalTokensOut.toLocaleString('vi-VN')}
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex flex-wrap gap-1">
+                              {Object.entries(row.breakdown).map(([ct, b]) => (
+                                <Badge
+                                  key={ct}
+                                  variant="outline"
+                                  className={`text-[11px] ${CALL_TYPE_COLORS[ct] ?? ''}`}
+                                >
+                                  {CALL_TYPE_LABELS[ct] ?? ct} ×{b.callCount}
+                                </Badge>
+                              ))}
+                            </div>
+                          </TableCell>
+                          <TableCell className="text-right font-semibold tabular-nums">
+                            <div>{formatUsdCost(row.totalCostUsd)}</div>
+                            <div className="text-xs font-normal text-muted-foreground">
+                              ~{usdToVnd(row.totalCostUsd).toLocaleString('vi-VN')}đ
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
 
                 {totalPages > 1 ? (
                   <div className="mt-4 border-t pt-4">
@@ -409,62 +445,102 @@ export default function PartnerAiCostsPage() {
                 />
               </div>
             ) : (
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Loại</TableHead>
-                    <TableHead>Model</TableHead>
-                    <TableHead className="text-right">In</TableHead>
-                    <TableHead className="text-right">Out</TableHead>
-                    <TableHead className="text-right">Chi phí</TableHead>
-                    <TableHead>Ref</TableHead>
-                    <TableHead>Thời gian</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
+              <>
+                {/* Mobile card layout */}
+                <div className="space-y-2 p-4 lg:hidden">
                   {detail.items.map((log) => (
-                    <TableRow key={log.id}>
-                      <TableCell>
+                    <div key={log.id} className="rounded-lg border p-3 space-y-1.5">
+                      <div className="flex items-center justify-between gap-2">
                         <Badge
                           variant="outline"
-                          className={`text-[11px] ${CALL_TYPE_COLORS[log.callType] ?? ''}`}
+                          className={`text-[10px] ${CALL_TYPE_COLORS[log.callType] ?? ''}`}
                         >
                           {CALL_TYPE_LABELS[log.callType] ?? log.callType}
                         </Badge>
-                      </TableCell>
-                      <TableCell className="text-xs text-muted-foreground">{log.model}</TableCell>
-                      <TableCell className="text-right text-xs tabular-nums">
-                        {log.tokensIn.toLocaleString('vi-VN')}
-                      </TableCell>
-                      <TableCell className="text-right text-xs tabular-nums">
-                        {log.tokensOut.toLocaleString('vi-VN')}
-                      </TableCell>
-                      <TableCell className="text-right text-xs font-medium tabular-nums">
-                        <div>{formatUsdCost(log.costUsd)}</div>
-                        <div className="font-normal text-muted-foreground">
-                          ~{usdToVnd(log.costUsd).toLocaleString('vi-VN')}đ
-                        </div>
-                      </TableCell>
-                      <TableCell className="max-w-[140px] text-xs text-muted-foreground">
-                        {log.transactionId ? (
-                          <span title={log.transactionId}>
-                            txn:{log.transactionId.slice(0, 8)}…
-                          </span>
-                        ) : log.conversationId ? (
-                          <span title={log.conversationId}>
-                            conv:{log.conversationId.slice(0, 8)}…
-                          </span>
-                        ) : (
-                          '—'
-                        )}
-                      </TableCell>
-                      <TableCell className="text-xs text-muted-foreground">
-                        {formatDateTimeShort(log.createdAt)}
-                      </TableCell>
-                    </TableRow>
+                        <span className="text-xs font-medium tabular-nums">
+                          {formatUsdCost(log.costUsd)}
+                        </span>
+                      </div>
+                      <p className="text-xs text-muted-foreground">{log.model}</p>
+                      <div className="flex items-center justify-between text-xs text-muted-foreground">
+                        <span>In: {log.tokensIn.toLocaleString('vi-VN')}</span>
+                        <span>Ra: {log.tokensOut.toLocaleString('vi-VN')}</span>
+                      </div>
+                      <div className="flex items-center justify-between text-xs text-muted-foreground">
+                        <span className="truncate">
+                          {log.transactionId
+                            ? `txn:${log.transactionId.slice(0, 8)}…`
+                            : log.conversationId
+                              ? `conv:${log.conversationId.slice(0, 8)}…`
+                              : '—'}
+                        </span>
+                        <span>{formatDateTimeShort(log.createdAt)}</span>
+                      </div>
+                    </div>
                   ))}
-                </TableBody>
-              </Table>
+                </div>
+                {/* Desktop table */}
+                <div className="hidden p-4 lg:block">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Loại</TableHead>
+                        <TableHead>Model</TableHead>
+                        <TableHead className="text-right">In</TableHead>
+                        <TableHead className="text-right">Out</TableHead>
+                        <TableHead className="text-right">Chi phí</TableHead>
+                        <TableHead>Ref</TableHead>
+                        <TableHead>Thời gian</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {detail.items.map((log) => (
+                        <TableRow key={log.id}>
+                          <TableCell>
+                            <Badge
+                              variant="outline"
+                              className={`text-[11px] ${CALL_TYPE_COLORS[log.callType] ?? ''}`}
+                            >
+                              {CALL_TYPE_LABELS[log.callType] ?? log.callType}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="text-xs text-muted-foreground">
+                            {log.model}
+                          </TableCell>
+                          <TableCell className="text-right text-xs tabular-nums">
+                            {log.tokensIn.toLocaleString('vi-VN')}
+                          </TableCell>
+                          <TableCell className="text-right text-xs tabular-nums">
+                            {log.tokensOut.toLocaleString('vi-VN')}
+                          </TableCell>
+                          <TableCell className="text-right text-xs font-medium tabular-nums">
+                            <div>{formatUsdCost(log.costUsd)}</div>
+                            <div className="font-normal text-muted-foreground">
+                              ~{usdToVnd(log.costUsd).toLocaleString('vi-VN')}đ
+                            </div>
+                          </TableCell>
+                          <TableCell className="max-w-[140px] text-xs text-muted-foreground">
+                            {log.transactionId ? (
+                              <span title={log.transactionId}>
+                                txn:{log.transactionId.slice(0, 8)}…
+                              </span>
+                            ) : log.conversationId ? (
+                              <span title={log.conversationId}>
+                                conv:{log.conversationId.slice(0, 8)}…
+                              </span>
+                            ) : (
+                              '—'
+                            )}
+                          </TableCell>
+                          <TableCell className="text-xs text-muted-foreground">
+                            {formatDateTimeShort(log.createdAt)}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              </>
             )}
           </div>
 

@@ -170,53 +170,82 @@ function CopilotHistoryTable() {
       )}
 
       {items.length > 0 && (
-        <div className="rounded-lg border">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Cập nhật</TableHead>
-                <TableHead>Tiêu đề</TableHead>
-                <TableHead className="text-right hidden sm:table-cell">
-                  <span className="block">Tin nhắn</span>
-                  <span className="block text-[10px] font-normal normal-case text-muted-foreground">
-                    Bạn + AI
-                  </span>
-                </TableHead>
-                <TableHead className="w-10" />
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {items.map((item) => (
-                <TableRow
-                  key={item.id}
-                  className="cursor-pointer hover:bg-muted/50"
-                  onClick={() => openConversation(item.id)}
-                >
-                  <TableCell className="whitespace-nowrap text-muted-foreground">
-                    <span className="hidden sm:inline">
-                      {formatTransactionDateTime(item.updatedAt)}
+        <>
+          {/* Mobile card layout */}
+          <div className="space-y-3 lg:hidden">
+            {items.map((item) => (
+              <Card
+                key={item.id}
+                className="cursor-pointer py-4 hover:bg-muted/50 transition-colors"
+                onClick={() => openConversation(item.id)}
+              >
+                <CardContent className="space-y-2 text-sm">
+                  <div className="flex items-start justify-between gap-2">
+                    <p className="font-medium truncate">{item.title}</p>
+                    <ExternalLink className="size-4 shrink-0 text-muted-foreground" />
+                  </div>
+                  {item.lastMessage && (
+                    <p className="text-xs text-muted-foreground truncate">
+                      {formatMessagePreview(item.lastMessage)}
+                    </p>
+                  )}
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs text-muted-foreground">
+                      {formatDateVN(item.updatedAt)}
                     </span>
-                    <span className="sm:hidden">{formatDateVN(item.updatedAt)}</span>
-                  </TableCell>
-                  <TableCell>
-                    <p className="font-medium truncate max-w-[200px] sm:max-w-md">{item.title}</p>
-                    {item.lastMessage && (
-                      <p className="mt-0.5 text-xs text-muted-foreground truncate max-w-[200px] sm:max-w-md">
-                        {formatMessagePreview(item.lastMessage)}
-                      </p>
-                    )}
-                  </TableCell>
-                  <TableCell className="text-right hidden sm:table-cell tabular-nums">
-                    {item.messageCount}
-                  </TableCell>
-                  <TableCell>
-                    <ExternalLink className="size-4 text-muted-foreground" />
-                  </TableCell>
+                    <span className="text-xs text-muted-foreground">
+                      {item.messageCount} tin nhắn
+                    </span>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+
+          {/* Desktop table */}
+          <div className="hidden lg:block rounded-lg border">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Cập nhật</TableHead>
+                  <TableHead>Tiêu đề</TableHead>
+                  <TableHead className="text-right">
+                    <span className="block">Tin nhắn</span>
+                    <span className="block text-[10px] font-normal normal-case text-muted-foreground">
+                      Bạn + AI
+                    </span>
+                  </TableHead>
+                  <TableHead className="w-10" />
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </div>
+              </TableHeader>
+              <TableBody>
+                {items.map((item) => (
+                  <TableRow
+                    key={item.id}
+                    className="cursor-pointer hover:bg-muted/50"
+                    onClick={() => openConversation(item.id)}
+                  >
+                    <TableCell className="whitespace-nowrap text-muted-foreground">
+                      {formatTransactionDateTime(item.updatedAt)}
+                    </TableCell>
+                    <TableCell>
+                      <p className="font-medium truncate max-w-md">{item.title}</p>
+                      {item.lastMessage && (
+                        <p className="mt-0.5 text-xs text-muted-foreground truncate max-w-md">
+                          {formatMessagePreview(item.lastMessage)}
+                        </p>
+                      )}
+                    </TableCell>
+                    <TableCell className="text-right tabular-nums">{item.messageCount}</TableCell>
+                    <TableCell>
+                      <ExternalLink className="size-4 text-muted-foreground" />
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        </>
       )}
 
       {total > 0 && (

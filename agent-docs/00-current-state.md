@@ -2,9 +2,9 @@
 
 > Mục đích: cho biết **chính xác** cái gì đã tồn tại trong repo ngay lúc này, để agent không cần `find`/`grep`/`ls` lại từ đầu mỗi session mới. File này phải được cập nhật mỗi khi có thay đổi cấu trúc đáng kể (thêm module, thêm page, đổi dependency lớn, thêm service hạ tầng). Nếu file này và thực tế code lệch nhau, **tin thực tế code**, và sửa lại file này ngay sau đó.
 
-Cập nhật lần cuối: **Architecture refactoring + FE polish** — Backend: CopilotStreamService (deps 8→3), PartnerService split 4 services + date util. Frontend: typed API helpers (getApiData/postApiData/putApiData/deleteApiData), PaginationBar adoption (9 pages), StatCard unification, CopilotPage split (3 sub-components + SSE utils), shared API types (review/analytics/reports/billing), SettingsPage tabs split, dead code removal. `pnpm verify` pass 10/10.
+Cập nhật lần cuối: **UI/UX polish** — 10 issues: PaymentStatusBadge shared component, ErrorRetryCard shared component, useCopilotChat hook (CopilotPage ~650→~440 lines), BillingTab split (4 files), CopilotHistoryTab mobile layout, NotificationBell empty state, TransactionStatusBadge adoption (CycleTransactionsDialog), responsive tables (AccountsPage, PaymentHistoryTable, PartnerAiCostsPage×2, PartnerPlansPage, AuditLogPanel). `pnpm verify` pass 10/10.
 
-Trước đó — **feat(partner): AI cost visibility dashboard (issue #21)** — bảng `ai_usage_logs` + `AiCallType` enum; `AiUsageLogService.record()` fire-and-forget; instrument toàn bộ OpenAI call sites (classify/copilot/embedding/title_gen); SQL GROUP BY aggregate; 2 endpoint mới `/partner/ai-costs` + `/partner/ai-costs/detail`; `PartnerAiCostsPage`, stat card trên Dashboard, nav item sidebar. `pnpm verify` pass.
+Trước đó — **Architecture refactoring + FE polish** — Backend: CopilotStreamService (deps 8→3), PartnerService split 4 services + date util. Frontend: typed API helpers (getApiData/postApiData/putApiData/deleteApiData), PaginationBar adoption (9 pages), StatCard unification, CopilotPage split (3 sub-components + SSE utils), shared API types (review/analytics/reports/billing), SettingsPage tabs split, dead code removal. `pnpm verify` pass 10/10.
 
 Trước đó — **Performance polish** — report SQL aggregations (`getDailyTrend`, `buildAccountSummaries`, `getTopAccounts`); Vite `manualChunks` (recharts/tanstack/radix); Settings tab lazy mount; billing upgrade sync JWT `plan` ngay (optimistic `updateUser` + `refreshSession`). `pnpm verify` pass.
 
@@ -230,6 +230,18 @@ Trước đó — **Phase 7 polish + UX hardening** — Settings tab phân trang
 - **FE CopilotPage split:** tạo `lib/copilot-sse.ts` + 3 sub-components (`CopilotChatInput`, `CopilotMessageBubble`, `CopilotWelcomeState`); CopilotPage giảm từ 821 xuống ~650 lines ✅
 - **FE Dead code removal:** xóa `hooks/useCopilotStream.ts` (457 lines, unused) ✅
 
+**Đã xong (UI/UX polish — 10 issues):**
+- **PaymentStatusBadge:** tạo `components/shared/PaymentStatusBadge.tsx` — unified status badge 6 trạng thái (`paid`, `pending`, `failed`, `expired`, `active`, `suspended`), border style, dark mode; cập nhật `BillingTab.tsx`, `PartnerPaymentsPage.tsx`, `PartnerTenantsPage.tsx` dùng chung, bỏ inline `STATUS_CLASS`/`STATUS_CLASSES` ✅
+- **BillingTab split:** tách `BillingTab.tsx` (1090→~600 lines) thành 4 files: `billing/billing-constants.ts` (~55 lines), `billing/PaymentHistoryTable.tsx` (~175 lines), `billing/CycleTransactionsDialog.tsx` (~210 lines) ✅
+- **CopilotHistoryTab mobile:** thêm mobile card layout (`lg:hidden`) + desktop table (`hidden lg:block`) trong `CopilotHistoryTab.tsx` ✅
+- **ErrorRetryCard:** tạo `components/shared/ErrorRetryCard.tsx` — shared error card với title, description, retry button; cập nhật `AnalyticsPage.tsx` dùng (3 error states) ✅
+- **Error states:** thêm error states cho `DashboardPage.tsx` (errorSummary check) + `AccountsPage.tsx` (isError/refetch từ useQuery) ✅
+- **Keyboard accessibility:** `SwipeableReviewCard` trong `ReviewPage.tsx` — `role="button"`, `tabIndex`, `aria-label`, `onKeyDown` (Enter/Space=confirm, Escape/Delete=skip), `focus-visible:ring` ✅
+- **useCopilotChat hook:** tạo `hooks/useCopilotChat.ts` — tách `sendViaStream`, `sendViaJson`, `sendMessage`, `handleStop`, streaming state; CopilotPage giảm từ ~650 xuống ~440 lines ✅
+- **TransactionStatusBadge adoption:** thay inline `<Badge>` trong `CycleTransactionsDialog.tsx` bằng `<TransactionStatusBadge>`, fix label inconsistency ("Chờ duyệt" → "Cần review") ✅
+- **NotificationBell empty state:** nâng cấp từ plain text sang visual empty state với icon Bell + subtitle "Thông báo mới sẽ xuất hiện ở đây" ✅
+- **Responsive tables (5 pages):** `AccountsPage` (4 cols), `PaymentHistoryTable` (7 cols), `PartnerAiCostsPage` summary (5 cols) + detail (7 cols), `PartnerPlansPage` (6 cols), `AuditLogPanel` (5-6 cols) — mobile card layout + desktop table ✅
+
 **Chưa làm (Sprint 4 — còn lại):**
 - Bổ sung env production đầy đủ vào `docker-compose.yml` (OpenAI, Resend, PayOS, v.v.) + deploy lên VPS
 - SSL/HTTPS + nginx config production (domain thật, certbot) — template có tại `deploy/nginx/xcash.conf`
@@ -449,6 +461,7 @@ paypilot-ai/                                   ← tên folder local có thể k
 │           │   ├── useSidebarCollapsed.ts      # persist collapse sidebar localStorage ✅
 │           │   ├── useCopilotConversations.ts  # infinite query sidebar (cursor, staleTime 30s) + refreshListAfterChat + quota optimistic ✅
 │           │   ├── useCopilotHistoryPage.ts    # offset pagination cho Settings CopilotHistoryTab ✅
+│           │   ├── useCopilotChat.ts           # extracted send/stream/stop logic from CopilotPage ✅
 │           │   └── useNotifications.ts, useDebouncedValue
 │           ├── components/
 │           │   ├── copilot/
@@ -465,7 +478,10 @@ paypilot-ai/                                   ← tên folder local có thể k
 │           │   ├── profile/ChangePasswordPanel.tsx  # Form 2 bước đổi mật khẩu (nhúng trong ProfileDialog) ✅
 │           │   ├── dashboard/                 # stat cards, charts (không còn BankStatusCard trên Dashboard) ✅
 │           │   ├── shared/
-│           │   │   ├── NotificationBell.tsx    # In-app notification bell + dropdown + SSE/poll ✅
+│           │   │   ├── NotificationBell.tsx    # In-app notification bell + dropdown + SSE/poll + empty state ✅
+│           │   │   ├── PaymentStatusBadge.tsx  # Unified payment status badge (paid/pending/failed/expired/active/suspended) ✅
+│           │   │   ├── TransactionStatusBadge.tsx # Unified transaction status badge (pending/classified/review/skipped) ✅
+│           │   │   ├── ErrorRetryCard.tsx      # Shared error card with title, description, retry button ✅
 │           │   │   ├── PlanGate.tsx            # Plan upgrade gate ✅
 │           │   │   ├── WelcomeTour.tsx         # 4-step welcome dialog ✅
 │           │   │   ├── UserAvatar.tsx          # User avatar component ✅
@@ -479,23 +495,27 @@ paypilot-ai/                                   ← tên folder local có thể k
 │           │   ├── auth/                      # LoginPage, RegisterPage, VerifyEmailPage, AcceptInvitePage, ForgotPasswordPage, ResetPasswordPage ✅
 │           │   ├── onboarding/                # OnboardingPage, OnboardingCallbackPage ✅
 │           │   ├── dashboard/DashboardPage.tsx # summary API + stat cards clickable + CTA onboarding ✅
-│           │   ├── accounts/AccountsPage.tsx  # Danh mục TK TT133 + tìm mã/tên ✅
+│           │   ├── accounts/AccountsPage.tsx  # Danh mục TK TT133 + tìm mã/tên + mobile card layout ✅
 │           │   ├── transactions/              # TransactionsPage (filter source, nút Import Excel, badge amber, bulk-reclassify) + TransactionDetailSheet + ImportTransactionsDialog ✅
 │           │   ├── review/ReviewPage.tsx      # Human Review queue (confirm/correct/skip) + SwipeableReviewCard mobile ✅
 │           │   ├── reports/ReportsPage.tsx    # Báo cáo tháng + export Excel ✅
 │           │   ├── analytics/AnalyticsPage.tsx # So sánh tháng, BarChart thu/chi, top 5 danh mục ✅
-│           │   ├── copilot/CopilotPage.tsx    # AI Copilot chat — 2-column layout (sidebar+chat), mobile Sheet, localStorage persistence, history from DB, infinite scroll, stop button (Phase 4+5); ~650 lines after split ✅
+│           │   ├── copilot/CopilotPage.tsx    # AI Copilot chat — 2-column layout (sidebar+chat), mobile Sheet, localStorage persistence, history from DB, infinite scroll, stop button (Phase 4+5); ~440 lines after hook extraction ✅
 │           │   ├── settings/SettingsPage.tsx  # Tabs: Banking/Threshold/Notifications/Team/Nhật ký/Billing/Lịch sử Copilot ✅
 │           │   ├── settings/CopilotHistoryTab.tsx  # Phase 7 — bảng lịch sử Copilot trong Settings ✅
-│           │   ├── components/audit/AuditLogPanel.tsx  # Bảng nhật ký dùng chung ✅
+│           │   ├── settings/tabs/billing/
+│           │   │   ├── billing-constants.ts    # Status maps, helper functions extracted from BillingTab ✅
+│           │   │   ├── PaymentHistoryTable.tsx # Payment history table component (mobile + desktop) ✅
+│           │   │   └── CycleTransactionsDialog.tsx # Cycle transactions dialog (uses TransactionStatusBadge) ✅
+│           │   ├── components/audit/AuditLogPanel.tsx  # Bảng nhật ký dùng chung + mobile card layout ✅
 │           │   └── partner/
 │           │       ├── PartnerLayout.tsx          # Sidebar: Dashboard/DN/Thanh toán/Nhật ký/Gói dịch vụ/Chi phí AI ✅
 │           │       ├── PartnerDashboardPage.tsx   # Stat cards (5 cột, thêm "Chi phí AI tháng này" click → /partner/ai-costs) + biểu đồ doanh thu theo gói ✅
 │           │       ├── PartnerTenantsPage.tsx     # Danh sách tenant paginate 20/trang, filter, dialog chi tiết + đổi gói ✅
 │           │       ├── PartnerPaymentsPage.tsx    # Lịch sử thanh toán (bảng payment_orders + filter + summary) ✅
 │           │       ├── PartnerAuditPage.tsx       # /partner/audit-logs — audit log toàn hệ thống ✅
-│           │       ├── PartnerPlansPage.tsx       # 4 plan cards, bảng giá, dialog chỉnh giá ✅
-│           │       └── PartnerAiCostsPage.tsx     # Chi phí AI — date filter, bảng tenant ranked by cost, breakdown badges, Sheet detail per-call ✅
+│           │       ├── PartnerPlansPage.tsx       # 4 plan cards, bảng giá, dialog chỉnh giá + mobile card layout ✅
+│           │       └── PartnerAiCostsPage.tsx     # Chi phí AI — date filter, bảng tenant ranked by cost, breakdown badges, Sheet detail per-call + mobile card layout ✅
 ├── packages/shared-types/src/index.ts        # TransactionStatus.CLASSIFIED (bỏ MATCHED), ClassificationType, AccountType ✅
 ├── biome.json, package.json, turbo.json, pnpm-workspace.yaml
 ```

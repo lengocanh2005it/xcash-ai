@@ -9,6 +9,7 @@ import { RecentTransactionsCard } from '@/components/dashboard/RecentTransaction
 import { TransactionSourceChart } from '@/components/dashboard/TransactionSourceChart';
 import { TransactionStatusChart } from '@/components/dashboard/TransactionStatusChart';
 import { Header } from '@/components/layout/Header';
+import { ErrorRetryCard } from '@/components/shared/ErrorRetryCard';
 import { UserAvatar } from '@/components/shared/UserAvatar';
 import { WelcomeTour } from '@/components/shared/WelcomeTour';
 import { Button } from '@/components/ui/button';
@@ -56,7 +57,12 @@ export default function DashboardPage() {
   yesterday.setDate(yesterday.getDate() - 1);
   const yesterdayRange = dayIsoRange(yesterday);
 
-  const { data: summary, isLoading: loadingSummary } = useQuery({
+  const {
+    data: summary,
+    isLoading: loadingSummary,
+    isError: errorSummary,
+    refetch: refetchSummary,
+  } = useQuery({
     queryKey: ['reports', 'summary', year, month, 'dashboard'],
     queryFn: () => getApiData<SummaryData>(`/reports/summary?year=${year}&month=${month}`),
     enabled: bankingLinked,
@@ -233,6 +239,12 @@ export default function DashboardPage() {
             (['classified', 'pending', 'review', 'accuracy'] as const).map((key) => (
               <Skeleton key={key} className="h-[120px] w-full rounded-xl" />
             ))
+          ) : errorSummary && bankingLinked ? (
+            <ErrorRetryCard
+              title="Không thể tải dữ liệu dashboard"
+              onRetry={() => refetchSummary()}
+              className="col-span-full"
+            />
           ) : (
             <>
               <DashboardStatCard

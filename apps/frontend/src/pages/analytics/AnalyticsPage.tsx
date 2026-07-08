@@ -4,9 +4,9 @@ import { TrendingDown, TrendingUp } from 'lucide-react';
 import { useState } from 'react';
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { Header } from '@/components/layout/Header';
+import { ErrorRetryCard } from '@/components/shared/ErrorRetryCard';
 import { PlanGate } from '@/components/shared/PlanGate';
 import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import {
   Select,
@@ -123,14 +123,11 @@ export default function AnalyticsPage() {
                 <Skeleton key={k} className="h-28" />
               ))
             ) : errorComp ? (
-              <Card className="col-span-full border-destructive/30 bg-destructive/5">
-                <CardContent className="py-6 text-center">
-                  <p className="text-sm text-destructive">Không thể tải dữ liệu so sánh</p>
-                  <Button variant="link" size="sm" className="mt-2" onClick={() => refetchComp()}>
-                    Thử lại
-                  </Button>
-                </CardContent>
-              </Card>
+              <ErrorRetryCard
+                title="Không thể tải dữ liệu so sánh"
+                onRetry={() => refetchComp()}
+                className="col-span-full"
+              />
             ) : (
               comparison && (
                 <>
@@ -264,12 +261,7 @@ export default function AnalyticsPage() {
                     ))}
                   </div>
                 ) : errorTop ? (
-                  <div className="py-6 text-center">
-                    <p className="text-sm text-destructive">Không thể tải top chi phí</p>
-                    <Button variant="link" size="sm" className="mt-2" onClick={() => refetchTop()}>
-                      Thử lại
-                    </Button>
-                  </div>
+                  <ErrorRetryCard title="Không thể tải top chi phí" onRetry={() => refetchTop()} />
                 ) : topAccounts?.topExpense.length === 0 ? (
                   <p className="text-sm text-muted-foreground text-center py-8">Chưa có dữ liệu</p>
                 ) : (
@@ -318,12 +310,10 @@ export default function AnalyticsPage() {
                     ))}
                   </div>
                 ) : errorTop ? (
-                  <div className="py-6 text-center">
-                    <p className="text-sm text-destructive">Không thể tải top doanh thu</p>
-                    <Button variant="link" size="sm" className="mt-2" onClick={() => refetchTop()}>
-                      Thử lại
-                    </Button>
-                  </div>
+                  <ErrorRetryCard
+                    title="Không thể tải top doanh thu"
+                    onRetry={() => refetchTop()}
+                  />
                 ) : topAccounts?.topRevenue.length === 0 ? (
                   <p className="text-sm text-muted-foreground text-center py-8">Chưa có dữ liệu</p>
                 ) : (

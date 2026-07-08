@@ -1,9 +1,8 @@
 import type { CopilotConversationSummary, CopilotMessageDto } from '@xcash/shared-types';
 import { SubscriptionPlan } from '@xcash/shared-types';
 import { Bot, Menu, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
-import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { CopilotChatInput } from '@/components/copilot/CopilotChatInput';
-import type { StreamActivity } from '@/components/copilot/CopilotLoadingStatus';
 import { CopilotLoadingStatus } from '@/components/copilot/CopilotLoadingStatus';
 import { CopilotMessageBubble } from '@/components/copilot/CopilotMessageBubble';
 import { CopilotSidebar } from '@/components/copilot/CopilotSidebar';
@@ -17,20 +16,10 @@ import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent } from '@/components/ui/sheet';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useAuthContext } from '@/contexts/auth-context';
+import { type Message, useCopilotChat } from '@/hooks/useCopilotChat';
 import { useCopilotConversations } from '@/hooks/useCopilotConversations';
 import { useSidebarCollapsed } from '@/hooks/useSidebarCollapsed';
-import { API_BASE_URL, api, getAccessToken } from '@/lib/api';
-import type { SseEvent } from '@/lib/copilot-sse';
-import { feedSseChunk, flushSsePending } from '@/lib/copilot-sse';
 import { cn } from '@/lib/utils';
-
-interface Message {
-  id: string;
-  role: 'user' | 'assistant';
-  content: string;
-  activities?: CopilotActivity[];
-  isPartial?: boolean;
-}
 
 function mapDto(m: CopilotMessageDto): Message {
   return {
@@ -54,13 +43,10 @@ export default function CopilotPage() {
 
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
   const [isLoadingConversation, setIsLoadingConversation] = useState(false);
   const [isLoadingOlder, setIsLoadingOlder] = useState(false);
   const [hasMoreMessages, setHasMoreMessages] = useState(false);
   const [oldestMessageId, setOldestMessageId] = useState<string | null>(null);
-  const [streamActivity, setStreamActivity] = useState<StreamActivity | undefined>();
-  const [streamingContent, setStreamingContent] = useState('');
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [pendingDelete, setPendingDelete] = useState<CopilotConversationSummary | null>(null);
   const [isDeletingConversation, setIsDeletingConversation] = useState(false);
@@ -68,14 +54,35 @@ export default function CopilotPage() {
     'xcash_copilot_history_collapsed',
     true,
   );
-  const [canAbort, setCanAbort] = useState(false);
   const [activeConversationId, setActiveConversationId] = useState<string | null>(() => {
     if (!user?.id) return null;
     return localStorage.getItem(`xcash_copilot_conv_${user.id}`) ?? null;
   });
 
+  const addMessage = useCallback((msg: Message) => {
+    setMessages((prev) => [...prev, msg]);
+  }, []);
+
+  const {
+    sendMessage: sendChatMessage,
+    handleStop,
+    isLoading,
+    canAbort,
+    streamActivity,
+    streamingContent,
+  } = useCopilotChat({
+    activeConversationId,
+    getMessages: () => messages,
+    addMessage,
+    onConversationCreated: (id) => {
+      setActiveConversationId(id);
+      persistConversation(id);
+    },
+    refreshListAfterChat,
+    invalidateList,
+  });
+
   const bottomRef = useRef<HTMLDivElement>(null);
-  const abortRef = useRef<AbortController | null>(null);
   const chatContainerRef = useRef<HTMLDivElement>(null);
   const sentinelRef = useRef<HTMLDivElement>(null);
   const prevScrollHeightRef = useRef(0);
@@ -172,225 +179,13 @@ export default function CopilotPage() {
     }
   }, [messages, isLoading, streamingContent, isLoadingConversation]);
 
-  const getHistory = (msgs: Message[], convId: string | null) => {
-    const slice = msgs.slice(-10);
-    const withoutPendingUser =
-      !convId && slice.length > 0 && slice[slice.length - 1]?.role === 'user'
-        ? slice.slice(0, -1)
-        : slice;
-    return withoutPendingUser.map(({ role, content }) => ({ role, content }));
-  };
-
-  // Returns conversationId on success, null on abort, throws on error
-  const sendViaStream = async (
-    text: string,
-    msgs: Message[],
-    convId: string | null,
-  ): Promise<string | null> => {
-    const token = getAccessToken();
-    abortRef.current = new AbortController();
-    let receivedConversationId: string | null = null;
-    let accumulated = '';
-
-    try {
-      const response = await fetch(`${API_BASE_URL}/ai/copilot/stream`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
-        body: JSON.stringify({
-          message: text,
-          history: getHistory(msgs, convId),
-          ...(convId ? { conversationId: convId } : {}),
-        }),
-        signal: abortRef.current.signal,
-      });
-      if (!response.ok || !response.body) throw new Error('stream failed');
-
-      const reader = response.body.getReader();
-      const decoder = new TextDecoder();
-      const pending = { buffer: '' };
-      let receivedDone = false;
-
-      const handleSseEvent = ({ event, data }: SseEvent) => {
-        if (event === 'activity') {
-          setStreamActivity(JSON.parse(data) as StreamActivity);
-        } else if (event === 'delta') {
-          accumulated += (JSON.parse(data) as { content: string }).content;
-          setStreamingContent(accumulated);
-        } else if (event === 'done') {
-          receivedDone = true;
-          const {
-            reply,
-            meta,
-            conversationId: newConvId,
-          } = JSON.parse(data) as {
-            reply: string;
-            meta?: { activities: CopilotActivity[] };
-            conversationId?: string;
-          };
-          receivedConversationId = newConvId ?? convId;
-          setStreamingContent('');
-          setStreamActivity(undefined);
-          setMessages((prev) => [
-            ...prev,
-            {
-              id: `a-${Date.now()}`,
-              role: 'assistant',
-              content: reply,
-              activities: meta?.activities ?? [],
-            },
-          ]);
-        }
-      };
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (value) {
-          for (const evt of feedSseChunk(decoder.decode(value, { stream: true }), pending)) {
-            handleSseEvent(evt);
-          }
-        }
-        if (done) break;
-      }
-
-      const tail = decoder.decode();
-      if (tail) {
-        for (const evt of feedSseChunk(tail, pending)) handleSseEvent(evt);
-      }
-      for (const evt of flushSsePending(pending)) handleSseEvent(evt);
-
-      if (!receivedDone) throw new Error('stream ended without done');
-      return receivedConversationId;
-    } catch (err) {
-      if ((err as Error).name === 'AbortError') {
-        // Save partial content as a "stopped" bubble
-        if (accumulated.trim()) {
-          setMessages((prev) => [
-            ...prev,
-            {
-              id: `a-${Date.now()}`,
-              role: 'assistant',
-              content: accumulated,
-              activities: [],
-              isPartial: true,
-            },
-          ]);
-        }
-        setStreamingContent('');
-        setStreamActivity(undefined);
-        return null; // don't update conversationId, don't fallback to JSON
-      }
-      throw err;
-    }
-  };
-
-  const sendViaJson = async (
-    text: string,
-    msgs: Message[],
-    convId: string | null,
-  ): Promise<string | null> => {
-    const res = await api.post<{
-      data: { reply: string; meta?: { activities: CopilotActivity[] }; conversationId?: string };
-    }>('/ai/copilot', {
-      message: text,
-      history: getHistory(msgs, convId),
-      ...(convId ? { conversationId: convId } : {}),
-    });
-    const { reply, meta, conversationId: newConvId } = res.data.data;
-    setMessages((prev) => [
-      ...prev,
-      {
-        id: `a-${Date.now()}`,
-        role: 'assistant',
-        content: reply,
-        activities: meta?.activities ?? [],
-      },
-    ]);
-    return newConvId ?? convId;
-  };
-
   const sendMessage = async (text: string) => {
-    if (!text.trim() || isLoading) return;
-    const userMsg: Message = { id: `u-${Date.now()}`, role: 'user', content: text };
-    const prevMessages = messages;
-    setMessages((prev) => [...prev, userMsg]);
     setInput('');
-    setIsLoading(true);
-    setStreamActivity(undefined);
-    setStreamingContent('');
-
-    const isNewConversation = !activeConversationId;
-
-    let wasAborted = false;
-    setCanAbort(true);
-    try {
-      const newConvId = await sendViaStream(text, [...prevMessages, userMsg], activeConversationId);
-      if (newConvId === null) {
-        wasAborted = true;
-        return; // aborted — don't update conversation or invalidate
-      }
-      const convId = newConvId ?? activeConversationId;
-      if (newConvId && newConvId !== activeConversationId) {
-        setActiveConversationId(newConvId);
-        persistConversation(newConvId);
-      }
-      if (convId) {
-        refreshListAfterChat({
-          conversationId: convId,
-          firstMessage: text,
-          isNewConversation,
-        });
-      } else {
-        invalidateList();
-      }
-    } catch {
-      setCanAbort(false);
-      try {
-        const newConvId = await sendViaJson(text, [...prevMessages, userMsg], activeConversationId);
-        const convId = newConvId ?? activeConversationId;
-        if (newConvId && newConvId !== activeConversationId) {
-          setActiveConversationId(newConvId);
-          persistConversation(newConvId);
-        }
-        if (convId) {
-          refreshListAfterChat({
-            conversationId: convId,
-            firstMessage: text,
-            isNewConversation,
-          });
-        } else {
-          invalidateList();
-        }
-      } catch {
-        setMessages((prev) => [
-          ...prev,
-          {
-            id: `err-${Date.now()}`,
-            role: 'assistant',
-            content: 'Xin lỗi, có lỗi xảy ra. Vui lòng thử lại.',
-          },
-        ]);
-      }
-    } finally {
-      setCanAbort(false);
-      if (!wasAborted) {
-        setIsLoading(false);
-        setStreamActivity(undefined);
-        setStreamingContent('');
-      } else {
-        setIsLoading(false);
-      }
-    }
-  };
-
-  const handleStop = () => {
-    abortRef.current?.abort();
+    await sendChatMessage(text);
   };
 
   const handleNewChat = () => {
-    if (isLoading) abortRef.current?.abort();
+    if (isLoading) handleStop();
     setMessages([]);
     setActiveConversationId(null);
     persistConversation(null);
@@ -401,7 +196,7 @@ export default function CopilotPage() {
 
   const handleSelectConversation = (id: string) => {
     if (id === activeConversationId && !isLoadingConversation) return;
-    if (isLoading) abortRef.current?.abort();
+    if (isLoading) handleStop();
     setSidebarOpen(false);
     setIsLoadingConversation(true);
     setMessages([]);

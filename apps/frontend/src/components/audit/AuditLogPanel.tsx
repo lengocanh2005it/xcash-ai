@@ -262,56 +262,98 @@ export function AuditLogPanel({
       ) : items.length === 0 ? (
         <EmptyState title={emptyTitle} description={emptyDescription} />
       ) : (
-        <div className="overflow-x-auto rounded-lg border">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b bg-muted/40 text-left">
-                <th className="px-3 py-2 font-medium">Thời gian</th>
-                {showTenant && <th className="px-3 py-2 font-medium">Doanh nghiệp</th>}
-                <th className="px-3 py-2 font-medium">Người thực hiện</th>
-                <th className="px-3 py-2 font-medium">Hành động</th>
-                <th className="px-3 py-2 font-medium">Đối tượng</th>
-                <th className="px-3 py-2 font-medium w-24" />
-              </tr>
-            </thead>
-            <tbody>
-              {items.map((item) => (
-                <tr key={item.id} className="border-b last:border-0 align-middle hover:bg-muted/20">
-                  <td className="px-3 py-2.5 whitespace-nowrap text-muted-foreground">
+        <>
+          {/* Mobile card layout */}
+          <div className="space-y-2 lg:hidden">
+            {items.map((item) => (
+              <div key={item.id} className="rounded-lg border p-3 space-y-1.5">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-xs text-muted-foreground">
                     {formatDateVN(item.createdAt)}
-                  </td>
-                  {showTenant && (
-                    <td className="px-3 py-2.5 max-w-[160px] truncate">
-                      {item.businessName ?? '—'}
-                    </td>
-                  )}
-                  <td className="px-3 py-2.5">{item.actorLabel}</td>
-                  <td className="px-3 py-2.5">
-                    <Badge variant="secondary">{item.actionLabel}</Badge>
-                  </td>
-                  <td className="px-3 py-2.5">
-                    <div>{item.entityTypeLabel}</div>
-                    <div className="text-xs text-muted-foreground font-mono truncate max-w-[140px]">
-                      {item.entityId}
-                    </div>
-                  </td>
-                  <td className="px-3 py-2.5 text-right">
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      className="gap-1.5 text-muted-foreground"
-                      onClick={() => openDetail(item)}
-                    >
-                      <Eye className="size-4" />
-                      <span className="hidden sm:inline">Chi tiết</span>
-                    </Button>
-                  </td>
+                  </span>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="h-6 gap-1 text-xs text-muted-foreground"
+                    onClick={() => openDetail(item)}
+                  >
+                    <Eye className="size-3" />
+                  </Button>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Badge variant="secondary" className="text-[10px]">
+                    {item.actionLabel}
+                  </Badge>
+                  <span className="text-sm font-medium">{item.actorLabel}</span>
+                </div>
+                {showTenant && (
+                  <p className="text-xs text-muted-foreground truncate">
+                    {item.businessName ?? '—'}
+                  </p>
+                )}
+                <p className="text-xs text-muted-foreground">
+                  {item.entityTypeLabel}
+                  <span className="ml-1 font-mono">{item.entityId.slice(0, 12)}…</span>
+                </p>
+              </div>
+            ))}
+          </div>
+          {/* Desktop table */}
+          <div className="hidden overflow-x-auto rounded-lg border lg:block">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b bg-muted/40 text-left">
+                  <th className="px-3 py-2 font-medium">Thời gian</th>
+                  {showTenant && <th className="px-3 py-2 font-medium">Doanh nghiệp</th>}
+                  <th className="px-3 py-2 font-medium">Người thực hiện</th>
+                  <th className="px-3 py-2 font-medium">Hành động</th>
+                  <th className="px-3 py-2 font-medium">Đối tượng</th>
+                  <th className="px-3 py-2 font-medium w-24" />
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody>
+                {items.map((item) => (
+                  <tr
+                    key={item.id}
+                    className="border-b last:border-0 align-middle hover:bg-muted/20"
+                  >
+                    <td className="px-3 py-2.5 whitespace-nowrap text-muted-foreground">
+                      {formatDateVN(item.createdAt)}
+                    </td>
+                    {showTenant && (
+                      <td className="px-3 py-2.5 max-w-[160px] truncate">
+                        {item.businessName ?? '—'}
+                      </td>
+                    )}
+                    <td className="px-3 py-2.5">{item.actorLabel}</td>
+                    <td className="px-3 py-2.5">
+                      <Badge variant="secondary">{item.actionLabel}</Badge>
+                    </td>
+                    <td className="px-3 py-2.5">
+                      <div>{item.entityTypeLabel}</div>
+                      <div className="text-xs text-muted-foreground font-mono truncate max-w-[140px]">
+                        {item.entityId}
+                      </div>
+                    </td>
+                    <td className="px-3 py-2.5 text-right">
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="gap-1.5 text-muted-foreground"
+                        onClick={() => openDetail(item)}
+                      >
+                        <Eye className="size-4" />
+                        <span className="hidden sm:inline">Chi tiết</span>
+                      </Button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
       )}
 
       {!isLoading && total > 0 && (

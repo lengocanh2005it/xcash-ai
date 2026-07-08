@@ -153,6 +153,17 @@ function SwipeableReviewCard({
     setDragX(0);
   };
 
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (disabled) return;
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      onConfirm();
+    } else if (e.key === 'Escape' || e.key === 'Delete') {
+      e.preventDefault();
+      onSkip();
+    }
+  };
+
   return (
     <div className="relative overflow-hidden rounded-lg border">
       <div className="absolute inset-0 flex items-center justify-between px-4">
@@ -163,8 +174,12 @@ function SwipeableReviewCard({
           Bỏ qua <SkipForward className="size-4" />
         </span>
       </div>
+      {/* biome-ignore lint/a11y/useSemanticElements: swipeable card needs div for pointer events */}
       <div
-        className="relative touch-pan-y space-y-2 bg-background p-4"
+        role="button"
+        tabIndex={disabled ? -1 : 0}
+        aria-label={`Giao dịch: ${item.transaction.content ?? 'không có nội dung'}, nhấn Enter để xác nhận, Escape để bỏ qua`}
+        className="relative touch-pan-y space-y-2 bg-background p-4 outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
         style={{
           transform: `translateX(${dragX}px)`,
           transition: dragging ? 'none' : 'transform 0.2s',
@@ -173,6 +188,7 @@ function SwipeableReviewCard({
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerEnd}
         onPointerCancel={handlePointerEnd}
+        onKeyDown={handleKeyDown}
       >
         <div className="flex items-start justify-between gap-2">
           <p className="min-w-0 flex-1 truncate text-sm font-medium">

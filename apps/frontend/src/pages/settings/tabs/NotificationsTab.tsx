@@ -99,7 +99,7 @@ export function NotificationsTab() {
     <Card>
       <CardHeader>
         <CardTitle className="text-base">Cấu hình thông báo</CardTitle>
-        <CardDescription>Nhận thông báo khi có giao dịch mới cần xét duyệt.</CardDescription>
+        <CardDescription>Cấu hình kênh và tần suất nhận thông báo.</CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
         <div className="space-y-4">

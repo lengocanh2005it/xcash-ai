@@ -116,7 +116,7 @@ export function NotificationsTab() {
                   </span>
                 )}
               </p>
-              <p className="text-xs text-muted-foreground">Email nhận thông báo</p>
+              <p className="text-xs text-muted-foreground">Nhận email khi có giao dịch mới</p>
             </div>
             <Switch
               checked={form.emailEnabled}

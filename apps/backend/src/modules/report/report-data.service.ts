@@ -345,6 +345,49 @@ export class ReportDataService {
     };
   }
 
+  async getSummaryByDateRange(tenantId: string, startDate: string, endDate: string) {
+    const from = new Date(startDate);
+    const to = new Date(endDate);
+    to.setHours(23, 59, 59, 999);
+
+    const [byAccount, reviewCount, totalCount, classifiedCount] = await Promise.all([
+      this.buildAccountSummaries(tenantId, from, to),
+      this.prisma.transactionClassification.count({
+        where: {
+          tenantId,
+          status: TransactionStatus.review,
+          transaction: { transactionDate: { gte: from, lte: to } },
+        },
+      }),
+      this.prisma.transaction.count({
+        where: { tenantId, transactionDate: { gte: from, lte: to } },
+      }),
+      this.prisma.transactionClassification.count({
+        where: {
+          tenantId,
+          status: TransactionStatus.classified,
+          transaction: { transactionDate: { gte: from, lte: to } },
+        },
+      }),
+    ]);
+
+    const totalRevenue = byAccount
+      .filter((a) => a.accountType === 'revenue')
+      .reduce((s, a) => s + a.totalCredit - a.totalDebit, 0);
+
+    const totalExpense = byAccount
+      .filter((a) => a.accountType === 'expense')
+      .reduce((s, a) => s + a.totalDebit - a.totalCredit, 0);
+
+    const aiAccuracy = totalCount > 0 ? Math.round((classifiedCount / totalCount) * 100) : 0;
+
+    return {
+      period: { startDate, endDate },
+      summary: { totalRevenue, totalExpense, net: totalRevenue - totalExpense },
+      stats: { totalCount, classifiedCount, reviewCount, aiAccuracy },
+    };
+  }
+
   async getAccountBreakdown(
     tenantId: string,
     year: number,

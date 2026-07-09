@@ -1,3 +1,4 @@
+import { BILLING_SETTINGS_KNOWLEDGE } from './billing-settings';
 import { CASSO_KNOWLEDGE, type KnowledgeSection } from './casso';
 import { TT133_KNOWLEDGE } from './tt133';
 import { XCASH_FEATURES_KNOWLEDGE } from './xcash-features';
@@ -6,6 +7,7 @@ export const ALL_SECTIONS: KnowledgeSection[] = [
   ...CASSO_KNOWLEDGE,
   ...TT133_KNOWLEDGE,
   ...XCASH_FEATURES_KNOWLEDGE,
+  ...BILLING_SETTINGS_KNOWLEDGE,
 ];
 
 /** Knowledge used internally by Copilot — not shown as "Nguồn" chips in the chat UI. */

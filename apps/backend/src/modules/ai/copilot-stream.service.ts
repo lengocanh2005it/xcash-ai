@@ -45,7 +45,11 @@ export class CopilotStreamService {
       this.conversationService.findOrCreate(tenantId, user.id, dto.conversationId),
       useFunctionCalling
         ? Promise.resolve(undefined)
-        : this.copilotContextService.getFinancialContext(tenantId),
+        : this.copilotContextService.getFinancialContext(tenantId, {
+            name: user.name,
+            role: user.role,
+            businessName: user.businessName,
+          }),
     ]);
     const userMsg = await this.conversationService.saveUserMessage(conversation.id, dto.message);
 
@@ -109,7 +113,11 @@ export class CopilotStreamService {
       this.conversationService.findOrCreate(tenantId, user.id, dto.conversationId),
       useFunctionCalling
         ? Promise.resolve(undefined)
-        : this.copilotContextService.getFinancialContext(tenantId),
+        : this.copilotContextService.getFinancialContext(tenantId, {
+            name: user.name,
+            role: user.role,
+            businessName: user.businessName,
+          }),
     ]);
     const userMsg = await this.conversationService.saveUserMessage(conversation.id, dto.message);
 

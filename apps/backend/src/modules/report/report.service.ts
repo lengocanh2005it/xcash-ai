@@ -50,6 +50,10 @@ export class ReportService {
     return this.reportData.getTopAccounts(tenantId, year, month, limit);
   }
 
+  async getSummaryByDateRange(tenantId: string, startDate: string, endDate: string) {
+    return this.reportData.getSummaryByDateRange(tenantId, startDate, endDate);
+  }
+
   async fetchExportData(tenantId: string, fromDate: string, toDate: string) {
     return this.reportData.fetchExportData(tenantId, fromDate, toDate);
   }

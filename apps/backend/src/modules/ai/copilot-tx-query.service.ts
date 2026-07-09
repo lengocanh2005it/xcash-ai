@@ -1,5 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { type Prisma, TransactionStatus } from '@prisma/client';
+import { type AccountType, type Prisma, TransactionStatus } from '@prisma/client';
 import { Role } from '@xcash/shared-types';
 import { PrismaService } from '../../prisma/prisma.service';
 import { RedisService } from '../../redis/redis.service';
@@ -101,6 +101,24 @@ export class CopilotTransactionQueryService {
     return this.prisma.chartOfAccount.findFirst({
       where: { tenantId, accountCode },
       select: { accountCode: true, accountName: true, accountType: true, isActive: true },
+    });
+  }
+
+  async listChartAccounts(tenantId: string, accountType?: string, limit = 50) {
+    const validAccountTypes = ['asset', 'liability', 'equity', 'revenue', 'expense'];
+    const where: Prisma.ChartOfAccountWhereInput = {
+      tenantId,
+      isActive: true,
+      ...(accountType && validAccountTypes.includes(accountType)
+        ? { accountType: accountType as AccountType }
+        : {}),
+    };
+
+    return this.prisma.chartOfAccount.findMany({
+      where,
+      select: { accountCode: true, accountName: true, accountType: true },
+      orderBy: { accountCode: 'asc' },
+      take: Math.min(100, Math.max(1, limit)),
     });
   }
 

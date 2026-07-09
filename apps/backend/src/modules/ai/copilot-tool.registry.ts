@@ -516,6 +516,186 @@ export const COPILOT_TOOLS: CopilotToolEntry[] = [
       return text.slice(0, 300);
     },
   },
+  {
+    name: 'get_billing_current_plan',
+    description:
+      'Lấy thông tin gói dịch vụ hiện tại của doanh nghiệp: tên gói, giá, quota giao dịch, quota AI Copilot, số đã dùng, trạng thái. Dùng khi user hỏi về gói dịch vụ, quota, hoặc tình trạng thanh toán.',
+    parameters: {
+      type: 'object',
+      properties: {},
+      required: [],
+      additionalProperties: false,
+    },
+    activity: {
+      final: { kind: 'internal_data', label: 'Gói dịch vụ', source: 'X-Cash AI' },
+      streaming: {
+        kind: 'internal_data',
+        label: 'Đang tra cứu gói dịch vụ…',
+        source: 'X-Cash AI',
+      },
+    },
+    execute: (service, tenantId) => service.getBillingCurrentPlan(tenantId),
+    formatSnippet: (data) => {
+      if (data == null) return undefined;
+      const d = data as {
+        plan?: string;
+        pricePerMonth?: number;
+        transactionQuota?: number;
+        transactionUsed?: number;
+        copilotQuota?: number;
+        copilotUsed?: number;
+        status?: string;
+        currentCycleEnd?: Date | string;
+      };
+      if (!d.plan) return undefined;
+      const fmt = (n?: number) => (n != null ? n.toLocaleString('vi-VN') : '∞');
+      const cycleEnd = d.currentCycleEnd
+        ? new Date(d.currentCycleEnd).toLocaleDateString('vi-VN')
+        : '—';
+      return [
+        `Gói: ${d.plan} — ${fmt(d.pricePerMonth)}đ/tháng`,
+        `GD: ${fmt(d.transactionUsed)}/${fmt(d.transactionQuota)} | Copilot: ${fmt(d.copilotUsed)}/${fmt(d.copilotQuota)}`,
+        `Trạng thái: ${d.status} · Hết hạn: ${cycleEnd}`,
+      ].join('\n');
+    },
+  },
+  {
+    name: 'get_payment_history',
+    description:
+      'Lấy lịch sử sử dụng (usage history) của doanh nghiệp trong 90 ngày gần nhất. Dùng khi user hỏi về lịch sử thanh toán, số giao dịch đã xử lý theo thời gian.',
+    parameters: {
+      type: 'object',
+      properties: {},
+      required: [],
+      additionalProperties: false,
+    },
+    activity: {
+      final: { kind: 'internal_data', label: 'Lịch sử thanh toán', source: 'X-Cash AI' },
+      streaming: {
+        kind: 'internal_data',
+        label: 'Đang lấy lịch sử thanh toán…',
+        source: 'X-Cash AI',
+      },
+    },
+    execute: (service, tenantId) => service.getPaymentHistory(tenantId),
+    formatSnippet: (data) => {
+      if (data == null) return undefined;
+      const d = data as Array<{ metric: string; value: number; recordedAt: Date | string }>;
+      if (!Array.isArray(d) || d.length === 0) return undefined;
+      const recent = d.slice(0, 5);
+      return recent
+        .map((h) => {
+          const date = new Date(h.recordedAt).toLocaleDateString('vi-VN');
+          return `${date}: ${h.metric} = ${h.value.toLocaleString('vi-VN')}`;
+        })
+        .join('\n');
+    },
+  },
+  {
+    name: 'list_chart_accounts',
+    description:
+      'Liệt kê danh sách tài khoản kế toán TT133 của doanh nghiệp. Có thể lọc theo loại tài khoản (asset, liability, equity, revenue, expense). Dùng khi user hỏi danh sách tài khoản hoặc muốn xem hệ thống tài khoản.',
+    parameters: {
+      type: 'object',
+      properties: {
+        accountType: {
+          type: 'string',
+          enum: ['asset', 'liability', 'equity', 'revenue', 'expense'],
+          description: 'Lọc theo loại tài khoản (tùy chọn)',
+        },
+        limit: {
+          type: 'integer',
+          minimum: 1,
+          maximum: 100,
+          description: 'Số lượng tài khoản trả về, mặc định 50',
+        },
+      },
+      required: [],
+      additionalProperties: false,
+    },
+    activity: {
+      final: { kind: 'internal_data', label: 'Hệ thống tài khoản', source: 'X-Cash AI' },
+      streaming: {
+        kind: 'internal_data',
+        label: 'Đang lấy danh sách tài khoản…',
+        source: 'X-Cash AI',
+      },
+    },
+    execute: (service, tenantId, args) =>
+      service.listChartAccounts(
+        tenantId,
+        args.accountType as string | undefined,
+        Number(args.limit ?? 50),
+      ),
+    formatSnippet: (data) => {
+      if (data == null) return undefined;
+      const d = data as Array<{
+        accountCode: string;
+        accountName: string;
+        accountType: string;
+      }>;
+      if (!Array.isArray(d) || d.length === 0) return undefined;
+      const preview = d.slice(0, 10);
+      return preview
+        .map((a) => `TK ${a.accountCode} — ${a.accountName} (${a.accountType})`)
+        .join('\n');
+    },
+  },
+  {
+    name: 'get_period_summary',
+    description:
+      'Tổng hợp thu/chi/lãi-lỗ và thống kê giao dịch trong một khoảng thời gian tùy chỉnh (từ ngày đến ngày). Dùng khi user hỏi về doanh thu/chi phí/lãi lỗ của một khoảng thời gian cụ thể (vd: "từ đầu năm đến nay", "quý trước", "tuần trước").',
+    parameters: {
+      type: 'object',
+      properties: {
+        startDate: {
+          type: 'string',
+          format: 'date',
+          description: 'Ngày bắt đầu (YYYY-MM-DD), vd "2026-01-01"',
+        },
+        endDate: {
+          type: 'string',
+          format: 'date',
+          description: 'Ngày kết thúc (YYYY-MM-DD), vd "2026-06-30"',
+        },
+      },
+      required: ['startDate', 'endDate'],
+      additionalProperties: false,
+    },
+    activity: {
+      final: { kind: 'internal_data', label: 'Báo cáo kỳ', source: 'X-Cash AI' },
+      streaming: {
+        kind: 'internal_data',
+        label: 'Đang tổng hợp báo cáo kỳ…',
+        source: 'X-Cash AI',
+      },
+    },
+    execute: (service, tenantId, args) =>
+      service.getPeriodSummary(tenantId, String(args.startDate), String(args.endDate)),
+    formatSnippet: (data) => {
+      if (data == null) return undefined;
+      const d = data as {
+        period?: { startDate: string; endDate: string };
+        summary?: { totalRevenue?: number; totalExpense?: number; net?: number };
+        stats?: { totalCount?: number; reviewCount?: number; aiAccuracy?: number };
+      };
+      const fmt = (n?: number) => (n != null ? `${Math.abs(n).toLocaleString('vi-VN')}đ` : '—');
+      const s = d.summary;
+      const st = d.stats;
+      const period = d.period
+        ? `Từ ${d.period.startDate} đến ${d.period.endDate}`
+        : 'Khoảng thời gian tùy chỉnh';
+      return [
+        period,
+        `Thu: ${fmt(s?.totalRevenue)} · Chi: ${fmt(s?.totalExpense)} · Lãi/lỗ: ${fmt(s?.net)}`,
+        st
+          ? `${st.totalCount ?? 0} giao dịch · ${st.reviewCount ?? 0} chờ duyệt · AI ${st.aiAccuracy ?? 0}%`
+          : '',
+      ]
+        .filter(Boolean)
+        .join('\n');
+    },
+  },
 ];
 
 /** Set of tool names that produce action cards in the UI. */

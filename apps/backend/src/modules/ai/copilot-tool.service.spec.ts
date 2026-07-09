@@ -4,6 +4,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { RedisService } from '../../redis/redis.service';
 import { OnboardingService } from '../onboarding/onboarding.service';
 import { ReportService } from '../report/report.service';
+import { CopilotBillingService } from './copilot-billing.service';
 import { CopilotKnowledgeService } from './copilot-knowledge.service';
 import { CopilotToolService } from './copilot-tool.service';
 import { CopilotTransactionQueryService } from './copilot-tx-query.service';
@@ -370,6 +371,11 @@ describe('CopilotToolService — facade dispatch', () => {
     searchCassoPublic: jest.fn().mockResolvedValue({ results: [] }),
   };
 
+  const mockBillingService = {
+    getCurrentPlan: jest.fn().mockResolvedValue({ plan: 'pro' }),
+    getPaymentHistory: jest.fn().mockResolvedValue([]),
+  };
+
   beforeEach(async () => {
     jest.clearAllMocks();
 
@@ -379,6 +385,7 @@ describe('CopilotToolService — facade dispatch', () => {
         { provide: ReportService, useValue: mockReportService },
         { provide: CopilotKnowledgeService, useValue: mockKnowledgeService },
         { provide: CopilotTransactionQueryService, useValue: mockTxQueryService },
+        { provide: CopilotBillingService, useValue: mockBillingService },
       ],
     }).compile();
 

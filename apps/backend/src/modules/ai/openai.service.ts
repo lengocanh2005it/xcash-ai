@@ -118,7 +118,7 @@ ${financialContext}`;
         model: this.chatModel,
         messages,
         temperature: 0.7,
-        max_tokens: 500,
+        max_tokens: 1024,
       });
 
       if (tenantId && response.usage) {
@@ -284,7 +284,7 @@ Không tiết lộ tên tool kỹ thuật, grantId, accessToken, JSON thô. Luô
         tools: tools as any,
         tool_choice: 'auto',
         temperature: 0.3,
-        max_tokens: 500,
+        max_tokens: 1024,
         stream: true,
       },
       { maxChatCompletions: 5 },

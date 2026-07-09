@@ -106,20 +106,6 @@ export class BankingService {
       throw new NotFoundException('Không tìm thấy tenant cho grantId này');
     }
 
-    const subscription = await this.prisma.subscription.findFirst({
-      where: { tenantId: grant.tenantId, status: 'active' },
-    });
-
-    if (!subscription) {
-      throw new NotFoundException('Không tìm thấy subscription active cho tenant');
-    }
-
-    const isOverQuota = subscription.transactionUsedThisCycle >= subscription.transactionQuota;
-
-    if (isOverQuota && subscription.plan === SubscriptionPlan.free) {
-      throw new ForbiddenException('Đã hết quota tháng này. Vui lòng nâng cấp gói.');
-    }
-
     const casDirection = txn.amount >= 0 ? 'in' : 'out';
 
     const existingTransaction = await this.prisma.transaction.findUnique({
@@ -136,6 +122,20 @@ export class BankingService {
     }
 
     const saved = await this.prisma.$transaction(async (tx) => {
+      const subscription = await tx.subscription.findFirst({
+        where: { tenantId: grant.tenantId, status: 'active' },
+      });
+
+      if (!subscription) {
+        throw new NotFoundException('Không tìm thấy subscription active cho tenant');
+      }
+
+      const isOverQuota = subscription.transactionUsedThisCycle >= subscription.transactionQuota;
+
+      if (isOverQuota && subscription.plan === SubscriptionPlan.free) {
+        throw new ForbiddenException('Đã hết quota tháng này. Vui lòng nâng cấp gói.');
+      }
+
       const transaction = await tx.transaction.create({
         data: {
           tenantId: grant.tenantId,
@@ -183,21 +183,23 @@ export class BankingService {
         },
       });
 
-      return transaction;
+      return { transaction, subscription };
     });
 
-    await this.webhookQueue.add(AI_CLASSIFY_JOB, { transactionDbId: saved.id });
+    const { transaction: savedTx, subscription: currentSubscription } = saved;
+
+    await this.webhookQueue.add(AI_CLASSIFY_JOB, { transactionDbId: savedTx.id });
 
     void this.quotaNotificationService
       .checkAndNotify({
         tenantId: grant.tenantId,
-        oldUsed: subscription.transactionUsedThisCycle,
-        quota: subscription.transactionQuota,
-        plan: subscription.plan,
-        overagePricePerTransaction: subscription.overagePricePerTransaction
-          ? Number(subscription.overagePricePerTransaction)
+        oldUsed: currentSubscription.transactionUsedThisCycle - 1,
+        quota: currentSubscription.transactionQuota,
+        plan: currentSubscription.plan,
+        overagePricePerTransaction: currentSubscription.overagePricePerTransaction
+          ? Number(currentSubscription.overagePricePerTransaction)
           : null,
-        cycleStart: subscription.currentCycleStart,
+        cycleStart: currentSubscription.currentCycleStart,
         added: 1,
       })
       .catch((err: unknown) =>
@@ -207,8 +209,8 @@ export class BankingService {
     return {
       duplicate: false,
       transactionId,
-      tenantId: saved.tenantId,
-      status: saved.status,
+      tenantId: savedTx.tenantId,
+      status: savedTx.status,
     };
   }
 }

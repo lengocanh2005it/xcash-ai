@@ -1,8 +1,9 @@
 import { Type } from 'class-transformer';
-import { IsNumber, IsOptional, IsString, ValidateNested } from 'class-validator';
+import { IsNotEmpty, IsNumber, IsOptional, IsString, ValidateNested } from 'class-validator';
 
 export class CasWebhookTransactionDto {
   @IsString()
+  @IsNotEmpty()
   id!: string;
 
   @IsNumber()
@@ -13,6 +14,7 @@ export class CasWebhookTransactionDto {
   description?: string;
 
   @IsString()
+  @IsNotEmpty()
   transactionDateTime!: string;
 
   @IsOptional()

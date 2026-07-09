@@ -50,6 +50,7 @@ cp apps/frontend/.env.example apps/frontend/.env
 | Webhook security | `WEBHOOK_SIGNATURE_HEADER`, `WEBHOOK_TIMESTAMP_TOLERANCE_SECONDS`, `WEBHOOK_IDEMPOTENCY_TTL_SECONDS`, `WEBHOOK_SKIP_SIGNATURE_VERIFY` | dev local/ngrok: `WEBHOOK_SKIP_SIGNATURE_VERIFY=true`; production **phải** `false` |
 | AI Classification | `AI_CLASSIFICATION_THRESHOLD=85` | mặc định, tenant có thể override qua `tenants.classification_threshold` |
 | Rate Limiting | `RATE_LIMIT_PER_MINUTE=120` | giới hạn request/phút, tính theo `tenantId` (fallback `userId`/IP) qua `TenantThrottlerGuard` |
+| Error Tracking | `SENTRY_DSN` | Sentry DSN để track exceptions production (optional) |
 | Frontend | `VITE_API_BASE_URL` | `apps/frontend/.env` — prefix `VITE_` bắt buộc |
 | Docker Compose | `POSTGRES_*`, `REDIS_PORT` | `.env` ở **root** repo |
 | Backend (còn lại) | xem `.env.example` | `apps/backend/.env` |

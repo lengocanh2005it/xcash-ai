@@ -102,13 +102,26 @@ describe('BankingService', () => {
       grantId: 'grant-1',
       tenantId: 'tenant-1',
     });
-    prisma.subscription.findFirst.mockResolvedValue({
-      id: 'sub-1',
-      tenantId: 'tenant-1',
-      plan: SubscriptionPlan.free,
-      transactionQuota: 100,
-      transactionUsedThisCycle: 100,
-    });
+    prisma.transaction.findUnique.mockResolvedValue(null);
+    prisma.$transaction.mockImplementation(async (callback) =>
+      callback({
+        subscription: {
+          findFirst: jest.fn().mockResolvedValue({
+            id: 'sub-1',
+            tenantId: 'tenant-1',
+            plan: SubscriptionPlan.free,
+            transactionQuota: 100,
+            transactionUsedThisCycle: 100,
+          }),
+        },
+        transaction: {
+          create: jest.fn(),
+        },
+        subscriptionUpdate: {
+          update: jest.fn(),
+        },
+      }),
+    );
 
     await expect(service.handleCasWebhook(payload)).rejects.toBeInstanceOf(ForbiddenException);
   });
@@ -119,25 +132,25 @@ describe('BankingService', () => {
       grantId: 'grant-1',
       tenantId: 'tenant-1',
     });
-    prisma.subscription.findFirst.mockResolvedValue({
-      id: 'sub-1',
-      tenantId: 'tenant-1',
-      plan: SubscriptionPlan.free,
-      transactionQuota: 100,
-      transactionUsedThisCycle: 10,
-    });
     prisma.transaction.findUnique.mockResolvedValue(null);
     prisma.$transaction.mockImplementation(async (callback) =>
       callback({
+        subscription: {
+          findFirst: jest.fn().mockResolvedValue({
+            id: 'sub-1',
+            tenantId: 'tenant-1',
+            plan: SubscriptionPlan.free,
+            transactionQuota: 100,
+            transactionUsedThisCycle: 10,
+          }),
+          update: jest.fn().mockResolvedValue({}),
+        },
         transaction: {
           create: jest.fn().mockResolvedValue({
             id: 'db-txn-1',
             tenantId: 'tenant-1',
             status: TransactionStatus.pending,
           }),
-        },
-        subscription: {
-          update: jest.fn().mockResolvedValue({}),
         },
         usageLog: {
           create: jest.fn(),

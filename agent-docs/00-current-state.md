@@ -272,6 +272,18 @@ Trước đó — **Phase 7 polish + UX hardening** — Settings tab phân trang
 - Backend test: mở rộng `copilot-tool.service.spec.ts` (4 case mới: hợp lệ/viewer/non-review/mã TK sai), mở rộng `classification.service.spec.ts` (`correct()` với/không `source`) ✅
 - PRD: [Issue #24](https://github.com/lengocanh2005it/xcash-ai/issues/24), branch `feat/copilot-correct-action`, PR chưa tạo ✅
 
+**Đã xong (Edge Case Hardening):**
+- Backend: **Helmet middleware** — HTTP security headers (HSTS, X-Frame-Options, CSP) với config linh hoạt theo `NODE_ENV` ✅
+- Backend: **Sentry integration** — `@sentry/node` init trong `main.ts`, env `SENTRY_DSN` ✅
+- Backend: **Swagger disabled in production** — chỉ enable khi `NODE_ENV !== 'production'` ✅
+- Backend: **Cas client retry logic** — `withRetry()` wrapper cho `request()` và `requestWithAccessToken()`, retry 3 lần với exponential backoff (500ms base) cho HTTP 429/502/503/504 ✅
+- Backend: **OpenAI SDK retry** — `maxRetries: 3` khi init OpenAI client ✅
+- Backend: **Webhook DTO validation** — thêm `@IsNotEmpty()` cho `transaction.id` và `transaction.transactionDateTime` trong `CasWebhookDto` ✅
+- Backend: **Optimistic locking cho quota** — di chuyển `subscription.findFirst` + quota check vào `prisma.$transaction` để đảm bảo atomicity, tránh race condition giữa check quota và increment ✅
+- Dependencies: thêm `helmet@^8.2.0`, `@sentry/node@^10.64.0` ✅
+- Tests: cập nhật `banking.service.spec.ts` mock cho transaction context ✅
+- `pnpm verify` pass 11/11 ✅
+
 **Chưa làm (Sprint 4 — còn lại):**
 - Bổ sung env production đầy đủ vào `docker-compose.yml` (OpenAI, Resend, PayOS, v.v.) + deploy lên VPS
 - SSL/HTTPS + nginx config production (domain thật, certbot) — template có tại `deploy/nginx/xcash.conf`

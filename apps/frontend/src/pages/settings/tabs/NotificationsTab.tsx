@@ -57,6 +57,7 @@ export function NotificationsTab() {
       getApiData<{
         emailEnabled: boolean;
         email: string | null;
+        monthlyReportEnabled: boolean;
         slackEnabled: boolean;
         slackWebhookUrl: string | null;
       }>('/settings/notifications'),
@@ -65,6 +66,7 @@ export function NotificationsTab() {
   const [form, setForm] = useState({
     emailEnabled: false,
     email: '',
+    monthlyReportEnabled: false,
     slackEnabled: false,
     slackWebhookUrl: '',
   });
@@ -75,6 +77,7 @@ export function NotificationsTab() {
     setForm({
       emailEnabled: data.emailEnabled,
       email: data.email ?? '',
+      monthlyReportEnabled: data.monthlyReportEnabled,
       slackEnabled: data.slackEnabled,
       slackWebhookUrl: data.slackWebhookUrl ?? '',
     });
@@ -125,6 +128,31 @@ export function NotificationsTab() {
               onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))}
             />
           )}
+        </div>
+
+        <Separator />
+
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="flex items-center gap-1.5 font-medium text-sm">
+                Báo cáo hàng tháng
+                {!canEmail && (
+                  <span className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
+                    <Lock className="size-2.5" /> Gói {PLAN_LABEL[SubscriptionPlan.STARTER]}+
+                  </span>
+                )}
+              </p>
+              <p className="text-xs text-muted-foreground">
+                Nhận email tổng kết tài chính vào ngày 1 hàng tháng
+              </p>
+            </div>
+            <Switch
+              checked={form.monthlyReportEnabled}
+              disabled={!canEmail}
+              onCheckedChange={(v) => setForm((f) => ({ ...f, monthlyReportEnabled: v }))}
+            />
+          </div>
         </div>
 
         <Separator />

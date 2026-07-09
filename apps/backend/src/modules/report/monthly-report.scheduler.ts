@@ -55,7 +55,7 @@ export class MonthlyReportScheduler {
       }
 
       const config = await this.settingsService.getNotifications(tenant.id);
-      if (!config.emailEnabled || !config.email?.trim()) {
+      if (!config.monthlyReportEnabled || !config.email?.trim()) {
         skipped++;
         continue;
       }

@@ -1,7 +1,7 @@
 import { TransactionSource, TransactionStatus } from '@prisma/client';
-import { ReportService } from './report.service';
+import { ReportDataService } from './report-data.service';
 
-describe('ReportService dashboard charts', () => {
+describe('ReportDataService dashboard charts', () => {
   const tenantId = 'tenant-1';
 
   let prisma: {
@@ -10,7 +10,7 @@ describe('ReportService dashboard charts', () => {
     };
     $queryRaw: jest.Mock;
   };
-  let service: ReportService;
+  let service: ReportDataService;
 
   beforeEach(() => {
     prisma = {
@@ -19,7 +19,7 @@ describe('ReportService dashboard charts', () => {
       },
       $queryRaw: jest.fn(),
     };
-    service = new ReportService(prisma as never);
+    service = new ReportDataService(prisma as never);
   });
 
   describe('getDailyTrend', () => {

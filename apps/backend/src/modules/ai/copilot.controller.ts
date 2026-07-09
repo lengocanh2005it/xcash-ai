@@ -15,18 +15,6 @@ import {
 } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import { SkipThrottle, Throttle } from '@nestjs/throttler';
-import { Type } from 'class-transformer';
-import {
-  ArrayMaxSize,
-  IsArray,
-  IsIn,
-  IsOptional,
-  IsString,
-  IsUUID,
-  MaxLength,
-  MinLength,
-  ValidateNested,
-} from 'class-validator';
 import type { Request, Response } from 'express';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { RequiresPlan } from '../../common/decorators/requires-plan.decorator';
@@ -41,37 +29,12 @@ import type { AuthenticatedUser } from '../../common/types/authenticated-user.ty
 import { RedisService } from '../../redis/redis.service';
 import { CopilotConversationService } from './copilot-conversation.service';
 import { CopilotStreamService } from './copilot-stream.service';
+import { CopilotDto } from './dto/copilot.dto';
 import {
   GetConversationQueryDto,
   ListConversationsQueryDto,
   RenameConversationDto,
 } from './dto/copilot-conversation.dto';
-
-class ChatMessage {
-  @IsIn(['user', 'assistant'])
-  role: 'user' | 'assistant';
-
-  @IsString()
-  @MaxLength(2000)
-  content: string;
-}
-
-class CopilotDto {
-  @IsString()
-  @MinLength(1)
-  @MaxLength(2000)
-  message: string;
-
-  @IsArray()
-  @ArrayMaxSize(20)
-  @ValidateNested({ each: true })
-  @Type(() => ChatMessage)
-  history: ChatMessage[];
-
-  @IsOptional()
-  @IsUUID()
-  conversationId?: string;
-}
 
 @ApiTags('ai')
 @Controller('ai')

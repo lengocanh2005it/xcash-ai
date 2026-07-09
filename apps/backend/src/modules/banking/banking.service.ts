@@ -1,4 +1,3 @@
-import { createHmac, timingSafeEqual } from 'node:crypto';
 import { InjectQueue } from '@nestjs/bullmq';
 import {
   BadRequestException,
@@ -6,7 +5,6 @@ import {
   Injectable,
   Logger,
   NotFoundException,
-  UnauthorizedException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Prisma, SubscriptionPlan, TransactionDirection, TransactionSource } from '@prisma/client';
@@ -14,6 +12,7 @@ import type { Queue } from 'bullmq';
 import { isOveragePlan } from '../../common/constants/quota-policy';
 import { QuotaNotificationService } from '../../common/services/quota-notification.service';
 import { createAuditLog } from '../../common/util/audit-log.util';
+import { verifyWebhookSignature } from '../../common/util/webhook-signature.util';
 import { PrismaService } from '../../prisma/prisma.service';
 import { WEBHOOK_QUEUE } from '../../queue/queue.module';
 import { RedisService } from '../../redis/redis.service';
@@ -50,50 +49,20 @@ export class BankingService {
     timestampHeader?: string,
   ): void {
     const skipVerify = this.configService.get<string>('WEBHOOK_SKIP_SIGNATURE_VERIFY') === 'true';
-    if (skipVerify) {
-      this.logger.warn('WEBHOOK_SKIP_SIGNATURE_VERIFY=true — bỏ qua verify chữ ký webhook');
-      return;
-    }
-
-    if (!signatureHeader) {
-      throw new UnauthorizedException('Thiếu chữ ký webhook');
-    }
-
+    const secret = this.configService.get<string>('CAS_SECRET_KEY', '');
     const toleranceSeconds = Number.parseInt(
       this.configService.get<string>('WEBHOOK_TIMESTAMP_TOLERANCE_SECONDS', '300'),
       10,
     );
 
-    if (timestampHeader) {
-      const timestamp = Number.parseInt(timestampHeader, 10);
-      if (!Number.isNaN(timestamp)) {
-        const now = Math.floor(Date.now() / 1000);
-        if (Math.abs(now - timestamp) > toleranceSeconds) {
-          throw new UnauthorizedException('Webhook timestamp không hợp lệ');
-        }
-      }
-    }
-
-    const secret = this.configService.get<string>('CAS_SECRET_KEY', '');
-    if (!secret) {
-      throw new UnauthorizedException('Chưa cấu hình CAS_SECRET_KEY để verify webhook');
-    }
-
-    const expected = createHmac('sha256', secret).update(rawBody).digest('hex');
-    const provided = signatureHeader.replace(/^sha256=/, '');
-
-    try {
-      const expectedBuffer = Buffer.from(expected, 'hex');
-      const providedBuffer = Buffer.from(provided, 'hex');
-      if (
-        expectedBuffer.length !== providedBuffer.length ||
-        !timingSafeEqual(expectedBuffer, providedBuffer)
-      ) {
-        throw new UnauthorizedException('Chữ ký webhook không hợp lệ');
-      }
-    } catch {
-      throw new UnauthorizedException('Chữ ký webhook không hợp lệ');
-    }
+    verifyWebhookSignature({
+      rawBody,
+      signatureHeader,
+      timestampHeader,
+      skipVerify,
+      secret,
+      toleranceSeconds,
+    });
   }
 
   async handleCasWebhook(

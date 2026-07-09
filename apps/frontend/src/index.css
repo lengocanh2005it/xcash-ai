@@ -130,3 +130,13 @@
     font-family: var(--font-sans);
   }
 }
+
+@layer utilities {
+  .scrollbar-hidden {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+  .scrollbar-hidden::-webkit-scrollbar {
+    display: none;
+  }
+}

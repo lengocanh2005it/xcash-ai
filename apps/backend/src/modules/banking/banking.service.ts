@@ -1,4 +1,3 @@
-import { createHmac, timingSafeEqual } from 'node:crypto';
 import { InjectQueue } from '@nestjs/bullmq';
 import {
   BadRequestException,
@@ -6,21 +5,18 @@ import {
   Injectable,
   Logger,
   NotFoundException,
-  UnauthorizedException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Prisma, SubscriptionPlan, TransactionDirection, TransactionSource } from '@prisma/client';
 import type { Queue } from 'bullmq';
-import {
-  isOveragePlan,
-  OVERAGE_PLANS,
-  QUOTA_WARNING_RATIO,
-} from '../../common/constants/quota-policy';
+import { isOveragePlan } from '../../common/constants/quota-policy';
+import { QuotaNotificationService } from '../../common/services/quota-notification.service';
+import { createAuditLog } from '../../common/util/audit-log.util';
+import { verifyWebhookSignature } from '../../common/util/webhook-signature.util';
 import { PrismaService } from '../../prisma/prisma.service';
 import { WEBHOOK_QUEUE } from '../../queue/queue.module';
 import { RedisService } from '../../redis/redis.service';
 import { AI_CLASSIFY_JOB } from '../ai/classification.processor';
-import { NotificationService } from '../notification/notification.service';
 import type { CasWebhookDto } from './dto/banking.dto';
 
 export interface CasWebhookResult {
@@ -43,7 +39,7 @@ export class BankingService {
     private readonly prisma: PrismaService,
     private readonly redisService: RedisService,
     private readonly configService: ConfigService,
-    private readonly notificationService: NotificationService,
+    private readonly quotaNotificationService: QuotaNotificationService,
     @InjectQueue(WEBHOOK_QUEUE) private readonly webhookQueue: Queue,
   ) {}
 
@@ -53,50 +49,20 @@ export class BankingService {
     timestampHeader?: string,
   ): void {
     const skipVerify = this.configService.get<string>('WEBHOOK_SKIP_SIGNATURE_VERIFY') === 'true';
-    if (skipVerify) {
-      this.logger.warn('WEBHOOK_SKIP_SIGNATURE_VERIFY=true — bỏ qua verify chữ ký webhook');
-      return;
-    }
-
-    if (!signatureHeader) {
-      throw new UnauthorizedException('Thiếu chữ ký webhook');
-    }
-
+    const secret = this.configService.get<string>('CAS_SECRET_KEY', '');
     const toleranceSeconds = Number.parseInt(
       this.configService.get<string>('WEBHOOK_TIMESTAMP_TOLERANCE_SECONDS', '300'),
       10,
     );
 
-    if (timestampHeader) {
-      const timestamp = Number.parseInt(timestampHeader, 10);
-      if (!Number.isNaN(timestamp)) {
-        const now = Math.floor(Date.now() / 1000);
-        if (Math.abs(now - timestamp) > toleranceSeconds) {
-          throw new UnauthorizedException('Webhook timestamp không hợp lệ');
-        }
-      }
-    }
-
-    const secret = this.configService.get<string>('CAS_SECRET_KEY', '');
-    if (!secret) {
-      throw new UnauthorizedException('Chưa cấu hình CAS_SECRET_KEY để verify webhook');
-    }
-
-    const expected = createHmac('sha256', secret).update(rawBody).digest('hex');
-    const provided = signatureHeader.replace(/^sha256=/, '');
-
-    try {
-      const expectedBuffer = Buffer.from(expected, 'hex');
-      const providedBuffer = Buffer.from(provided, 'hex');
-      if (
-        expectedBuffer.length !== providedBuffer.length ||
-        !timingSafeEqual(expectedBuffer, providedBuffer)
-      ) {
-        throw new UnauthorizedException('Chữ ký webhook không hợp lệ');
-      }
-    } catch {
-      throw new UnauthorizedException('Chữ ký webhook không hợp lệ');
-    }
+    verifyWebhookSignature({
+      rawBody,
+      signatureHeader,
+      timestampHeader,
+      skipVerify,
+      secret,
+      toleranceSeconds,
+    });
   }
 
   async handleCasWebhook(
@@ -140,20 +106,6 @@ export class BankingService {
       throw new NotFoundException('Không tìm thấy tenant cho grantId này');
     }
 
-    const subscription = await this.prisma.subscription.findFirst({
-      where: { tenantId: grant.tenantId, status: 'active' },
-    });
-
-    if (!subscription) {
-      throw new NotFoundException('Không tìm thấy subscription active cho tenant');
-    }
-
-    const isOverQuota = subscription.transactionUsedThisCycle >= subscription.transactionQuota;
-
-    if (isOverQuota && subscription.plan === SubscriptionPlan.free) {
-      throw new ForbiddenException('Đã hết quota tháng này. Vui lòng nâng cấp gói.');
-    }
-
     const casDirection = txn.amount >= 0 ? 'in' : 'out';
 
     const existingTransaction = await this.prisma.transaction.findUnique({
@@ -170,6 +122,20 @@ export class BankingService {
     }
 
     const saved = await this.prisma.$transaction(async (tx) => {
+      const subscription = await tx.subscription.findFirst({
+        where: { tenantId: grant.tenantId, status: 'active' },
+      });
+
+      if (!subscription) {
+        throw new NotFoundException('Không tìm thấy subscription active cho tenant');
+      }
+
+      const isOverQuota = subscription.transactionUsedThisCycle >= subscription.transactionQuota;
+
+      if (isOverQuota && subscription.plan === SubscriptionPlan.free) {
+        throw new ForbiddenException('Đã hết quota tháng này. Vui lòng nâng cấp gói.');
+      }
+
       const transaction = await tx.transaction.create({
         data: {
           tenantId: grant.tenantId,
@@ -204,75 +170,47 @@ export class BankingService {
         });
       }
 
-      await tx.auditLog.create({
-        data: {
-          tenantId: grant.tenantId,
-          entityType: 'transaction',
-          entityId: transaction.id,
-          action: 'webhook_received',
-          actor: 'system',
-          afterState: {
-            transactionId,
-            grantId: payload.grantId,
-            amount: txn.amount,
-          },
+      await createAuditLog(tx, {
+        tenantId: grant.tenantId,
+        entityType: 'transaction',
+        entityId: transaction.id,
+        action: 'webhook_received',
+        actor: 'system',
+        afterState: {
+          transactionId,
+          grantId: payload.grantId,
+          amount: txn.amount,
         },
       });
 
-      return transaction;
+      return { transaction, subscription };
     });
 
-    await this.webhookQueue.add(AI_CLASSIFY_JOB, { transactionDbId: saved.id });
+    const { transaction: savedTx, subscription: currentSubscription } = saved;
 
-    void this.notifyQuotaUsage(subscription, grant.tenantId, isOverQuota).catch((err: unknown) =>
-      this.logger.warn(`Quota notification failed for tenant ${grant.tenantId}`, err),
-    );
+    await this.webhookQueue.add(AI_CLASSIFY_JOB, { transactionDbId: savedTx.id });
+
+    void this.quotaNotificationService
+      .checkAndNotify({
+        tenantId: grant.tenantId,
+        oldUsed: currentSubscription.transactionUsedThisCycle - 1,
+        quota: currentSubscription.transactionQuota,
+        plan: currentSubscription.plan,
+        overagePricePerTransaction: currentSubscription.overagePricePerTransaction
+          ? Number(currentSubscription.overagePricePerTransaction)
+          : null,
+        cycleStart: currentSubscription.currentCycleStart,
+        added: 1,
+      })
+      .catch((err: unknown) =>
+        this.logger.warn(`Quota notification failed for tenant ${grant.tenantId}`, err),
+      );
 
     return {
       duplicate: false,
       transactionId,
-      tenantId: saved.tenantId,
-      status: saved.status,
+      tenantId: savedTx.tenantId,
+      status: savedTx.status,
     };
-  }
-
-  private async notifyQuotaUsage(
-    subscription: {
-      transactionUsedThisCycle: number;
-      transactionQuota: number;
-      currentCycleStart: Date;
-      plan: SubscriptionPlan;
-      overagePricePerTransaction: { toNumber?: () => number } | number | null;
-    },
-    tenantId: string,
-    isOverQuota: boolean,
-  ): Promise<void> {
-    const oldUsed = subscription.transactionUsedThisCycle;
-    const quota = subscription.transactionQuota;
-    const newUsed = oldUsed + 1;
-    const cycleStart = subscription.currentCycleStart;
-    const warningThreshold = Math.ceil(quota * QUOTA_WARNING_RATIO);
-
-    if (oldUsed < warningThreshold && newUsed >= warningThreshold) {
-      await this.notificationService.createQuotaWarning(tenantId, newUsed, quota, cycleStart);
-    }
-
-    if (oldUsed < quota && newUsed >= quota) {
-      await this.notificationService.createQuotaExceeded(tenantId, quota, cycleStart);
-    }
-
-    if (isOverQuota && isOveragePlan(subscription.plan)) {
-      const rawPrice = subscription.overagePricePerTransaction;
-      const price =
-        rawPrice === null || rawPrice === undefined
-          ? 0
-          : typeof rawPrice === 'number'
-            ? rawPrice
-            : (rawPrice.toNumber?.() ?? Number(rawPrice));
-
-      if (price > 0) {
-        await this.notificationService.createOverageStarted(tenantId, price, cycleStart);
-      }
-    }
   }
 }

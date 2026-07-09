@@ -1,15 +1,14 @@
 import type * as XLSX from 'xlsx';
-import { ImportService } from './import.service';
+import { ImportParserService } from './import-parser.service';
 
-// Minimal stub — no DI needed for pure methods
-function makeService(): ImportService {
-  return new ImportService(null as never, null as never, null as never);
+function makeParser(): ImportParserService {
+  return new ImportParserService();
 }
 
-describe('ImportService — normalizeAmount', () => {
-  let svc: ImportService;
+describe('ImportParserService — normalizeAmount', () => {
+  let svc: ImportParserService;
   beforeEach(() => {
-    svc = makeService();
+    svc = makeParser();
   });
 
   it('parses plain integer', () => expect(svc.normalizeAmount(2500000)).toBe(2500000));
@@ -22,10 +21,10 @@ describe('ImportService — normalizeAmount', () => {
   it('returns null for null', () => expect(svc.normalizeAmount(null)).toBeNull());
 });
 
-describe('ImportService — parseDate', () => {
-  let svc: ImportService;
+describe('ImportParserService — parseDate', () => {
+  let svc: ImportParserService;
   beforeEach(() => {
-    svc = makeService();
+    svc = makeParser();
   });
 
   it('parses dd/MM/yyyy', () => {
@@ -74,10 +73,10 @@ describe('ImportService — parseDate', () => {
   it('returns null for empty', () => expect(svc.parseDate('')).toBeNull());
 });
 
-describe('ImportService — generateTransactionId', () => {
-  let svc: ImportService;
+describe('ImportParserService — generateTransactionId', () => {
+  let svc: ImportParserService;
   beforeEach(() => {
-    svc = makeService();
+    svc = makeParser();
   });
 
   const row = {
@@ -113,22 +112,17 @@ describe('ImportService — generateTransactionId', () => {
   });
 });
 
-describe('ImportService — parseRows validation', () => {
-  let svc: ImportService;
+describe('ImportParserService — parseRows validation', () => {
+  let svc: ImportParserService;
   beforeEach(() => {
-    svc = makeService();
+    svc = makeParser();
   });
 
-  // We can't easily call parseRows without a real buffer, but we test the helpers.
-  // Full parseRows integration is covered by E2E. Here we test edge rules:
-
   it('normalizeAmount rejects zero', () => {
-    expect(svc.normalizeAmount(0)).toBe(0); // normalize returns 0, caller checks > 0
+    expect(svc.normalizeAmount(0)).toBe(0);
   });
 
   it('direction chi → out, thu → in', () => {
-    // tested indirectly via parseRows — direction logic is inline
-    // Just ensure the service constructs without throwing
     expect(svc).toBeDefined();
   });
 });

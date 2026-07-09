@@ -1,7 +1,7 @@
 import path from 'node:path';
 import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
-import { defineConfig } from 'vite';
+import { defineConfig } from 'vitest/config';
 
 // https://vite.dev/config/
 export default defineConfig({
@@ -11,6 +11,16 @@ export default defineConfig({
       '@': path.resolve(__dirname, './src'),
       // Vite cần ESM — bundle trực tiếp từ source TS (dist/ là CommonJS cho NestJS)
       '@xcash/shared-types': path.resolve(__dirname, '../../packages/shared-types/src/index.ts'),
+    },
+  },
+  test: {
+    globals: true,
+    environment: 'jsdom',
+    setupFiles: './src/test/setup.ts',
+    css: true,
+    coverage: {
+      provider: 'v8',
+      reporter: ['text', 'html'],
     },
   },
   build: {

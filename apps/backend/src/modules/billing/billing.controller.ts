@@ -7,6 +7,7 @@ import { Roles } from '../../common/decorators/roles.decorator';
 import { JwtAuthGuard, RolesGuard } from '../../common/guards/auth.guards';
 import type { AuthenticatedUser } from '../../common/types/authenticated-user.type';
 import { BillingService } from './billing.service';
+import { BillingOverageService } from './billing-overage.service';
 import { CycleTransactionsQueryDto } from './dto/cycle-transactions-query.dto';
 import { PaymentHistoryDto } from './dto/payment-history.dto';
 import { UpgradeBillingDto } from './dto/upgrade-billing.dto';
@@ -17,6 +18,7 @@ import { UpgradeBillingDto } from './dto/upgrade-billing.dto';
 export class BillingController {
   constructor(
     private readonly service: BillingService,
+    private readonly overageService: BillingOverageService,
     private readonly config: ConfigService,
   ) {}
 
@@ -71,13 +73,13 @@ export class BillingController {
   @Get('overage-orders')
   @Roles(Role.ADMIN)
   getOverageOrders(@CurrentUser() user: AuthenticatedUser) {
-    return this.service.getOverageOrders(user.tenantId!);
+    return this.overageService.getOverageOrders(user.tenantId!);
   }
 
   @Post('overage-order')
   @Roles(Role.ADMIN)
   createOverageOrder(@CurrentUser() user: AuthenticatedUser) {
-    return this.service.createOverageOrder(user.tenantId!);
+    return this.overageService.createOverageOrder(user.tenantId!);
   }
 
   @Post('overage-order/:orderCode/mock-confirm')

@@ -1,4 +1,5 @@
 import { useId } from 'react';
+import { SidebarCollapseFade } from '@/components/layout/SidebarCollapseFade';
 import { useTheme } from '@/contexts/theme-context';
 import { cn } from '@/lib/utils';
 
@@ -93,13 +94,17 @@ interface LogoProps {
 
 export function Logo({ collapsed = false, markSize = 36, className }: LogoProps) {
   return (
-    <div className={cn('flex min-w-0 items-center gap-3', collapsed && 'flex-col', className)}>
+    <div
+      className={cn('flex min-w-0 items-center gap-3', collapsed && 'justify-center', className)}
+    >
       <LogoMark size={markSize} />
       {!collapsed ? (
-        <div className="min-w-0">
-          <p className="truncate text-sm font-semibold text-foreground">X-Cash AI</p>
-          <p className="truncate text-xs text-muted-foreground">Định khoản tự động</p>
-        </div>
+        <SidebarCollapseFade collapsed={false} block className="min-w-0">
+          <div className="min-w-0">
+            <p className="truncate text-sm font-semibold text-foreground">X-Cash AI</p>
+            <p className="truncate text-xs text-muted-foreground">Định khoản tự động</p>
+          </div>
+        </SidebarCollapseFade>
       ) : null}
     </div>
   );

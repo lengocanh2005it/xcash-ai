@@ -13,6 +13,8 @@ import type { UpdateNotificationsDto, UpdateThresholdDto } from './dto/settings.
 export interface NotificationConfig {
   emailEnabled: boolean;
   email: string | null;
+  monthlyReportEnabled: boolean;
+  monthlyReportEmail: string | null;
   slackEnabled: boolean;
   slackWebhookUrl: string | null;
 }
@@ -45,7 +47,14 @@ export class SettingsService {
   async getNotifications(tenantId: string): Promise<NotificationConfig> {
     const raw = await this.redis.client.get(`settings:notifications:${tenantId}`);
     if (!raw) {
-      return { emailEnabled: false, email: null, slackEnabled: false, slackWebhookUrl: null };
+      return {
+        emailEnabled: false,
+        email: null,
+        monthlyReportEnabled: false,
+        monthlyReportEmail: null,
+        slackEnabled: false,
+        slackWebhookUrl: null,
+      };
     }
     return JSON.parse(raw) as NotificationConfig;
   }
@@ -55,7 +64,7 @@ export class SettingsService {
     dto: UpdateNotificationsDto,
   ): Promise<NotificationConfig> {
     // Thông báo Email cần gói Starter+, Slack cần gói Pro+
-    if (dto.emailEnabled || dto.slackEnabled) {
+    if (dto.emailEnabled || dto.slackEnabled || dto.monthlyReportEnabled) {
       const subscription = await this.prisma.subscription.findFirst({
         where: { tenantId, status: 'active' },
         orderBy: { startedAt: 'desc' },
@@ -65,6 +74,9 @@ export class SettingsService {
       if (dto.emailEnabled && !meetsPlan(plan, 'starter')) {
         throw new ForbiddenException('Thông báo Email yêu cầu gói Starter trở lên.');
       }
+      if (dto.monthlyReportEnabled && !meetsPlan(plan, 'starter')) {
+        throw new ForbiddenException('Email báo cáo hàng tháng yêu cầu gói Starter trở lên.');
+      }
       if (dto.slackEnabled && !meetsPlan(plan, 'pro')) {
         throw new ForbiddenException('Thông báo Slack yêu cầu gói Pro trở lên.');
       }
@@ -73,6 +85,8 @@ export class SettingsService {
     const config: NotificationConfig = {
       emailEnabled: dto.emailEnabled,
       email: dto.email ?? null,
+      monthlyReportEnabled: dto.monthlyReportEnabled,
+      monthlyReportEmail: dto.monthlyReportEmail ?? null,
       slackEnabled: dto.slackEnabled,
       slackWebhookUrl: dto.slackWebhookUrl ?? null,
     };

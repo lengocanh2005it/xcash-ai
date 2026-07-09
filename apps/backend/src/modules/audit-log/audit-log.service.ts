@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import type { AuditLog, Prisma } from '@prisma/client';
+import { paginateParams, paginateResult } from '../../common/util/pagination.util';
 import { PrismaService } from '../../prisma/prisma.service';
 import {
   getAuditActionLabel,
@@ -40,13 +41,14 @@ export class AuditLogService {
   async listForTenant(tenantId: string, query: ListAuditLogsQueryDto): Promise<PaginatedAuditLogs> {
     const page = query.page ?? 1;
     const limit = Math.min(query.limit ?? 20, 100);
+    const { skip } = paginateParams(page, limit);
     const where = await this.buildWhere({ tenantId, query });
 
     const [rows, total] = await Promise.all([
       this.prisma.auditLog.findMany({
         where,
         orderBy: { createdAt: 'desc' },
-        skip: (page - 1) * limit,
+        skip,
         take: limit,
       }),
       this.prisma.auditLog.count({ where }),
@@ -55,24 +57,22 @@ export class AuditLogService {
     const items = await this.toViewItems(rows);
 
     return {
+      ...paginateResult(items, total, page, limit),
       items,
-      page,
-      limit,
-      total,
-      totalPages: Math.max(1, Math.ceil(total / limit)),
-    };
+    } as PaginatedAuditLogs;
   }
 
   async listForPartner(query: ListAuditLogsQueryDto): Promise<PaginatedAuditLogs> {
     const page = query.page ?? 1;
     const limit = Math.min(query.limit ?? 20, 100);
+    const { skip } = paginateParams(page, limit);
     const where = await this.buildWhere({ tenantId: query.tenantId, query, partnerScope: true });
 
     const [rows, total] = await Promise.all([
       this.prisma.auditLog.findMany({
         where,
         orderBy: { createdAt: 'desc' },
-        skip: (page - 1) * limit,
+        skip,
         take: limit,
       }),
       this.prisma.auditLog.count({ where }),
@@ -81,12 +81,9 @@ export class AuditLogService {
     const items = await this.toViewItems(rows, { includeBusinessName: true });
 
     return {
+      ...paginateResult(items, total, page, limit),
       items,
-      page,
-      limit,
-      total,
-      totalPages: Math.max(1, Math.ceil(total / limit)),
-    };
+    } as PaginatedAuditLogs;
   }
 
   private async buildWhere(params: {

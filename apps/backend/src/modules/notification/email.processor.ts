@@ -4,6 +4,7 @@ import type { Job } from 'bullmq';
 import {
   EMAIL_CHANGE_PASSWORD_OTP_JOB,
   EMAIL_INVITE_JOB,
+  EMAIL_MONTHLY_REPORT_JOB,
   EMAIL_OTP_JOB,
   EMAIL_QUEUE,
   EMAIL_RESET_OTP_JOB,
@@ -11,6 +12,7 @@ import {
   type EmailChangePasswordOtpJobData,
   type EmailInviteJobData,
   type EmailJobData,
+  type EmailMonthlyReportJobData,
   type EmailOtpJobData,
   type EmailResetOtpJobData,
 } from './email.constants';
@@ -31,6 +33,7 @@ export class EmailProcessor extends WorkerHost {
       | EmailResetOtpJobData
       | EmailChangePasswordOtpJobData
       | EmailInviteJobData
+      | EmailMonthlyReportJobData
     >,
   ): Promise<void> {
     try {
@@ -58,6 +61,11 @@ export class EmailProcessor extends WorkerHost {
 
       if (job.name === EMAIL_INVITE_JOB) {
         await this.resendEmailService.sendTeamInvite(job.data as EmailInviteJobData);
+        return;
+      }
+
+      if (job.name === EMAIL_MONTHLY_REPORT_JOB) {
+        await this.resendEmailService.sendMonthlyReport(job.data as EmailMonthlyReportJobData);
         return;
       }
     } catch (error) {

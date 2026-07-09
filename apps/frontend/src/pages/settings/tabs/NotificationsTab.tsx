@@ -57,6 +57,8 @@ export function NotificationsTab() {
       getApiData<{
         emailEnabled: boolean;
         email: string | null;
+        monthlyReportEnabled: boolean;
+        monthlyReportEmail: string | null;
         slackEnabled: boolean;
         slackWebhookUrl: string | null;
       }>('/settings/notifications'),
@@ -65,6 +67,8 @@ export function NotificationsTab() {
   const [form, setForm] = useState({
     emailEnabled: false,
     email: '',
+    monthlyReportEnabled: false,
+    monthlyReportEmail: '',
     slackEnabled: false,
     slackWebhookUrl: '',
   });
@@ -75,6 +79,8 @@ export function NotificationsTab() {
     setForm({
       emailEnabled: data.emailEnabled,
       email: data.email ?? '',
+      monthlyReportEnabled: data.monthlyReportEnabled,
+      monthlyReportEmail: data.monthlyReportEmail ?? '',
       slackEnabled: data.slackEnabled,
       slackWebhookUrl: data.slackWebhookUrl ?? '',
     });
@@ -96,7 +102,7 @@ export function NotificationsTab() {
     <Card>
       <CardHeader>
         <CardTitle className="text-base">Cấu hình thông báo</CardTitle>
-        <CardDescription>Nhận thông báo khi có giao dịch mới cần xét duyệt.</CardDescription>
+        <CardDescription>Cấu hình kênh và tần suất nhận thông báo.</CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
         <div className="space-y-4">
@@ -110,7 +116,7 @@ export function NotificationsTab() {
                   </span>
                 )}
               </p>
-              <p className="text-xs text-muted-foreground">Nhận thông báo qua email</p>
+              <p className="text-xs text-muted-foreground">Nhận email khi có giao dịch mới</p>
             </div>
             <Switch
               checked={form.emailEnabled}
@@ -123,6 +129,38 @@ export function NotificationsTab() {
               placeholder="email@company.com"
               value={form.email}
               onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))}
+            />
+          )}
+        </div>
+
+        <Separator />
+
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="flex items-center gap-1.5 font-medium text-sm">
+                Báo cáo hàng tháng
+                {!canEmail && (
+                  <span className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
+                    <Lock className="size-2.5" /> Gói {PLAN_LABEL[SubscriptionPlan.STARTER]}+
+                  </span>
+                )}
+              </p>
+              <p className="text-xs text-muted-foreground">
+                Nhận email tổng kết tài chính vào ngày 1 hàng tháng
+              </p>
+            </div>
+            <Switch
+              checked={form.monthlyReportEnabled}
+              disabled={!canEmail}
+              onCheckedChange={(v) => setForm((f) => ({ ...f, monthlyReportEnabled: v }))}
+            />
+          </div>
+          {canEmail && form.monthlyReportEnabled && (
+            <Input
+              placeholder="email@company.com"
+              value={form.monthlyReportEmail}
+              onChange={(e) => setForm((f) => ({ ...f, monthlyReportEmail: e.target.value }))}
             />
           )}
         </div>

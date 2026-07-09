@@ -2,6 +2,7 @@ import { InjectQueue } from '@nestjs/bullmq';
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma, TransactionSource, TransactionStatus } from '@prisma/client';
 import type { Queue } from 'bullmq';
+import { paginateParams, paginateResult } from '../../common/util/pagination.util';
 import { PrismaService } from '../../prisma/prisma.service';
 import { WEBHOOK_QUEUE } from '../../queue/queue.module';
 import { AI_CLASSIFY_JOB } from '../ai/classification.processor';
@@ -17,7 +18,7 @@ export class TransactionService {
   async findAll(tenantId: string, query: ListTransactionsQueryDto) {
     const page = query.page ?? 1;
     const limit = query.limit ?? 20;
-    const skip = (page - 1) * limit;
+    const { skip } = paginateParams(page, limit);
 
     const search = query.search?.trim();
 
@@ -80,7 +81,7 @@ export class TransactionService {
       this.prisma.transaction.count({ where }),
     ]);
 
-    return { items, page, limit, total };
+    return paginateResult(items, total, page, limit);
   }
 
   async findOne(tenantId: string, id: string) {

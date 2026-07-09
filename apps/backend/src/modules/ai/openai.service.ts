@@ -39,7 +39,7 @@ export class OpenAiService {
       'text-embedding-3-small',
     );
     this.chatModel = this.configService.get<string>('OPENAI_CHAT_MODEL', 'gpt-4o-mini');
-    this.client = apiKey ? new OpenAI({ apiKey }) : null;
+    this.client = apiKey ? new OpenAI({ apiKey, maxRetries: 3 }) : null;
 
     if (!this.client) {
       this.logger.warn(

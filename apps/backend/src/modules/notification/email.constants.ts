@@ -5,6 +5,7 @@ export const EMAIL_OTP_JOB = 'send-verification-otp';
 export const EMAIL_RESET_OTP_JOB = 'send-password-reset-otp';
 export const EMAIL_CHANGE_PASSWORD_OTP_JOB = 'send-change-password-otp';
 export const EMAIL_INVITE_JOB = 'send-team-invite';
+export const EMAIL_MONTHLY_REPORT_JOB = 'send-monthly-report';
 
 export interface EmailJobData {
   tenantId: string;
@@ -40,6 +41,30 @@ export interface EmailInviteJobData {
   businessName: string;
   roleLabel: string;
   activationUrl: string;
+}
+
+export interface EmailMonthlyReportJobData {
+  tenantId: string;
+  to: string;
+  businessName: string;
+  year: number;
+  month: number;
+  summary: {
+    totalRevenue: number;
+    totalExpense: number;
+    net: number;
+    classifiedCount: number;
+    reviewCount: number;
+    totalCount: number;
+    aiAccuracy: number;
+  };
+  comparison?: {
+    revenueChange: number;
+    expenseChange: number;
+    netChange: number;
+  };
+  topExpense?: Array<{ accountName: string; total: number }>;
+  topRevenue?: Array<{ accountName: string; total: number }>;
 }
 
 export const EMAIL_JOB_OPTIONS = {

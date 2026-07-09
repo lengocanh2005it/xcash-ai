@@ -1,5 +1,6 @@
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { NotificationType, Prisma } from '@prisma/client';
+import { paginateParams } from '../../common/util/pagination.util';
 import { PrismaService } from '../../prisma/prisma.service';
 import { NotificationDeliveryService } from './notification-delivery.service';
 import { NotificationStreamService } from './notification-stream.service';
@@ -69,11 +70,12 @@ export class NotificationService {
       ...this.userScope(userId),
     };
 
+    const { skip } = paginateParams(page, limit);
     const [items, total, unreadCount] = await Promise.all([
       this.prisma.notification.findMany({
         where,
         orderBy: { createdAt: 'desc' },
-        skip: (page - 1) * limit,
+        skip,
         take: limit,
       }),
       this.prisma.notification.count({ where }),

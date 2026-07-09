@@ -159,7 +159,7 @@ export default function SettingsPage() {
           value={resolvedTab}
           onValueChange={(value) => setSearchParams({ tab: value }, { replace: true })}
         >
-          <TabsList className="w-full justify-start gap-1 overflow-x-auto">
+          <TabsList className="w-full justify-start gap-1 overflow-x-auto rounded-lg bg-muted p-1">
             {tabs.map((tab) => {
               const Icon = tab.icon;
               const locked = isSettingsTabLocked(tab, userRole);

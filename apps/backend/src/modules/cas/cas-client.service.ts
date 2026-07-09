@@ -1,6 +1,44 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 
+const CAS_RETRYABLE_STATUS_CODES = new Set([429, 502, 503, 504]);
+const CAS_MAX_RETRIES = 3;
+const CAS_RETRY_BASE_DELAY_MS = 500;
+
+async function withRetry<T>(
+  fn: () => Promise<T>,
+  maxRetries: number,
+  baseDelayMs: number,
+  logger: Logger,
+  context: string,
+): Promise<T> {
+  let lastError: Error | undefined;
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      return await fn();
+    } catch (error) {
+      lastError = error instanceof Error ? error : new Error(String(error));
+      const isRetryable =
+        error instanceof CasHttpError && CAS_RETRYABLE_STATUS_CODES.has(error.status);
+      if (!isRetryable || attempt === maxRetries) throw lastError;
+      const delay = baseDelayMs * 2 ** attempt;
+      logger.warn(`${context} attempt ${attempt + 1} failed, retrying in ${delay}ms...`);
+      await new Promise((resolve) => setTimeout(resolve, delay));
+    }
+  }
+  throw lastError;
+}
+
+class CasHttpError extends Error {
+  constructor(
+    message: string,
+    public readonly status: number,
+  ) {
+    super(message);
+    this.name = 'CasHttpError';
+  }
+}
+
 export const CAS_DEFAULT_GRANT_SCOPES = 'identity,transaction';
 
 export interface CasGrantTokenRequest {
@@ -294,34 +332,42 @@ export class CasClientService {
       throw new Error('Thiếu CAS_CLIENT_ID hoặc CAS_SECRET_KEY trong biến môi trường');
     }
 
-    const response = await fetch(`${this.baseUrl}${path}`, {
-      ...init,
-      headers: {
-        'Content-Type': 'application/json',
-        'x-client-id': this.clientId,
-        'x-secret-key': this.secretKey,
-        'X-BankHub-Api-Version': this.apiVersion,
-        ...(init.headers ?? {}),
+    return withRetry(
+      async () => {
+        const response = await fetch(`${this.baseUrl}${path}`, {
+          ...init,
+          headers: {
+            'Content-Type': 'application/json',
+            'x-client-id': this.clientId,
+            'x-secret-key': this.secretKey,
+            'X-BankHub-Api-Version': this.apiVersion,
+            ...(init.headers ?? {}),
+          },
+        });
+
+        const text = await response.text();
+        let data: unknown = {};
+        if (text) {
+          try {
+            data = JSON.parse(text);
+          } catch {
+            data = { raw: text };
+          }
+        }
+
+        if (!response.ok) {
+          const errorMessage = extractCasErrorMessage(data, response.status);
+          this.logger.warn(`Cas ${init.method ?? 'GET'} ${path} failed: ${errorMessage}`);
+          throw new CasHttpError(errorMessage, response.status);
+        }
+
+        return data as T;
       },
-    });
-
-    const text = await response.text();
-    let data: unknown = {};
-    if (text) {
-      try {
-        data = JSON.parse(text);
-      } catch {
-        data = { raw: text };
-      }
-    }
-
-    if (!response.ok) {
-      const errorMessage = extractCasErrorMessage(data, response.status);
-      this.logger.warn(`Cas ${init.method ?? 'GET'} ${path} failed: ${errorMessage}`);
-      throw new Error(errorMessage);
-    }
-
-    return data as T;
+      CAS_MAX_RETRIES,
+      CAS_RETRY_BASE_DELAY_MS,
+      this.logger,
+      `Cas ${init.method ?? 'GET'} ${path}`,
+    );
   }
 
   private async requestWithAccessToken<T>(
@@ -333,35 +379,42 @@ export class CasClientService {
       throw new Error('Thiếu CAS_CLIENT_ID hoặc CAS_SECRET_KEY trong biến môi trường');
     }
 
-    const response = await fetch(`${this.baseUrl}${path}`, {
-      ...init,
-      headers: {
-        'x-client-id': this.clientId,
-        'x-secret-key': this.secretKey,
-        'X-BankHub-Api-Version': this.apiVersion,
-        // Cas quickstart: Authorization header is the raw access token (no Bearer prefix).
-        Authorization: accessToken,
-        ...(init.headers ?? {}),
+    return withRetry(
+      async () => {
+        const response = await fetch(`${this.baseUrl}${path}`, {
+          ...init,
+          headers: {
+            'x-client-id': this.clientId,
+            'x-secret-key': this.secretKey,
+            'X-BankHub-Api-Version': this.apiVersion,
+            Authorization: accessToken,
+            ...(init.headers ?? {}),
+          },
+        });
+
+        const text = await response.text();
+        let data: unknown = {};
+        if (text) {
+          try {
+            data = JSON.parse(text);
+          } catch {
+            data = { raw: text };
+          }
+        }
+
+        if (!response.ok) {
+          const errorMessage = extractCasErrorMessage(data, response.status);
+          this.logger.warn(`Cas ${init.method ?? 'GET'} ${path} failed: ${errorMessage}`);
+          throw new CasHttpError(errorMessage, response.status);
+        }
+
+        const payload = unwrapCasPayload(data);
+        return payload as T;
       },
-    });
-
-    const text = await response.text();
-    let data: unknown = {};
-    if (text) {
-      try {
-        data = JSON.parse(text);
-      } catch {
-        data = { raw: text };
-      }
-    }
-
-    if (!response.ok) {
-      const errorMessage = extractCasErrorMessage(data, response.status);
-      this.logger.warn(`Cas ${init.method ?? 'GET'} ${path} failed: ${errorMessage}`);
-      throw new Error(errorMessage);
-    }
-
-    const payload = unwrapCasPayload(data);
-    return payload as T;
+      CAS_MAX_RETRIES,
+      CAS_RETRY_BASE_DELAY_MS,
+      this.logger,
+      `Cas ${init.method ?? 'GET'} ${path}`,
+    );
   }
 }

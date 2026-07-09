@@ -17,7 +17,7 @@ export function TenantLayout() {
       <DesktopSidebar collapsed={sidebarCollapsed} onToggleCollapsed={toggleSidebarCollapsed} />
       <MobileSidebar open={mobileNavOpen} onClose={() => setMobileNavOpen(false)} />
 
-      <div className="flex min-w-0 flex-1 flex-col">
+      <div className="flex min-w-0 flex-1 flex-col [contain:layout]">
         <div className="sticky top-0 z-30 flex items-center gap-2 border-b border-border bg-background px-4 py-3 lg:hidden">
           <Button
             type="button"

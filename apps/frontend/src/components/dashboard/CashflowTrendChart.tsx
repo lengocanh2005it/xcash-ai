@@ -1,14 +1,5 @@
-import {
-  Bar,
-  CartesianGrid,
-  ComposedChart,
-  Legend,
-  Line,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from 'recharts';
+import { Bar, CartesianGrid, ComposedChart, Legend, Line, Tooltip, XAxis, YAxis } from 'recharts';
+import { DebouncedResponsiveContainer } from '@/components/shared/DebouncedResponsiveContainer';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { type DailyTransactionTrendPoint, formatCurrency } from '@/lib/dashboard-transactions';
@@ -71,7 +62,7 @@ export function CashflowTrendChart({ data, isLoading }: CashflowTrendChartProps)
             Chưa có dữ liệu thu chi. Biểu đồ sẽ hiện sau khi có giao dịch đã định khoản.
           </div>
         ) : (
-          <ResponsiveContainer width="100%" height={300}>
+          <DebouncedResponsiveContainer height={300}>
             <ComposedChart data={data} margin={{ top: 8, right: 12, left: 0, bottom: 0 }}>
               <CartesianGrid stroke="var(--border)" strokeDasharray="4 4" vertical={false} />
               <XAxis
@@ -129,7 +120,7 @@ export function CashflowTrendChart({ data, isLoading }: CashflowTrendChartProps)
                 activeDot={{ r: 5 }}
               />
             </ComposedChart>
-          </ResponsiveContainer>
+          </DebouncedResponsiveContainer>
         )}
       </CardContent>
     </Card>

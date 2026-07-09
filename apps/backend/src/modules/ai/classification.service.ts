@@ -1,10 +1,12 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { ClassificationType, Prisma, TransactionStatus } from '@prisma/client';
+import { createAuditLog } from '../../common/util/audit-log.util';
 import { PrismaService } from '../../prisma/prisma.service';
 import { NotificationService } from '../notification/notification.service';
 import { EmbeddingService } from './embedding.service';
 import { OpenAiService } from './openai.service';
+import { ruleBasedClassify } from './rule-based-classification.util';
 import { preprocessTransactionContent } from './utils/text-preprocessing';
 
 function resolveDirection(transaction: {
@@ -84,7 +86,7 @@ export class ClassificationService {
           confidenceScore: aiResult.confidence,
           reason: aiResult.reason,
         }
-      : this.ruleBased(content, direction);
+      : ruleBasedClassify(content, direction);
 
     const autoClassified = confidenceScore >= threshold;
     const status = autoClassified ? TransactionStatus.classified : TransactionStatus.review;
@@ -110,15 +112,13 @@ export class ClassificationService {
         data: { status },
       });
 
-      await tx.auditLog.create({
-        data: {
-          tenantId: transaction.tenantId,
-          entityType: 'transaction_classification',
-          entityId: created.id,
-          action: autoClassified ? 'ai_auto_classify' : 'ai_queued_review',
-          actor: 'ai',
-          afterState: { debitAccount, creditAccount, confidenceScore, reason },
-        },
+      await createAuditLog(tx, {
+        tenantId: transaction.tenantId,
+        entityType: 'transaction_classification',
+        entityId: created.id,
+        action: autoClassified ? 'ai_auto_classify' : 'ai_queued_review',
+        actor: 'ai',
+        afterState: { debitAccount, creditAccount, confidenceScore, reason },
       });
 
       return created;
@@ -171,81 +171,5 @@ export class ClassificationService {
 
   private getDefaultThreshold(): number {
     return Number.parseInt(this.configService.get<string>('AI_CLASSIFICATION_THRESHOLD', '85'), 10);
-  }
-
-  private ruleBased(
-    content: string,
-    direction: 'in' | 'out',
-  ): { debitAccount: string; creditAccount: string; confidenceScore: number; reason: string } {
-    const upper = content.toUpperCase();
-
-    if (direction === 'in') {
-      if (
-        upper.includes('TIEN HANG') ||
-        upper.includes('THANH TOAN') ||
-        upper.includes('TT HANG')
-      ) {
-        return {
-          debitAccount: '112',
-          creditAccount: '511',
-          confidenceScore: 55,
-          reason: 'Tiền hàng vào — gợi ý doanh thu bán hàng',
-        };
-      }
-      if (upper.includes('LAI') || upper.includes('INTEREST')) {
-        return {
-          debitAccount: '112',
-          creditAccount: '515',
-          confidenceScore: 60,
-          reason: 'Lãi tiền gửi — gợi ý doanh thu tài chính',
-        };
-      }
-      return {
-        debitAccount: '112',
-        creditAccount: '131',
-        confidenceScore: 30,
-        reason: 'Tiền vào chưa xác định — cần xem xét',
-      };
-    }
-
-    if (upper.includes('LUONG') || upper.includes('SALARY') || upper.includes('TRA LUONG')) {
-      return {
-        debitAccount: '334',
-        creditAccount: '112',
-        confidenceScore: 65,
-        reason: 'Chi trả lương nhân viên',
-      };
-    }
-    if (upper.includes('HOA DON') || upper.includes('DIEN') || upper.includes('NUOC')) {
-      return {
-        debitAccount: '627',
-        creditAccount: '112',
-        confidenceScore: 55,
-        reason: 'Chi phí điện nước — gợi ý chi phí sản xuất chung',
-      };
-    }
-    if (upper.includes('VAN PHONG') || upper.includes('OFFICE')) {
-      return {
-        debitAccount: '642',
-        creditAccount: '112',
-        confidenceScore: 55,
-        reason: 'Chi phí văn phòng — gợi ý chi phí quản lý',
-      };
-    }
-    if (upper.includes('PHI') || upper.includes('FEE')) {
-      return {
-        debitAccount: '635',
-        creditAccount: '112',
-        confidenceScore: 50,
-        reason: 'Phí ngân hàng — gợi ý chi phí tài chính',
-      };
-    }
-
-    return {
-      debitAccount: '331',
-      creditAccount: '112',
-      confidenceScore: 25,
-      reason: 'Tiền ra chưa xác định — cần xem xét',
-    };
   }
 }

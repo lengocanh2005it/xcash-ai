@@ -1,12 +1,5 @@
-import {
-  Area,
-  AreaChart,
-  CartesianGrid,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from 'recharts';
+import { Area, AreaChart, CartesianGrid, Tooltip, XAxis, YAxis } from 'recharts';
+import { DebouncedResponsiveContainer } from '@/components/shared/DebouncedResponsiveContainer';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import type { DailyTransactionTrendPoint } from '@/lib/dashboard-transactions';
@@ -71,42 +64,40 @@ export function DashboardActivityChart({
             Chưa có giao dịch trong 7 ngày qua.
           </div>
         ) : (
-          <div className="min-h-[200px] w-full flex-1">
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={data} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
-                <defs>
-                  <linearGradient id="activityFill" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="var(--chart-3)" stopOpacity={0.35} />
-                    <stop offset="100%" stopColor="var(--chart-3)" stopOpacity={0.02} />
-                  </linearGradient>
-                </defs>
-                <CartesianGrid stroke="var(--border)" strokeDasharray="4 4" vertical={false} />
-                <XAxis
-                  dataKey="label"
-                  tickLine={false}
-                  axisLine={false}
-                  tick={{ fill: 'var(--muted-foreground)', fontSize: 11 }}
-                />
-                <YAxis
-                  tickLine={false}
-                  axisLine={false}
-                  width={28}
-                  allowDecimals={false}
-                  tick={{ fill: 'var(--muted-foreground)', fontSize: 11 }}
-                />
-                <Tooltip content={<ActivityTooltip />} />
-                <Area
-                  type="monotone"
-                  dataKey="activityCount"
-                  stroke="var(--chart-3)"
-                  strokeWidth={2}
-                  fill="url(#activityFill)"
-                  dot={{ fill: 'var(--chart-3)', r: 3 }}
-                  activeDot={{ r: 5 }}
-                />
-              </AreaChart>
-            </ResponsiveContainer>
-          </div>
+          <DebouncedResponsiveContainer className="min-h-[200px] w-full flex-1" minHeight={200}>
+            <AreaChart data={data} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+              <defs>
+                <linearGradient id="activityFill" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="var(--chart-3)" stopOpacity={0.35} />
+                  <stop offset="100%" stopColor="var(--chart-3)" stopOpacity={0.02} />
+                </linearGradient>
+              </defs>
+              <CartesianGrid stroke="var(--border)" strokeDasharray="4 4" vertical={false} />
+              <XAxis
+                dataKey="label"
+                tickLine={false}
+                axisLine={false}
+                tick={{ fill: 'var(--muted-foreground)', fontSize: 11 }}
+              />
+              <YAxis
+                tickLine={false}
+                axisLine={false}
+                width={28}
+                allowDecimals={false}
+                tick={{ fill: 'var(--muted-foreground)', fontSize: 11 }}
+              />
+              <Tooltip content={<ActivityTooltip />} />
+              <Area
+                type="monotone"
+                dataKey="activityCount"
+                stroke="var(--chart-3)"
+                strokeWidth={2}
+                fill="url(#activityFill)"
+                dot={{ fill: 'var(--chart-3)', r: 3 }}
+                activeDot={{ r: 5 }}
+              />
+            </AreaChart>
+          </DebouncedResponsiveContainer>
         )}
       </CardContent>
     </Card>

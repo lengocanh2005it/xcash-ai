@@ -3,6 +3,7 @@ import { Loader2 } from 'lucide-react';
 import { type FormEvent, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
+import { ConfirmDialog } from '@/components/shared/ConfirmDialog';
 import { Button } from '@/components/ui/button';
 import { DialogFooter } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
@@ -44,6 +45,7 @@ export function ChangePasswordPanel({
   const [confirmPassword, setConfirmPassword] = useState('');
   const [otp, setOtp] = useState('');
   const [cooldown, setCooldown] = useState(0);
+  const [confirmOpen, setConfirmOpen] = useState(false);
 
   useEffect(() => {
     if (!active) {
@@ -54,6 +56,7 @@ export function ChangePasswordPanel({
       setConfirmPassword('');
       setOtp('');
       setCooldown(0);
+      setConfirmOpen(false);
     }
   }, [active, onStepChange]);
 
@@ -78,6 +81,7 @@ export function ChangePasswordPanel({
       confirmPassword: string;
     }) => postApiData<ChangePasswordRequestResult>('/auth/change-password/request', payload),
     onSuccess: (result) => {
+      setConfirmOpen(false);
       toast.success(result.message);
       setStep('otp');
       setCooldown(RESEND_COOLDOWN_SECONDS);
@@ -122,6 +126,10 @@ export function ChangePasswordPanel({
       return;
     }
 
+    setConfirmOpen(true);
+  };
+
+  const handleConfirmRequestOtp = () => {
     requestMutation.mutate({
       currentPassword,
       newPassword,
@@ -147,71 +155,84 @@ export function ChangePasswordPanel({
 
   if (step === 'passwords') {
     return (
-      <form className="space-y-4" onSubmit={handlePasswordSubmit}>
-        <div className="space-y-2">
-          <Label htmlFor="change-current-password">Mật khẩu hiện tại</Label>
-          <Input
-            id="change-current-password"
-            type="password"
-            autoComplete="current-password"
-            value={currentPassword}
-            onChange={(event) => setCurrentPassword(event.target.value)}
-            required
-            minLength={8}
-          />
-        </div>
+      <>
+        <form className="space-y-4" onSubmit={handlePasswordSubmit}>
+          <div className="space-y-2">
+            <Label htmlFor="change-current-password">Mật khẩu hiện tại</Label>
+            <Input
+              id="change-current-password"
+              type="password"
+              autoComplete="current-password"
+              value={currentPassword}
+              onChange={(event) => setCurrentPassword(event.target.value)}
+              required
+              minLength={8}
+            />
+          </div>
 
-        <div className="space-y-2">
-          <Label htmlFor="change-new-password">Mật khẩu mới</Label>
-          <Input
-            id="change-new-password"
-            type="password"
-            autoComplete="new-password"
-            placeholder="Tối thiểu 8 ký tự"
-            value={newPassword}
-            onChange={(event) => setNewPassword(event.target.value)}
-            required
-            minLength={8}
-          />
-        </div>
+          <div className="space-y-2">
+            <Label htmlFor="change-new-password">Mật khẩu mới</Label>
+            <Input
+              id="change-new-password"
+              type="password"
+              autoComplete="new-password"
+              placeholder="Tối thiểu 8 ký tự"
+              value={newPassword}
+              onChange={(event) => setNewPassword(event.target.value)}
+              required
+              minLength={8}
+            />
+          </div>
 
-        <div className="space-y-2">
-          <Label htmlFor="change-confirm-password">Nhập lại mật khẩu mới</Label>
-          <Input
-            id="change-confirm-password"
-            type="password"
-            autoComplete="new-password"
-            value={confirmPassword}
-            onChange={(event) => setConfirmPassword(event.target.value)}
-            required
-            minLength={8}
-          />
-        </div>
+          <div className="space-y-2">
+            <Label htmlFor="change-confirm-password">Nhập lại mật khẩu mới</Label>
+            <Input
+              id="change-confirm-password"
+              type="password"
+              autoComplete="new-password"
+              value={confirmPassword}
+              onChange={(event) => setConfirmPassword(event.target.value)}
+              required
+              minLength={8}
+            />
+          </div>
 
-        <DialogFooter>
-          <Button type="button" variant="outline" onClick={onCancel}>
-            Quay lại
-          </Button>
-          <Button
-            type="submit"
-            disabled={
-              isPending ||
-              currentPassword.length < 8 ||
-              newPassword.length < 8 ||
-              confirmPassword.length < 8
-            }
-          >
-            {requestMutation.isPending ? (
-              <>
-                <Loader2 className="mr-2 size-4 animate-spin" />
-                Đang gửi OTP...
-              </>
-            ) : (
-              'Tiếp tục'
-            )}
-          </Button>
-        </DialogFooter>
-      </form>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={onCancel}>
+              Quay lại
+            </Button>
+            <Button
+              type="submit"
+              disabled={
+                isPending ||
+                currentPassword.length < 8 ||
+                newPassword.length < 8 ||
+                confirmPassword.length < 8
+              }
+            >
+              {requestMutation.isPending ? (
+                <>
+                  <Loader2 className="mr-2 size-4 animate-spin" />
+                  Đang gửi OTP...
+                </>
+              ) : (
+                'Tiếp tục'
+              )}
+            </Button>
+          </DialogFooter>
+        </form>
+
+        <ConfirmDialog
+          open={confirmOpen}
+          onOpenChange={(open) => !requestMutation.isPending && setConfirmOpen(open)}
+          title="Xác nhận đổi mật khẩu?"
+          description="Hệ thống sẽ gửi mã OTP qua email để xác thực. Sau khi đổi thành công, bạn sẽ cần đăng nhập lại. Bạn có chắc muốn tiếp tục?"
+          confirmLabel="Đồng ý"
+          cancelLabel="Hủy"
+          loading={requestMutation.isPending}
+          onConfirm={handleConfirmRequestOtp}
+        />
+      </>
     );
   }
 

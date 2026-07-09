@@ -1,5 +1,6 @@
 import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import type { SubscriptionPlan } from '@prisma/client';
+import { createAuditLog } from '../../common/util/audit-log.util';
 import { invalidateTenantPlanCache } from '../../common/util/tenant-plan-cache';
 import { PrismaService } from '../../prisma/prisma.service';
 import { RedisService } from '../../redis/redis.service';
@@ -52,28 +53,26 @@ export class PlanPricingService {
       },
     });
 
-    await this.prisma.auditLog.create({
-      data: {
-        entityType: 'plan_pricing',
-        entityId: plan,
-        action: 'plan_pricing_updated',
-        actor: partnerUserId,
-        beforeState: {
-          pricePerMonth: Number(existing.pricePerMonth),
-          transactionQuota: existing.transactionQuota,
-          overagePricePerTransaction:
-            existing.overagePricePerTransaction !== null
-              ? Number(existing.overagePricePerTransaction)
-              : null,
-        },
-        afterState: {
-          pricePerMonth: Number(updated.pricePerMonth),
-          transactionQuota: updated.transactionQuota,
-          overagePricePerTransaction:
-            updated.overagePricePerTransaction !== null
-              ? Number(updated.overagePricePerTransaction)
-              : null,
-        },
+    await createAuditLog(this.prisma, {
+      entityType: 'plan_pricing',
+      entityId: plan,
+      action: 'plan_pricing_updated',
+      actor: partnerUserId,
+      beforeState: {
+        pricePerMonth: Number(existing.pricePerMonth),
+        transactionQuota: existing.transactionQuota,
+        overagePricePerTransaction:
+          existing.overagePricePerTransaction !== null
+            ? Number(existing.overagePricePerTransaction)
+            : null,
+      },
+      afterState: {
+        pricePerMonth: Number(updated.pricePerMonth),
+        transactionQuota: updated.transactionQuota,
+        overagePricePerTransaction:
+          updated.overagePricePerTransaction !== null
+            ? Number(updated.overagePricePerTransaction)
+            : null,
       },
     });
 

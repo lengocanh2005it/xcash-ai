@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import type { AiCallType } from '@prisma/client';
 import { Prisma } from '@prisma/client';
 import { calcCostUsd } from '../../common/constants/ai-pricing';
+import { paginateParams, totalPagesFromTotal } from '../../common/util/pagination.util';
 import { PrismaService } from '../../prisma/prisma.service';
 import { parseFilterEndDate, parseFilterStartDate } from './utils/date.util';
 
@@ -18,7 +19,7 @@ export class AiCostService {
   }) {
     const page = Math.max(1, params.page ?? 1);
     const limit = Math.min(100, Math.max(1, params.limit ?? 20));
-    const skip = (page - 1) * limit;
+    const { skip } = paginateParams(page, limit);
 
     const conditions: Prisma.Sql[] = [];
     if (params.tenantId) conditions.push(Prisma.sql`tenant_id = ${params.tenantId}`);
@@ -125,7 +126,7 @@ export class AiCostService {
       total,
       page,
       limit,
-      totalPages: Math.max(1, Math.ceil(total / limit)),
+      totalPages: totalPagesFromTotal(total, limit),
       grandTotalCostUsd: roundUsd(grandTotalCostUsd),
       grandTotalCalls,
       grandTotalTokensIn,
@@ -150,7 +151,7 @@ export class AiCostService {
   }) {
     const page = Math.max(1, params.page ?? 1);
     const limit = Math.min(100, Math.max(1, params.limit ?? 20));
-    const skip = (page - 1) * limit;
+    const { skip } = paginateParams(page, limit);
 
     const periodStart = parseFilterStartDate(params.fromDate);
     const periodEnd = parseFilterEndDate(params.toDate);
@@ -193,7 +194,7 @@ export class AiCostService {
       total,
       page,
       limit,
-      totalPages: Math.ceil(total / limit),
+      totalPages: totalPagesFromTotal(total, limit),
     };
   }
 }

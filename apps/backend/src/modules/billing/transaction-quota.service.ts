@@ -1,12 +1,8 @@
 import { ForbiddenException, Injectable, Logger } from '@nestjs/common';
 import { Prisma, SubscriptionPlan } from '@prisma/client';
-import {
-  isOveragePlan,
-  OVERAGE_PLANS,
-  QUOTA_WARNING_RATIO,
-} from '../../common/constants/quota-policy';
+import { isOveragePlan } from '../../common/constants/quota-policy';
+import { QuotaNotificationService } from '../../common/services/quota-notification.service';
 import { PrismaService } from '../../prisma/prisma.service';
-import { NotificationService } from '../notification/notification.service';
 
 @Injectable()
 export class TransactionQuotaService {
@@ -14,7 +10,7 @@ export class TransactionQuotaService {
 
   constructor(
     private readonly prisma: PrismaService,
-    private readonly notificationService: NotificationService,
+    private readonly quotaNotificationService: QuotaNotificationService,
   ) {}
 
   async getActiveSubscription(tenantId: string) {
@@ -114,29 +110,16 @@ export class TransactionQuotaService {
     tenantId: string,
     imported: number,
   ): Promise<void> {
-    const oldUsed = subscription.transactionUsedThisCycle;
-    const quota = subscription.transactionQuota;
-    const newUsed = oldUsed + imported;
-    const cycleStart = subscription.currentCycleStart;
-    const warningThreshold = Math.ceil(quota * QUOTA_WARNING_RATIO);
-
-    try {
-      if (oldUsed < warningThreshold && newUsed >= warningThreshold) {
-        await this.notificationService.createQuotaWarning(tenantId, newUsed, quota, cycleStart);
-      }
-      if (oldUsed < quota && newUsed >= quota) {
-        await this.notificationService.createQuotaExceeded(tenantId, quota, cycleStart);
-      }
-      if (newUsed > quota && isOveragePlan(subscription.plan)) {
-        const price = subscription.overagePricePerTransaction
-          ? Number(subscription.overagePricePerTransaction)
-          : 0;
-        if (price > 0) {
-          await this.notificationService.createOverageStarted(tenantId, price, cycleStart);
-        }
-      }
-    } catch (err) {
-      this.logger.warn(`Quota notification failed for tenant ${tenantId}`, err);
-    }
+    await this.quotaNotificationService.checkAndNotify({
+      tenantId,
+      oldUsed: subscription.transactionUsedThisCycle,
+      quota: subscription.transactionQuota,
+      plan: subscription.plan,
+      overagePricePerTransaction: subscription.overagePricePerTransaction
+        ? Number(subscription.overagePricePerTransaction)
+        : null,
+      cycleStart: subscription.currentCycleStart,
+      added: imported,
+    });
   }
 }

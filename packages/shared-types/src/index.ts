@@ -1,69 +1,50 @@
 // Shared enums & types between @xcash/backend and @xcash/frontend.
 
-export enum Role {
-  CAS_PARTNER = 'cas_partner',
-  ADMIN = 'admin',
-  ACCOUNTANT = 'accountant',
-  VIEWER = 'viewer',
+// ─── Re-export enums from generated file (source of truth: Prisma schema) ─
+export {
+  AccountType,
+  AiCallType,
+  CasGrantStatus,
+  ClassificationType,
+  CopilotMessageRole,
+  NotificationType,
+  PaymentOrderStatus,
+  Role,
+  SubscriptionPlan,
+  SubscriptionStatus,
+  TransactionDirection,
+  TransactionSource,
+  TransactionStatus,
+} from './generated/enums';
+
+// ─── Plan utilities ──────────────────────────────────────────────────────
+import type { NotificationType, SubscriptionPlan, TransactionDirection } from './generated/enums';
+
+/** Thứ bậc gói dịch vụ — dùng để so sánh quyền truy cập tính năng theo tier. */
+export const PLAN_RANK: Record<SubscriptionPlan, number> = {
+  free: 0,
+  starter: 1,
+  pro: 2,
+  enterprise: 3,
+};
+
+export const PLAN_LABEL: Record<SubscriptionPlan, string> = {
+  free: 'Free',
+  starter: 'Starter',
+  pro: 'Pro',
+  enterprise: 'Enterprise',
+};
+
+/** True nếu gói hiện tại đủ cao (>=) so với gói tối thiểu yêu cầu. */
+export function meetsPlan(
+  current: SubscriptionPlan | null | undefined,
+  required: SubscriptionPlan,
+): boolean {
+  if (!current) return false;
+  return PLAN_RANK[current] >= PLAN_RANK[required];
 }
 
-export enum TransactionStatus {
-  PENDING = 'pending',
-  CLASSIFIED = 'classified',
-  REVIEW = 'review',
-  SKIPPED = 'skipped',
-}
-
-export enum ClassificationType {
-  AUTO = 'auto',
-  MANUAL = 'manual',
-}
-
-export enum AccountType {
-  ASSET = 'asset',
-  LIABILITY = 'liability',
-  EQUITY = 'equity',
-  REVENUE = 'revenue',
-  EXPENSE = 'expense',
-}
-
-export enum CasGrantStatus {
-  ACTIVE = 'active',
-  INVALIDATED = 'invalidated',
-}
-
-export enum SubscriptionPlan {
-  FREE = 'free',
-  STARTER = 'starter',
-  PRO = 'pro',
-  ENTERPRISE = 'enterprise',
-}
-
-export enum SubscriptionStatus {
-  ACTIVE = 'active',
-  SUSPENDED = 'suspended',
-  CANCELLED = 'cancelled',
-}
-
-export enum PaymentOrderStatus {
-  PENDING = 'pending',
-  PAID = 'paid',
-  EXPIRED = 'expired',
-  FAILED = 'failed',
-}
-
-export enum NotificationType {
-  REVIEW_NEEDED = 'review_needed',
-  QUOTA_WARNING = 'quota_warning',
-  QUOTA_EXCEEDED = 'quota_exceeded',
-  OVERAGE_STARTED = 'overage_started',
-  BILLING_SUCCESS = 'billing_success',
-  BILLING_PAYMENT_DUE = 'billing_payment_due',
-  TENANT_SUSPENDED = 'tenant_suspended',
-  COPILOT_QUOTA_WARNING = 'copilot_quota_warning',
-  COPILOT_QUOTA_EXCEEDED = 'copilot_quota_exceeded',
-}
-
+// ─── Interfaces ──────────────────────────────────────────────────────────
 export interface AppNotification {
   id: string;
   type: NotificationType;
@@ -78,16 +59,6 @@ export interface NotificationListResult {
   items: AppNotification[];
   unreadCount: number;
   total: number;
-}
-
-export enum TransactionSource {
-  CAS = 'cas',
-  IMPORT = 'import',
-}
-
-export enum TransactionDirection {
-  IN = 'in',
-  OUT = 'out',
 }
 
 export interface ImportValidateResult {

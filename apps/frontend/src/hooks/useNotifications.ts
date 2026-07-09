@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { AppNotification, NotificationListResult } from '@xcash/shared-types';
-import { useEffect } from 'react';
+import { useCallback, useMemo } from 'react';
 import { toast } from 'sonner';
 import {
   API_BASE_URL,
@@ -11,63 +11,38 @@ import {
   patchApiData,
 } from '@/lib/api';
 import { useAuth } from './useAuth';
+import { useSseStream } from './useSseStream';
 
 export function useNotifications() {
   const { user, logout } = useAuth();
   const qc = useQueryClient();
 
-  useEffect(() => {
-    if (!user?.tenantId) return;
+  const connect = useCallback(async () => {
+    const token = await getValidAccessToken();
+    if (!token) {
+      markLogoutInitiated();
+      toast.error('Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.');
+      await logout();
+      return null;
+    }
+    return new EventSource(`${API_BASE_URL}/notifications/stream?token=${token}`);
+  }, [logout]);
 
-    let es: EventSource | null = null;
-    let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
-    let closed = false;
+  const onMessage = useCallback(() => {
+    void qc.invalidateQueries({ queryKey: ['notifications'] });
+  }, [qc]);
 
-    const connect = async () => {
-      if (closed) return;
+  const sseOptions = useMemo(
+    () => ({ enabled: !!user?.tenantId, connect, onMessage }),
+    [user?.tenantId, connect, onMessage],
+  );
 
-      // Đảm bảo token hợp lệ trước khi mở EventSource
-      const token = await getValidAccessToken();
-      if (!token) {
-        // Refresh thất bại — session hết hạn, force logout.
-        // markLogoutInitiated() trước để ngăn axios interceptor gọi /auth/logout thêm lần nữa.
-        markLogoutInitiated();
-        toast.error('Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.');
-        await logout();
-        return;
-      }
-      if (closed) return;
-
-      es = new EventSource(`${API_BASE_URL}/notifications/stream?token=${token}`);
-
-      es.onmessage = () => {
-        void qc.invalidateQueries({ queryKey: ['notifications'] });
-      };
-
-      es.onerror = () => {
-        es?.close();
-        es = null;
-        if (!closed) {
-          // Chờ rồi reconnect với token mới (getValidAccessToken tự refresh nếu cần)
-          reconnectTimer = setTimeout(() => void connect(), 5_000);
-        }
-      };
-    };
-
-    void connect();
-
-    return () => {
-      closed = true;
-      if (reconnectTimer) clearTimeout(reconnectTimer);
-      es?.close();
-    };
-  }, [user?.tenantId, qc]);
+  useSseStream(sseOptions);
 
   return useQuery({
     queryKey: ['notifications'],
     queryFn: () => getApiData<NotificationListResult>('/notifications?limit=20'),
     enabled: !!user?.tenantId,
-    // Giữ refetch 60s làm fallback phòng SSE disconnect
     refetchInterval: 60_000,
     refetchIntervalInBackground: false,
   });

@@ -5,6 +5,7 @@ import type {
   EmailChangePasswordOtpJobData,
   EmailInviteJobData,
   EmailJobData,
+  EmailMonthlyReportJobData,
   EmailOtpJobData,
   EmailResetOtpJobData,
 } from './email.constants';
@@ -217,6 +218,195 @@ export class ResendEmailService {
     }
 
     this.logger.log(`Team invite email sent to ${data.to}`);
+  }
+
+  async sendMonthlyReport(data: EmailMonthlyReportJobData): Promise<void> {
+    if (!this.client) {
+      this.logger.warn('RESEND_API_KEY chưa cấu hình — bỏ qua gửi email báo cáo tháng');
+      return;
+    }
+
+    const senderName = this.configService.get<string>('RESEND_SENDER_NAME', 'X-Cash AI');
+    const senderEmail = this.configService.get<string>('RESEND_SENDER_EMAIL', 'noreply@xcash.ai');
+    const from = `${senderName} <${senderEmail}>`;
+    const monthLabel = `Tháng ${data.month}/${data.year}`;
+    const subject = `[X-Cash AI] Báo cáo ${monthLabel} — ${data.businessName}`;
+    const frontendUrl = this.configService.get<string>('FRONTEND_URL', 'http://localhost:5173');
+    const dashboardUrl = `${frontendUrl.replace(/\/$/, '')}/reports`;
+
+    const formatCurrency = (n: number) =>
+      new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(n);
+
+    const changeArrow = (n: number) => (n > 0 ? '↑' : n < 0 ? '↓' : '→');
+    const changeColor = (n: number) => (n > 0 ? '#16a34a' : n < 0 ? '#dc2626' : '#6b7280');
+    const changeText = (n: number) => {
+      const abs = Math.abs(n);
+      if (abs === 0) return 'Không đổi';
+      return `${n > 0 ? '+' : ''}${n}%`;
+    };
+
+    const comparisonBlock = data.comparison
+      ? `<tr>
+            <td style="padding:8px 12px;font-size:13px;color:#6b7280">So sánh tháng trước</td>
+            <td style="padding:8px 12px;font-size:13px;color:${changeColor(data.comparison.revenueChange)};text-align:right">
+              ${changeArrow(data.comparison.revenueChange)} ${changeText(data.comparison.revenueChange)}
+            </td>
+            <td style="padding:8px 12px;font-size:13px;color:${changeColor(data.comparison.expenseChange)};text-align:right">
+              ${changeArrow(data.comparison.expenseChange)} ${changeText(data.comparison.expenseChange)}
+            </td>
+            <td style="padding:8px 12px;font-size:13px;color:${changeColor(data.comparison.netChange)};text-align:right">
+              ${changeArrow(data.comparison.netChange)} ${changeText(data.comparison.netChange)}
+            </td>
+          </tr>`
+      : '';
+
+    const topExpenseRows = (data.topExpense ?? [])
+      .slice(0, 5)
+      .map(
+        (item, i) =>
+          `<tr>
+            <td style="padding:6px 12px;font-size:13px;border-bottom:1px solid #f3f4f6">${i + 1}. ${this.escapeHtml(item.accountName)}</td>
+            <td style="padding:6px 12px;font-size:13px;text-align:right;border-bottom:1px solid #f3f4f6">${formatCurrency(item.total)}</td>
+          </tr>`,
+      )
+      .join('');
+
+    const topRevenueRows = (data.topRevenue ?? [])
+      .slice(0, 5)
+      .map(
+        (item, i) =>
+          `<tr>
+            <td style="padding:6px 12px;font-size:13px;border-bottom:1px solid #f3f4f6">${i + 1}. ${this.escapeHtml(item.accountName)}</td>
+            <td style="padding:6px 12px;font-size:13px;text-align:right;border-bottom:1px solid #f3f4f6">${formatCurrency(item.total)}</td>
+          </tr>`,
+      )
+      .join('');
+
+    const html = `<!DOCTYPE html>
+<html lang="vi">
+  <body style="font-family:system-ui,sans-serif;color:#111827;line-height:1.5;max-width:600px;margin:0 auto;padding:24px">
+    <p style="font-size:12px;color:#6b7280;text-transform:uppercase;letter-spacing:.05em">X-Cash AI</p>
+    <h1 style="font-size:20px;margin:0 0 4px">Báo cáo ${monthLabel}</h1>
+    <p style="font-size:14px;color:#6b7280;margin:0 0 24px">${this.escapeHtml(data.businessName)}</p>
+
+    <!-- Summary cards -->
+    <table style="width:100%;border-collapse:collapse;margin-bottom:24px">
+      <tr>
+        <td style="background:#f0fdf4;border-radius:8px;padding:16px;text-align:center;width:33%">
+          <p style="font-size:12px;color:#16a34a;margin:0 0 4px;text-transform:uppercase">Thu nhập</p>
+          <p style="font-size:18px;font-weight:700;color:#16a34a;margin:0">${formatCurrency(data.summary.totalRevenue)}</p>
+        </td>
+        <td style="width:1%"></td>
+        <td style="background:#fef2f2;border-radius:8px;padding:16px;text-align:center;width:33%">
+          <p style="font-size:12px;color:#dc2626;margin:0 0 4px;text-transform:uppercase">Chi phí</p>
+          <p style="font-size:18px;font-weight:700;color:#dc2626;margin:0">${formatCurrency(data.summary.totalExpense)}</p>
+        </td>
+        <td style="width:1%"></td>
+        <td style="background:${data.summary.net >= 0 ? '#eff6ff' : '#fef2f2'};border-radius:8px;padding:16px;text-align:center;width:33%">
+          <p style="font-size:12px;color:${data.summary.net >= 0 ? '#2563eb' : '#dc2626'};margin:0 0 4px;text-transform:uppercase">Lãi/Lỗ</p>
+          <p style="font-size:18px;font-weight:700;color:${data.summary.net >= 0 ? '#2563eb' : '#dc2626'};margin:0">${formatCurrency(data.summary.net)}</p>
+        </td>
+      </tr>
+    </table>
+
+    <!-- Comparison table -->
+    <table style="width:100%;border-collapse:collapse;margin-bottom:24px">
+      <thead>
+        <tr style="background:#f9fafb">
+          <th style="padding:8px 12px;font-size:12px;text-align:left;color:#6b7280;text-transform:uppercase">Chỉ tiêu</th>
+          <th style="padding:8px 12px;font-size:12px;text-align:right;color:#6b7280;text-transform:uppercase">Thu nhập</th>
+          <th style="padding:8px 12px;font-size:12px;text-align:right;color:#6b7280;text-transform:uppercase">Chi phí</th>
+          <th style="padding:8px 12px;font-size:12px;text-align:right;color:#6b7280;text-transform:uppercase">Lãi/Lỗ</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td style="padding:8px 12px;font-size:13px;font-weight:600">Tháng này</td>
+          <td style="padding:8px 12px;font-size:13px;text-align:right">${formatCurrency(data.summary.totalRevenue)}</td>
+          <td style="padding:8px 12px;font-size:13px;text-align:right">${formatCurrency(data.summary.totalExpense)}</td>
+          <td style="padding:8px 12px;font-size:13px;text-align:right;font-weight:600">${formatCurrency(data.summary.net)}</td>
+        </tr>
+        ${comparisonBlock}
+      </tbody>
+    </table>
+
+    <!-- Stats -->
+    <table style="width:100%;border-collapse:collapse;margin-bottom:24px">
+      <tr>
+        <td style="padding:8px 12px;font-size:13px;color:#6b7280">Tổng giao dịch</td>
+        <td style="padding:8px 12px;font-size:13px;text-align:right;font-weight:600">${data.summary.totalCount.toLocaleString('vi-VN')}</td>
+      </tr>
+      <tr>
+        <td style="padding:8px 12px;font-size:13px;color:#6b7280">Đã AI định khoản</td>
+        <td style="padding:8px 12px;font-size:13px;text-align:right;font-weight:600">${data.summary.classifiedCount.toLocaleString('vi-VN')}</td>
+      </tr>
+      <tr>
+        <td style="padding:8px 12px;font-size:13px;color:#6b7280">Chờ review</td>
+        <td style="padding:8px 12px;font-size:13px;text-align:right;font-weight:600;color:#f59e0b">${data.summary.reviewCount.toLocaleString('vi-VN')}</td>
+      </tr>
+      <tr>
+        <td style="padding:8px 12px;font-size:13px;color:#6b7280">Độ chính xác AI</td>
+        <td style="padding:8px 12px;font-size:13px;text-align:right;font-weight:600;color:#2563eb">${data.summary.aiAccuracy}%</td>
+      </tr>
+    </table>
+
+    ${
+      topExpenseRows
+        ? `<h2 style="font-size:16px;margin:0 0 8px">Top chi phí</h2>
+    <table style="width:100%;border-collapse:collapse;margin-bottom:24px">
+      <tbody>${topExpenseRows}</tbody>
+    </table>`
+        : ''
+    }
+
+    ${
+      topRevenueRows
+        ? `<h2 style="font-size:16px;margin:0 0 8px">Top thu nhập</h2>
+    <table style="width:100%;border-collapse:collapse;margin-bottom:24px">
+      <tbody>${topRevenueRows}</tbody>
+    </table>`
+        : ''
+    }
+
+    <!-- CTA -->
+    <p style="margin:24px 0">
+      <a href="${dashboardUrl}"
+         style="display:inline-block;padding:10px 18px;background:#2563eb;color:#fff;text-decoration:none;border-radius:6px;font-weight:600">
+        Xem báo cáo chi tiết
+      </a>
+    </p>
+
+    <hr style="border:none;border-top:1px solid #e5e7eb;margin:24px 0" />
+    <p style="font-size:12px;color:#9ca3af;margin:0">Email tự động từ X-Cash AI. Vui lòng không trả lời email này.</p>
+  </body>
+</html>`;
+
+    const text = `Báo cáo ${monthLabel} — ${data.businessName}
+
+Thu nhập: ${formatCurrency(data.summary.totalRevenue)}
+Chi phí: ${formatCurrency(data.summary.totalExpense)}
+Lãi/Lỗ: ${formatCurrency(data.summary.net)}
+
+Tổng GD: ${data.summary.totalCount}
+Đã AI: ${data.summary.classifiedCount}
+Chờ review: ${data.summary.reviewCount}
+Độ chính xác AI: ${data.summary.aiAccuracy}%
+
+Xem báo cáo chi tiết: ${dashboardUrl}`;
+
+    const result = await this.client.emails.send({
+      from,
+      to: data.to,
+      subject,
+      html,
+      text,
+    });
+
+    if (result.error) {
+      throw new Error(result.error.message);
+    }
+
+    this.logger.log(`Monthly report email sent to ${data.to} (tenant ${data.tenantId})`);
   }
 
   private buildHtml(data: EmailJobData): string {

@@ -2,7 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
 import type { Subscription } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
-import { BillingService } from './billing.service';
+import { BillingOverageService } from './billing-overage.service';
 
 @Injectable()
 export class BillingCycleService {
@@ -10,7 +10,7 @@ export class BillingCycleService {
 
   constructor(
     private readonly prisma: PrismaService,
-    private readonly billing: BillingService,
+    private readonly overageService: BillingOverageService,
   ) {}
 
   // Chạy lúc 2am hàng ngày, tìm subscription đã hết chu kỳ
@@ -33,7 +33,7 @@ export class BillingCycleService {
   async processCycleEnd(sub: Subscription, now = new Date()) {
     // Tạo đơn thu phí vượt quota nếu có (Starter/Pro)
     try {
-      await this.billing.createOverageOrder(sub.tenantId);
+      await this.overageService.createOverageOrder(sub.tenantId);
       this.logger.log(`Overage order created for tenant ${sub.tenantId}`);
     } catch {
       // Không có overage hoặc gói không áp dụng — bỏ qua

@@ -4,11 +4,10 @@ import { ForbiddenException, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Test, TestingModule } from '@nestjs/testing';
 import { SubscriptionPlan, TransactionStatus } from '@prisma/client';
+import { QuotaNotificationService } from '../../common/services/quota-notification.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import { WEBHOOK_QUEUE } from '../../queue/queue.module';
 import { RedisService } from '../../redis/redis.service';
-import { TransactionQuotaService } from '../billing/transaction-quota.service';
-import { NotificationService } from '../notification/notification.service';
 import { BankingService } from './banking.service';
 
 describe('BankingService', () => {
@@ -55,10 +54,8 @@ describe('BankingService', () => {
     add: jest.fn().mockResolvedValue(undefined),
   };
 
-  const notificationService = {
-    createQuotaWarning: jest.fn().mockResolvedValue(undefined),
-    createQuotaExceeded: jest.fn().mockResolvedValue(undefined),
-    createOverageStarted: jest.fn().mockResolvedValue(undefined),
+  const quotaNotificationService = {
+    checkAndNotify: jest.fn().mockResolvedValue(undefined),
   };
 
   beforeEach(async () => {
@@ -76,8 +73,7 @@ describe('BankingService', () => {
           },
         },
         { provide: getQueueToken(WEBHOOK_QUEUE), useValue: webhookQueue },
-        { provide: NotificationService, useValue: notificationService },
-        { provide: TransactionQuotaService, useValue: {} },
+        { provide: QuotaNotificationService, useValue: quotaNotificationService },
       ],
     }).compile();
 
@@ -106,13 +102,26 @@ describe('BankingService', () => {
       grantId: 'grant-1',
       tenantId: 'tenant-1',
     });
-    prisma.subscription.findFirst.mockResolvedValue({
-      id: 'sub-1',
-      tenantId: 'tenant-1',
-      plan: SubscriptionPlan.free,
-      transactionQuota: 100,
-      transactionUsedThisCycle: 100,
-    });
+    prisma.transaction.findUnique.mockResolvedValue(null);
+    prisma.$transaction.mockImplementation(async (callback) =>
+      callback({
+        subscription: {
+          findFirst: jest.fn().mockResolvedValue({
+            id: 'sub-1',
+            tenantId: 'tenant-1',
+            plan: SubscriptionPlan.free,
+            transactionQuota: 100,
+            transactionUsedThisCycle: 100,
+          }),
+        },
+        transaction: {
+          create: jest.fn(),
+        },
+        subscriptionUpdate: {
+          update: jest.fn(),
+        },
+      }),
+    );
 
     await expect(service.handleCasWebhook(payload)).rejects.toBeInstanceOf(ForbiddenException);
   });
@@ -123,25 +132,25 @@ describe('BankingService', () => {
       grantId: 'grant-1',
       tenantId: 'tenant-1',
     });
-    prisma.subscription.findFirst.mockResolvedValue({
-      id: 'sub-1',
-      tenantId: 'tenant-1',
-      plan: SubscriptionPlan.free,
-      transactionQuota: 100,
-      transactionUsedThisCycle: 10,
-    });
     prisma.transaction.findUnique.mockResolvedValue(null);
     prisma.$transaction.mockImplementation(async (callback) =>
       callback({
+        subscription: {
+          findFirst: jest.fn().mockResolvedValue({
+            id: 'sub-1',
+            tenantId: 'tenant-1',
+            plan: SubscriptionPlan.free,
+            transactionQuota: 100,
+            transactionUsedThisCycle: 10,
+          }),
+          update: jest.fn().mockResolvedValue({}),
+        },
         transaction: {
           create: jest.fn().mockResolvedValue({
             id: 'db-txn-1',
             tenantId: 'tenant-1',
             status: TransactionStatus.pending,
           }),
-        },
-        subscription: {
-          update: jest.fn().mockResolvedValue({}),
         },
         usageLog: {
           create: jest.fn(),

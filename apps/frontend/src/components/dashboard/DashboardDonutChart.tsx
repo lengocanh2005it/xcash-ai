@@ -1,4 +1,5 @@
-import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from 'recharts';
+import { Cell, Pie, PieChart, Tooltip } from 'recharts';
+import { DebouncedResponsiveContainer } from '@/components/shared/DebouncedResponsiveContainer';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import type { DonutSlice } from '@/lib/dashboard-transactions';
@@ -95,7 +96,7 @@ export function DashboardDonutChart({
         ) : (
           <div className="grid items-center gap-4 sm:grid-cols-[132px_1fr]">
             <div className="relative mx-auto aspect-square w-full max-w-[132px] sm:mx-0">
-              <ResponsiveContainer width="100%" height="100%">
+              <DebouncedResponsiveContainer className="h-full w-full" minHeight={100}>
                 <PieChart>
                   <Pie
                     data={data}
@@ -113,7 +114,7 @@ export function DashboardDonutChart({
                   </Pie>
                   <Tooltip content={<DonutTooltip />} />
                 </PieChart>
-              </ResponsiveContainer>
+              </DebouncedResponsiveContainer>
               <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
                 <span className="text-base font-bold tabular-nums leading-none">
                   {total}

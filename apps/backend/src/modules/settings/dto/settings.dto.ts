@@ -30,6 +30,13 @@ export class UpdateNotificationsDto {
   email?: string;
 
   @IsBoolean()
+  monthlyReportEnabled: boolean;
+
+  @IsOptional()
+  @IsEmail()
+  monthlyReportEmail?: string;
+
+  @IsBoolean()
   slackEnabled: boolean;
 
   @IsOptional()

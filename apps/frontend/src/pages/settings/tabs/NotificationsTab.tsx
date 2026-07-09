@@ -113,7 +113,7 @@ export function NotificationsTab() {
                   </span>
                 )}
               </p>
-              <p className="text-xs text-muted-foreground">Nhận thông báo qua email</p>
+              <p className="text-xs text-muted-foreground">Email nhận thông báo</p>
             </div>
             <Switch
               checked={form.emailEnabled}

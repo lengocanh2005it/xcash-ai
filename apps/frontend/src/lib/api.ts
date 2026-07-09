@@ -9,19 +9,103 @@ export interface AuthSessionData {
   user: AuthenticatedUser;
 }
 
-let accessToken: string | null = null;
-let refreshPromise: Promise<string | null> | null = null;
-// Guard to prevent concurrent logout calls from different code paths (e.g., SSE hook
-// and axios interceptor both detecting an expired session at the same time).
-let logoutInitiated = false;
+class AuthTokenManager {
+  private accessToken: string | null = null;
+  private refreshPromise: Promise<string | null> | null = null;
+  private logoutInitiated = false;
+
+  setAccessToken(token: string | null) {
+    this.accessToken = token;
+  }
+
+  getAccessToken() {
+    return this.accessToken;
+  }
+
+  /** Lấy access token hợp lệ — tự refresh nếu chưa có hoặc token hiện tại đã expire. */
+  async getValidAccessToken(): Promise<string | null> {
+    if (this.accessToken) {
+      try {
+        const payload = JSON.parse(atob(this.accessToken.split('.')[1]));
+        const expiresSec = payload.exp as number;
+        if (expiresSec && expiresSec * 1000 > Date.now() + 30_000) return this.accessToken;
+      } catch {
+        // Không parse được → refresh
+      }
+    }
+
+    if (!this.refreshPromise) {
+      this.refreshPromise = this.refreshAccessToken()
+        .catch(() => null)
+        .finally(() => {
+          this.refreshPromise = null;
+        });
+    }
+    return this.refreshPromise;
+  }
+
+  private async refreshAccessToken(): Promise<string | null> {
+    const response = await axios.post<ApiResponse<AuthSessionData>>(
+      `${API_BASE_URL}/auth/refresh`,
+      {},
+      { withCredentials: true },
+    );
+
+    const token = response.data.data?.accessToken ?? null;
+    this.accessToken = token;
+    return token;
+  }
+
+  async clearStaleRefreshSession() {
+    if (this.logoutInitiated) {
+      this.accessToken = null;
+      return;
+    }
+    this.logoutInitiated = true;
+    this.accessToken = null;
+    try {
+      await axios.post(`${API_BASE_URL}/auth/logout`, {}, { withCredentials: true });
+    } catch {
+      // Cookie may already be invalid — ignore.
+    }
+  }
+
+  /** Gọi trước khi tự xử lý logout ở tầng UI để ngăn clearStaleRefreshSession gọi thêm lần nữa. */
+  markLogoutInitiated() {
+    this.logoutInitiated = true;
+  }
+
+  /** Reset sau khi login thành công — cho phép phát hiện session hết hạn lần tiếp theo. */
+  resetLogoutState() {
+    this.logoutInitiated = false;
+  }
+}
+
+export const authTokenManager = new AuthTokenManager();
+
+// ─── Convenience re-exports for backward compatibility ────────────────────────
 
 export function setAccessToken(token: string | null) {
-  accessToken = token;
+  authTokenManager.setAccessToken(token);
 }
 
 export function getAccessToken() {
-  return accessToken;
+  return authTokenManager.getAccessToken();
 }
+
+export async function getValidAccessToken(): Promise<string | null> {
+  return authTokenManager.getValidAccessToken();
+}
+
+export function markLogoutInitiated() {
+  authTokenManager.markLogoutInitiated();
+}
+
+export function resetLogoutState() {
+  authTokenManager.resetLogoutState();
+}
+
+// ─── Axios instance + interceptors ────────────────────────────────────────────
 
 export const api = axios.create({
   baseURL: API_BASE_URL,
@@ -32,48 +116,12 @@ export const api = axios.create({
 });
 
 api.interceptors.request.use((config) => {
-  if (accessToken) {
-    config.headers.Authorization = `Bearer ${accessToken}`;
+  const token = authTokenManager.getAccessToken();
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`;
   }
   return config;
 });
-
-async function refreshAccessToken(): Promise<string | null> {
-  const response = await axios.post<ApiResponse<AuthSessionData>>(
-    `${API_BASE_URL}/auth/refresh`,
-    {},
-    { withCredentials: true },
-  );
-
-  const token = response.data.data?.accessToken ?? null;
-  accessToken = token;
-  return token;
-}
-
-/** Lấy access token hợp lệ — tự refresh nếu chưa có hoặc token hiện tại đã expire. */
-export async function getValidAccessToken(): Promise<string | null> {
-  if (accessToken) {
-    // Kiểm tra token còn hạn không (decode phần payload, không cần verify signature)
-    try {
-      const payload = JSON.parse(atob(accessToken.split('.')[1]));
-      const expiresSec = payload.exp as number;
-      // Còn >30s → dùng luôn
-      if (expiresSec && expiresSec * 1000 > Date.now() + 30_000) return accessToken;
-    } catch {
-      // Không parse được → refresh
-    }
-  }
-
-  // Token hết hạn hoặc không có → refresh, deduplicate nhiều caller cùng lúc
-  if (!refreshPromise) {
-    refreshPromise = refreshAccessToken()
-      .catch(() => null)
-      .finally(() => {
-        refreshPromise = null;
-      });
-  }
-  return refreshPromise;
-}
 
 function isAuthBypassRoute(url?: string): boolean {
   if (!url) {
@@ -93,30 +141,6 @@ function isAuthBypassRoute(url?: string): boolean {
   );
 }
 
-async function clearStaleRefreshSession() {
-  if (logoutInitiated) {
-    accessToken = null;
-    return;
-  }
-  logoutInitiated = true;
-  accessToken = null;
-  try {
-    await axios.post(`${API_BASE_URL}/auth/logout`, {}, { withCredentials: true });
-  } catch {
-    // Cookie may already be invalid — ignore.
-  }
-}
-
-/** Gọi trước khi tự xử lý logout ở tầng UI (vd: useNotifications) để ngăn clearStaleRefreshSession gọi thêm lần nữa. */
-export function markLogoutInitiated() {
-  logoutInitiated = true;
-}
-
-/** Reset sau khi login thành công — cho phép phát hiện session hết hạn lần tiếp theo. */
-export function resetLogoutState() {
-  logoutInitiated = false;
-}
-
 api.interceptors.response.use(
   (response) => response,
   async (error: AxiosError) => {
@@ -130,18 +154,7 @@ api.interceptors.response.use(
     ) {
       originalRequest._retry = true;
 
-      if (!refreshPromise) {
-        refreshPromise = refreshAccessToken()
-          .catch(async () => {
-            await clearStaleRefreshSession();
-            return null;
-          })
-          .finally(() => {
-            refreshPromise = null;
-          });
-      }
-
-      const newToken = await refreshPromise;
+      const newToken = await authTokenManager.getValidAccessToken();
       if (newToken) {
         originalRequest.headers.Authorization = `Bearer ${newToken}`;
         return api(originalRequest);
@@ -151,6 +164,8 @@ api.interceptors.response.use(
     return Promise.reject(error);
   },
 );
+
+// ─── API helpers ──────────────────────────────────────────────────────────────
 
 export async function getApiData<T>(url: string): Promise<T> {
   const response = await api.get<ApiResponse<T>>(url);

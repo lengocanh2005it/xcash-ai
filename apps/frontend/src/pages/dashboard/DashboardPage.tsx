@@ -25,7 +25,7 @@ import {
   mapStatusBreakdownResponse,
   type SourceBreakdownApiResponse,
   type StatusBreakdownApiResponse,
-} from '@/lib/dashboard-transactions';
+} from '@/lib/dashboard-utils';
 import { dayIsoRange } from '@/lib/date';
 import type { SummaryData } from '@/types/api/reports';
 import type { TransactionListResponse } from '@/types/transaction';

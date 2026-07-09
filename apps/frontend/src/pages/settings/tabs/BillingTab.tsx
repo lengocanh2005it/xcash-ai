@@ -1,29 +1,16 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { SubscriptionPlan } from '@xcash/shared-types';
 import { AlertTriangle } from 'lucide-react';
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
-import { toast } from 'sonner';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import { useAuth } from '@/hooks/useAuth';
-import { api } from '@/lib/api';
+import { useBillingTab } from '@/hooks/useBillingTab';
 import { formatDateVN } from '@/lib/date';
 import { formatVND } from '@/lib/format-vnd';
 import { PLAN_LABEL } from '@/lib/plan';
-import { canViewBilling, isAdmin } from '@/lib/rbac';
 import { cn } from '@/lib/utils';
-import type {
-  BillingPlan,
-  OverageOrder,
-  OveragePaymentResult,
-  PlanData,
-  UpgradeResult,
-} from '@/types/api/billing';
 import { PLAN_ORDER } from './billing/billing-constants';
 import { CycleTransactionsDialog } from './billing/CycleTransactionsDialog';
 import { OveragePaymentDialog } from './billing/OveragePaymentDialog';
@@ -32,144 +19,30 @@ import { PaymentHistoryTable } from './billing/PaymentHistoryTable';
 import { UpgradeDialog } from './billing/UpgradeDialog';
 
 export function BillingTab() {
-  const qc = useQueryClient();
-  const { refreshSession, updateUser, user } = useAuth();
-  const canAccessBilling = canViewBilling(user?.role);
-  const isAdminUser = isAdmin(user?.role);
-
-  const syncPlanFromBilling = useCallback(
-    async (plan: string) => {
-      updateUser({ plan: plan as SubscriptionPlan });
-      await refreshSession();
-    },
-    [refreshSession, updateUser],
-  );
-  const [searchParams, setSearchParams] = useSearchParams();
-  const [upgradeOpen, setUpgradeOpen] = useState(false);
-  const [paymentOpen, setPaymentOpen] = useState(false);
-  const [upgradeResult, setUpgradeResult] = useState<UpgradeResult | null>(null);
-  const [selectedPlan, setSelectedPlan] = useState<string | null>(null);
-  const [overagePaymentOpen, setOveragePaymentOpen] = useState(false);
-  const [overageResult, setOverageResult] = useState<OveragePaymentResult | null>(null);
-  const [cycleDetailOpen, setCycleDetailOpen] = useState(false);
-
-  useEffect(() => {
-    if (searchParams.get('upgrade') === '1') {
-      setUpgradeOpen(true);
-      const next = new URLSearchParams(searchParams);
-      next.delete('upgrade');
-      setSearchParams(next, { replace: true });
-    }
-  }, [searchParams, setSearchParams]);
-
-  const { data, isLoading } = useQuery({
-    queryKey: ['billing', 'current-plan'],
-    queryFn: () => api.get<{ data: PlanData }>('/billing/current-plan').then((r) => r.data.data),
-    enabled: canAccessBilling,
-    refetchInterval: paymentOpen ? 5_000 : false,
-  });
-
-  const { data: availablePlans, isLoading: loadingPlans } = useQuery({
-    queryKey: ['billing', 'plans'],
-    queryFn: () => api.get<{ data: BillingPlan[] }>('/billing/plans').then((r) => r.data.data),
-    enabled: upgradeOpen && canAccessBilling,
-  });
-
-  const { data: overageOrders } = useQuery({
-    queryKey: ['billing', 'overage-orders'],
-    queryFn: () =>
-      api.get<{ data: OverageOrder[] }>('/billing/overage-orders').then((r) => r.data.data),
-    enabled: canAccessBilling && isAdminUser,
-    refetchInterval: overagePaymentOpen ? 5_000 : 30_000,
-  });
-
-  const pendingOverage = overageOrders?.[0] ?? null;
-
-  const overageOrderMutation = useMutation({
-    mutationFn: () =>
-      api.post<{ data: OveragePaymentResult }>('/billing/overage-order').then((r) => r.data.data),
-    onSuccess: (result) => {
-      setOverageResult(result);
-      setOveragePaymentOpen(true);
-    },
-    onError: () => toast.error('Không thể tạo đơn thanh toán phí vượt quota'),
-  });
-
-  const mockConfirmOverageMutation = useMutation({
-    mutationFn: (orderCode: string) => api.post(`/billing/overage-order/${orderCode}/mock-confirm`),
-    onSuccess: () => {
-      setOveragePaymentOpen(false);
-      setOverageResult(null);
-      qc.invalidateQueries({ queryKey: ['billing', 'overage-orders'] });
-      qc.invalidateQueries({ queryKey: ['notifications'] });
-      toast.success('Demo: Đã thanh toán phí vượt quota!');
-    },
-    onError: () => toast.error('Không thể xác nhận mock'),
-  });
-
-  useEffect(() => {
-    if (!data?.plan || data.plan === user?.plan) return;
-    updateUser({ plan: data.plan as SubscriptionPlan });
-  }, [data?.plan, updateUser, user?.plan]);
-
-  const prevPlanRef = useRef<string | undefined>(undefined);
-  useEffect(() => {
-    if (!paymentOpen || !upgradeResult || !data) return;
-    if (prevPlanRef.current && data.plan === upgradeResult?.orderCode) return;
-    if (data.plan !== prevPlanRef.current && prevPlanRef.current !== undefined) {
-      setPaymentOpen(false);
-      setUpgradeResult(null);
-      setSelectedPlan(null);
-      toast.success(
-        `Nâng cấp lên gói ${PLAN_LABEL[data.plan as SubscriptionPlan] ?? data.plan} thành công!`,
-      );
-      qc.invalidateQueries({ queryKey: ['billing', 'current-plan'] });
-      qc.invalidateQueries({ queryKey: ['notifications'] });
-      void syncPlanFromBilling(data.plan);
-    }
-    prevPlanRef.current = data.plan;
-  }, [data, paymentOpen, upgradeResult, qc, syncPlanFromBilling]);
-
-  useEffect(() => {
-    if (data && !paymentOpen) prevPlanRef.current = data.plan;
-  }, [data, paymentOpen]);
-
-  const upgradeMutation = useMutation({
-    mutationFn: (targetPlan: string) =>
-      api
-        .post<{ data: UpgradeResult }>('/billing/upgrade', { targetPlan })
-        .then((r) => r.data.data),
-    onSuccess: (result) => {
-      setUpgradeResult(result);
-      setUpgradeOpen(false);
-      setPaymentOpen(true);
-      prevPlanRef.current = data?.plan;
-    },
-    onError: () => toast.error('Không thể tạo đơn thanh toán, vui lòng thử lại'),
-  });
-
-  const mockConfirmMutation = useMutation({
-    mutationFn: (orderCode: string) => api.post(`/billing/upgrade/${orderCode}/mock-confirm`),
-    onSuccess: async () => {
-      qc.invalidateQueries({ queryKey: ['billing', 'current-plan'] });
-      qc.invalidateQueries({ queryKey: ['notifications'] });
-      setPaymentOpen(false);
-      setUpgradeResult(null);
-      setSelectedPlan(null);
-      toast.success('Demo: Thanh toán thành công!');
-      const refreshed = await qc.fetchQuery({
-        queryKey: ['billing', 'current-plan'],
-        queryFn: () =>
-          api.get<{ data: PlanData }>('/billing/current-plan').then((r) => r.data.data),
-      });
-      if (refreshed?.plan) {
-        await syncPlanFromBilling(refreshed.plan);
-      } else {
-        await refreshSession();
-      }
-    },
-    onError: () => toast.error('Không thể xác nhận mock'),
-  });
+  const {
+    data,
+    isLoading,
+    isAdminUser,
+    upgradeOpen,
+    setUpgradeOpen,
+    paymentOpen,
+    setPaymentOpen,
+    upgradeResult,
+    selectedPlan,
+    setSelectedPlan,
+    overagePaymentOpen,
+    setOveragePaymentOpen,
+    overageResult,
+    cycleDetailOpen,
+    setCycleDetailOpen,
+    availablePlans,
+    loadingPlans,
+    pendingOverage,
+    overageOrderMutation,
+    mockConfirmOverageMutation,
+    upgradeMutation,
+    mockConfirmMutation,
+  } = useBillingTab();
 
   if (isLoading) return <Skeleton className="h-48" />;
 

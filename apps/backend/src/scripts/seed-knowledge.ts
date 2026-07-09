@@ -8,11 +8,17 @@
 import * as crypto from 'node:crypto';
 import { PrismaClient } from '@prisma/client';
 import OpenAI from 'openai';
+import { BILLING_SETTINGS_KNOWLEDGE } from '../modules/ai/knowledge/billing-settings';
 import { CASSO_KNOWLEDGE } from '../modules/ai/knowledge/casso';
 import { TT133_KNOWLEDGE } from '../modules/ai/knowledge/tt133';
 import { XCASH_FEATURES_KNOWLEDGE } from '../modules/ai/knowledge/xcash-features';
 
-const ALL_SECTIONS = [...CASSO_KNOWLEDGE, ...TT133_KNOWLEDGE, ...XCASH_FEATURES_KNOWLEDGE];
+const ALL_SECTIONS = [
+  ...CASSO_KNOWLEDGE,
+  ...TT133_KNOWLEDGE,
+  ...XCASH_FEATURES_KNOWLEDGE,
+  ...BILLING_SETTINGS_KNOWLEDGE,
+];
 
 function sha256(text: string): string {
   return crypto.createHash('sha256').update(text).digest('hex');

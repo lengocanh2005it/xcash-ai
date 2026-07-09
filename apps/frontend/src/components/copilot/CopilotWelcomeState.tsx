@@ -4,21 +4,21 @@ import {
   Bot,
   Building2,
   ClipboardList,
+  CreditCard,
   HelpCircle,
-  Phone,
   Sparkles,
   TrendingUp,
 } from 'lucide-react';
 
 const SUGGESTIONS = [
   { icon: TrendingUp, text: 'Doanh thu tháng này bao nhiêu?' },
-  { icon: BarChart2, text: 'Tháng này chi nhiều nhất vào đâu?' },
+  { icon: BarChart2, text: 'So sánh tháng này với tháng trước' },
   { icon: ClipboardList, text: 'Có bao nhiêu giao dịch chờ xét duyệt?' },
+  { icon: CreditCard, text: 'Xem thông tin gói dịch vụ' },
   { icon: Building2, text: 'Đã liên kết ngân hàng chưa?' },
-  { icon: HelpCircle, text: 'Sao không thấy giao dịch từ Casso?' },
-  { icon: BookOpen, text: 'TK 642 trong TT133 là gì?' },
-  { icon: Phone, text: 'Liên hệ CASSO ở đâu?' },
-  { icon: Sparkles, text: 'Copilot làm được gì?' },
+  { icon: BookOpen, text: 'Tra cứu tài khoản TT133' },
+  { icon: HelpCircle, text: 'Không thấy giao dịch từ Casso?' },
+  { icon: Sparkles, text: 'Tìm giao dịch theo từ khóa' },
 ];
 
 interface CopilotWelcomeStateProps {
@@ -33,10 +33,10 @@ export function CopilotWelcomeState({ onSendMessage }: CopilotWelcomeStateProps)
           <Bot className="size-7" />
         </div>
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">AI Copilot</h1>
+          <h1 className="text-2xl font-semibold tracking-tight">Mình có thể giúp bạn</h1>
           <p className="mt-1 text-sm text-muted-foreground max-w-sm">
-            Hỏi đáp tài chính, tra cứu doanh thu/chi phí, định khoản TT133 — và đề xuất duyệt/sửa
-            giao dịch ngay trong chat.
+            Hỏi đáp kế toán, tra cứu số liệu, xem báo cáo và quản lý giao dịch — tất cả ngay trong
+            chat.
           </p>
         </div>
       </div>

@@ -14,6 +14,7 @@ export interface NotificationConfig {
   emailEnabled: boolean;
   email: string | null;
   monthlyReportEnabled: boolean;
+  monthlyReportEmail: string | null;
   slackEnabled: boolean;
   slackWebhookUrl: string | null;
 }
@@ -50,6 +51,7 @@ export class SettingsService {
         emailEnabled: false,
         email: null,
         monthlyReportEnabled: false,
+        monthlyReportEmail: null,
         slackEnabled: false,
         slackWebhookUrl: null,
       };
@@ -84,6 +86,7 @@ export class SettingsService {
       emailEnabled: dto.emailEnabled,
       email: dto.email ?? null,
       monthlyReportEnabled: dto.monthlyReportEnabled,
+      monthlyReportEmail: dto.monthlyReportEmail ?? null,
       slackEnabled: dto.slackEnabled,
       slackWebhookUrl: dto.slackWebhookUrl ?? null,
     };

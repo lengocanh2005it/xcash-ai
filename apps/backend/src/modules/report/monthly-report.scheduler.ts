@@ -55,7 +55,13 @@ export class MonthlyReportScheduler {
       }
 
       const config = await this.settingsService.getNotifications(tenant.id);
-      if (!config.monthlyReportEnabled || !config.email?.trim()) {
+      if (!config.monthlyReportEnabled) {
+        skipped++;
+        continue;
+      }
+
+      const reportEmail = config.monthlyReportEmail?.trim() || config.email?.trim();
+      if (!reportEmail) {
         skipped++;
         continue;
       }
@@ -93,7 +99,7 @@ export class MonthlyReportScheduler {
 
         const jobData: EmailMonthlyReportJobData = {
           tenantId: tenant.id,
-          to: config.email.trim(),
+          to: reportEmail,
           businessName: tenant.businessName,
           year,
           month,

@@ -58,6 +58,7 @@ export function NotificationsTab() {
         emailEnabled: boolean;
         email: string | null;
         monthlyReportEnabled: boolean;
+        monthlyReportEmail: string | null;
         slackEnabled: boolean;
         slackWebhookUrl: string | null;
       }>('/settings/notifications'),
@@ -67,6 +68,7 @@ export function NotificationsTab() {
     emailEnabled: false,
     email: '',
     monthlyReportEnabled: false,
+    monthlyReportEmail: '',
     slackEnabled: false,
     slackWebhookUrl: '',
   });
@@ -78,6 +80,7 @@ export function NotificationsTab() {
       emailEnabled: data.emailEnabled,
       email: data.email ?? '',
       monthlyReportEnabled: data.monthlyReportEnabled,
+      monthlyReportEmail: data.monthlyReportEmail ?? '',
       slackEnabled: data.slackEnabled,
       slackWebhookUrl: data.slackWebhookUrl ?? '',
     });
@@ -153,6 +156,13 @@ export function NotificationsTab() {
               onCheckedChange={(v) => setForm((f) => ({ ...f, monthlyReportEnabled: v }))}
             />
           </div>
+          {canEmail && form.monthlyReportEnabled && (
+            <Input
+              placeholder="email@company.com"
+              value={form.monthlyReportEmail}
+              onChange={(e) => setForm((f) => ({ ...f, monthlyReportEmail: e.target.value }))}
+            />
+          )}
         </div>
 
         <Separator />

@@ -70,6 +70,7 @@ export class CopilotStreamService {
           this.copilotToolService,
           conversation.id,
           user.role,
+          financialContext,
         );
         reply = result.reply;
         activities = result.activities;

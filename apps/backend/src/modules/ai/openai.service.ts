@@ -266,6 +266,7 @@ ${financialContext}`;
     toolService: CopilotToolService,
     conversationId?: string,
     role?: Role,
+    financialContext?: string,
   ): Promise<{ reply: string; activities: CopilotActivity[] }> {
     const calledTools: string[] = [];
     const resultsCapture = new Map<string, unknown>();
@@ -306,10 +307,19 @@ ${financialContext}`;
       return { reply, activities };
     } catch (error) {
       this.logger.error(
-        'Copilot runTools failed',
+        'Copilot runTools failed, falling back to simple chat',
         error instanceof Error ? error.message : String(error),
       );
-      return { reply: 'Xin lỗi, có lỗi xảy ra. Vui lòng thử lại.', activities: [] };
+
+      // Fallback to simple chat (has MiniMax fallback built-in)
+      const reply = await this.chatCopilot(
+        message,
+        history,
+        financialContext ?? '',
+        tenantId,
+        conversationId,
+      );
+      return { reply, activities: [] };
     }
   }
 

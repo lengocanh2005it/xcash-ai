@@ -41,7 +41,12 @@ export function SidebarShell({
             collapsed ? 'flex-col gap-2' : 'justify-between',
           )}
         >
-          <div className={cn('flex min-w-0 items-center gap-3', collapsed && 'justify-center')}>
+          <div
+            className={cn(
+              'flex min-w-0 items-center gap-3 overflow-hidden',
+              collapsed && 'justify-center',
+            )}
+          >
             <Logo collapsed={collapsed} markSize={36} />
           </div>
 

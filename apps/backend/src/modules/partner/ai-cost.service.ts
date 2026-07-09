@@ -2,11 +2,7 @@ import { Injectable } from '@nestjs/common';
 import type { AiCallType } from '@prisma/client';
 import { Prisma } from '@prisma/client';
 import { calcCostUsd } from '../../common/constants/ai-pricing';
-import {
-  paginateParams,
-  paginateResult,
-  totalPagesFromTotal,
-} from '../../common/util/pagination.util';
+import { paginateParams, totalPagesFromTotal } from '../../common/util/pagination.util';
 import { PrismaService } from '../../prisma/prisma.service';
 import { parseFilterEndDate, parseFilterStartDate } from './utils/date.util';
 

@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { ClassificationType, Prisma, TransactionStatus } from '@prisma/client';
+import { createAuditLog } from '../../common/util/audit-log.util';
 import { PrismaService } from '../../prisma/prisma.service';
 import { NotificationService } from '../notification/notification.service';
 import { EmbeddingService } from './embedding.service';
@@ -111,15 +112,13 @@ export class ClassificationService {
         data: { status },
       });
 
-      await tx.auditLog.create({
-        data: {
-          tenantId: transaction.tenantId,
-          entityType: 'transaction_classification',
-          entityId: created.id,
-          action: autoClassified ? 'ai_auto_classify' : 'ai_queued_review',
-          actor: 'ai',
-          afterState: { debitAccount, creditAccount, confidenceScore, reason },
-        },
+      await createAuditLog(tx, {
+        tenantId: transaction.tenantId,
+        entityType: 'transaction_classification',
+        entityId: created.id,
+        action: autoClassified ? 'ai_auto_classify' : 'ai_queued_review',
+        actor: 'ai',
+        afterState: { debitAccount, creditAccount, confidenceScore, reason },
       });
 
       return created;

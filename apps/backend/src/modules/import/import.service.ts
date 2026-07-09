@@ -9,6 +9,7 @@ import {
 import type { TransactionDirection } from '@xcash/shared-types';
 import type { Queue } from 'bullmq';
 import * as XLSX from 'xlsx';
+import { createAuditLog } from '../../common/util/audit-log.util';
 import { paginateParams, paginateResult } from '../../common/util/pagination.util';
 import { PrismaService } from '../../prisma/prisma.service';
 import { WEBHOOK_QUEUE } from '../../queue/queue.module';
@@ -419,15 +420,13 @@ export class ImportService {
         data: { importedCount: imported, skippedCount: skipped },
       });
 
-      await tx.auditLog.create({
-        data: {
-          tenantId,
-          entityType: 'transaction_import_batch',
-          entityId: batch.id,
-          action: 'transaction_import',
-          actor: userId,
-          afterState: { fileName, totalRows: rows.length, imported, skipped },
-        },
+      await createAuditLog(tx, {
+        tenantId,
+        entityType: 'transaction_import_batch',
+        entityId: batch.id,
+        action: 'transaction_import',
+        actor: userId,
+        afterState: { fileName, totalRows: rows.length, imported, skipped },
       });
     });
 

@@ -13,6 +13,7 @@ import { Prisma, SubscriptionPlan, TransactionDirection, TransactionSource } fro
 import type { Queue } from 'bullmq';
 import { isOveragePlan } from '../../common/constants/quota-policy';
 import { QuotaNotificationService } from '../../common/services/quota-notification.service';
+import { createAuditLog } from '../../common/util/audit-log.util';
 import { PrismaService } from '../../prisma/prisma.service';
 import { WEBHOOK_QUEUE } from '../../queue/queue.module';
 import { RedisService } from '../../redis/redis.service';
@@ -200,18 +201,16 @@ export class BankingService {
         });
       }
 
-      await tx.auditLog.create({
-        data: {
-          tenantId: grant.tenantId,
-          entityType: 'transaction',
-          entityId: transaction.id,
-          action: 'webhook_received',
-          actor: 'system',
-          afterState: {
-            transactionId,
-            grantId: payload.grantId,
-            amount: txn.amount,
-          },
+      await createAuditLog(tx, {
+        tenantId: grant.tenantId,
+        entityType: 'transaction',
+        entityId: transaction.id,
+        action: 'webhook_received',
+        actor: 'system',
+        afterState: {
+          transactionId,
+          grantId: payload.grantId,
+          amount: txn.amount,
         },
       });
 

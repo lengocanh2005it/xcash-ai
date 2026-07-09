@@ -7,7 +7,7 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { type SubscriptionPlan, TransactionSource } from '@prisma/client';
-import { isOveragePlan, OVERAGE_PLANS } from '../../common/constants/quota-policy';
+import { isOveragePlan } from '../../common/constants/quota-policy';
 import { invalidateTenantPlanCache } from '../../common/util/tenant-plan-cache';
 import { PrismaService } from '../../prisma/prisma.service';
 import { RedisService } from '../../redis/redis.service';

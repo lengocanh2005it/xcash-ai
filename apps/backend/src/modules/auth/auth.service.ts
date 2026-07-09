@@ -9,6 +9,7 @@ import {
 import { Prisma, Role as PrismaRole, type SubscriptionPlan } from '@prisma/client';
 import * as bcrypt from 'bcryptjs';
 import type { AuthenticatedUser } from '../../common/types/authenticated-user.type';
+import { createAuditLog } from '../../common/util/audit-log.util';
 import { PrismaService } from '../../prisma/prisma.service';
 import { ChartOfAccountsService } from '../chart-of-accounts/chart-of-accounts.service';
 import { TeamInviteService } from '../team/team-invite.service';
@@ -104,17 +105,15 @@ export class AuthService {
           },
         });
 
-        await tx.auditLog.create({
-          data: {
-            tenantId: tenant.id,
-            entityType: 'tenant',
-            entityId: tenant.id,
-            action: 'tenant_registered',
-            actor: createdUser.id,
-            afterState: {
-              businessName: tenant.businessName,
-              adminEmail: createdUser.email,
-            },
+        await createAuditLog(tx, {
+          tenantId: tenant.id,
+          entityType: 'tenant',
+          entityId: tenant.id,
+          action: 'tenant_registered',
+          actor: createdUser.id,
+          afterState: {
+            businessName: tenant.businessName,
+            adminEmail: createdUser.email,
           },
         });
 

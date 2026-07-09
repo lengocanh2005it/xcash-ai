@@ -1,5 +1,6 @@
 import { ConflictException, Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { createAuditLog } from '../../common/util/audit-log.util';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CAS_DEFAULT_GRANT_SCOPES, CasClientService } from '../cas/cas-client.service';
 
@@ -88,19 +89,17 @@ export class OnboardingService {
       },
     });
 
-    await this.prisma.auditLog.create({
-      data: {
-        tenantId,
-        entityType: 'cas_grant',
-        entityId: grant.id,
-        action: 'banking_linked',
-        actor: userId,
-        afterState: {
-          grantId: grant.grantId,
-          accountNumber: grant.accountNumber,
-          accountHolderName: grant.accountHolderName,
-          bankName: grant.bankName,
-        },
+    await createAuditLog(this.prisma, {
+      tenantId,
+      entityType: 'cas_grant',
+      entityId: grant.id,
+      action: 'banking_linked',
+      actor: userId,
+      afterState: {
+        grantId: grant.grantId,
+        accountNumber: grant.accountNumber,
+        accountHolderName: grant.accountHolderName,
+        bankName: grant.bankName,
       },
     });
 

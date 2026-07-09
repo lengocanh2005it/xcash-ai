@@ -1,6 +1,7 @@
 import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import type { SubscriptionStatus } from '@prisma/client';
 import { Prisma } from '@prisma/client';
+import { createAuditLog } from '../../common/util/audit-log.util';
 import { PrismaService } from '../../prisma/prisma.service';
 import { NotificationService } from '../notification/notification.service';
 import { getMonthStart } from './utils/date.util';
@@ -163,14 +164,12 @@ export class TenantManagementService {
       data: { status: 'suspended' },
     });
 
-    await this.prisma.auditLog.create({
-      data: {
-        tenantId,
-        entityType: 'tenant',
-        entityId: tenantId,
-        action: 'tenant_suspended',
-        actor: partnerUserId,
-      },
+    await createAuditLog(this.prisma, {
+      tenantId,
+      entityType: 'tenant',
+      entityId: tenantId,
+      action: 'tenant_suspended',
+      actor: partnerUserId,
     });
 
     void this.notificationService
@@ -193,14 +192,12 @@ export class TenantManagementService {
       data: { status: 'active' },
     });
 
-    await this.prisma.auditLog.create({
-      data: {
-        tenantId,
-        entityType: 'tenant',
-        entityId: tenantId,
-        action: 'tenant_activated',
-        actor: partnerUserId,
-      },
+    await createAuditLog(this.prisma, {
+      tenantId,
+      entityType: 'tenant',
+      entityId: tenantId,
+      action: 'tenant_activated',
+      actor: partnerUserId,
     });
 
     return { success: true };

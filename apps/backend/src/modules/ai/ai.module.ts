@@ -13,6 +13,7 @@ import { AiUsageLogService } from './ai-usage-log.service';
 import { ClassificationProcessor } from './classification.processor';
 import { ClassificationService } from './classification.service';
 import { CopilotController } from './copilot.controller';
+import { CopilotAgentService } from './copilot-agent.service';
 import { CopilotBillingService } from './copilot-billing.service';
 import { CopilotContextService } from './copilot-context.service';
 import { CopilotConversationService } from './copilot-conversation.service';
@@ -22,6 +23,10 @@ import { CopilotStreamService } from './copilot-stream.service';
 import { CopilotToolService } from './copilot-tool.service';
 import { CopilotTransactionQueryService } from './copilot-tx-query.service';
 import { EmbeddingService } from './embedding.service';
+import { DeepSeekLlmProvider } from './llm/deepseek-llm.provider';
+import { GeminiLlmProvider } from './llm/gemini-llm.provider';
+import { MinimaxLlmProvider } from './llm/minimax-llm.provider';
+import { OpenAiLlmProvider } from './llm/openai-llm.provider';
 import { OpenAiService } from './openai.service';
 
 @Module({
@@ -37,6 +42,11 @@ import { OpenAiService } from './openai.service';
   providers: [
     AiUsageLogService,
     OpenAiService,
+    OpenAiLlmProvider,
+    MinimaxLlmProvider,
+    DeepSeekLlmProvider,
+    GeminiLlmProvider,
+    CopilotAgentService,
     EmbeddingService,
     ClassificationService,
     ClassificationProcessor,

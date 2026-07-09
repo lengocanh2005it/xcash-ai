@@ -2,7 +2,9 @@
 
 > Mục đích: cho biết **chính xác** cái gì đã tồn tại trong repo ngay lúc này, để agent không cần `find`/`grep`/`ls` lại từ đầu mỗi session mới. File này phải được cập nhật mỗi khi có thay đổi cấu trúc đáng kể (thêm module, thêm page, đổi dependency lớn, thêm service hạ tầng). Nếu file này và thực tế code lệch nhau, **tin thực tế code**, và sửa lại file này ngay sau đó.
 
-Cập nhật lần cuối: **Copilot action-tool thứ hai — `propose_correct_transaction_classification`** (branch `feat/copilot-correct-action`, PR chưa tạo). Tool read-only/dry-run, dùng chung flag `COPILOT_ACTION_TOOLS_ENABLED`; nhận `debitAccount`/`creditAccount` mới do **user** tự nêu (model không tự đề xuất), validate tồn tại + active trong `ChartOfAccount` (1 query `findMany` cho cả 2 mã, không gọi lại tool `lookup_chart_account`); thứ tự check role → status → mã TK. FE mới `CopilotCorrectionCard.tsx` (card so sánh định khoản cũ/mới) — gọi thẳng `POST /review/:id/correct` (nay nhận thêm optional `source?: 'copilot'` giống `confirm`). `CopilotActionCardData` (shared-types) đổi từ interface đơn sang discriminated union (`CopilotConfirmActionCardData | CopilotCorrectActionCardData`, phân biệt qua field `tool`). `pnpm verify` pass 10/10.
+Cập nhật lần cuối: **Copilot LLM Provider Adapter** (branch `feat/copilot-llm-provider-adapter`, issues #31 + #32).
+
+Trước đó — **Copilot action-tool thứ hai — `propose_correct_transaction_classification`** (branch `feat/copilot-correct-action`, PR chưa tạo). Tool read-only/dry-run, dùng chung flag `COPILOT_ACTION_TOOLS_ENABLED`; nhận `debitAccount`/`creditAccount` mới do **user** tự nêu (model không tự đề xuất), validate tồn tại + active trong `ChartOfAccount` (1 query `findMany` cho cả 2 mã, không gọi lại tool `lookup_chart_account`); thứ tự check role → status → mã TK. FE mới `CopilotCorrectionCard.tsx` (card so sánh định khoản cũ/mới) — gọi thẳng `POST /review/:id/correct` (nay nhận thêm optional `source?: 'copilot'` giống `confirm`). `CopilotActionCardData` (shared-types) đổi từ interface đơn sang discriminated union (`CopilotConfirmActionCardData | CopilotCorrectActionCardData`, phân biệt qua field `tool`). `pnpm verify` pass 10/10.
 
 Trước đó — **Copilot action-tool đầu tiên — `propose_confirm_transaction_classification`** (branch `feat/copilot-confirm-action`, đã merge vào main qua PR #23). Tool read-only/dry-run, gated `COPILOT_ACTION_TOOLS_ENABLED` (default 0); FE render "action card" trong chat (`CopilotActionCard.tsx`) — re-check status live qua `useQuery`, xác nhận qua `useMutation` gọi thẳng `POST /review/:id/confirm` (không qua AI); endpoint đó nhận thêm optional `source?: 'copilot'` để audit trail. `CopilotActivity` (shared-types) thêm variant `kind: 'action_card'` + field `actionCard`. `getReviewQueue()` giờ select thêm `transaction.id`; `ReviewPage` có cột "Mã GD" (`CopyIdButton.tsx`, copy-to-clipboard) để lấy transactionId dán vào Copilot. `pnpm verify` pass 10/10.
 
@@ -298,6 +300,21 @@ Trước đó — **Phase 7 polish + UX hardening** — Settings tab phân trang
 - Backend: bỏ unused `RedisService` param khỏi `BillingService` + `PlanPricingService` constructors ✅
 - `pnpm verify` pass 11/11 ✅
 
+**Đã xong (Copilot LLM Provider Adapter — issues #31 + #32):**
+- Backend: `llm/llm-provider.interface.ts` — `LlmProviderAdapter` interface (`chat()`, `isAvailable()`, `getDefaultModel()`, `isQuotaOrBillingError()`, `isRetryableError()`), `LlmMessage`, `LlmToolCall`, `LlmChatResult`, `LlmToolDefinition` (plain JSON Schema) ✅
+- Backend: `llm/openai-llm.provider.ts` — OpenAI adapter wraps `chat.completions.create` (tools, tool_choice, tool_calls filter `type === 'function'`), type guard cho error classification ✅
+- Backend: `llm/minimax-llm.provider.ts` — MiniMax adapter (OpenAI-compatible `baseURL: api.minimax.io/v1`, reasoning tag strip `stripLlmReasoningTags`) ✅
+- Backend: `llm/deepseek-llm.provider.ts` — DeepSeek adapter (OpenAI-compatible `baseURL: api.deepseek.com/v1`) ✅
+- Backend: `llm/gemini-llm.provider.ts` — Gemini adapter (Google AI OpenAI-compatible endpoint `generativelanguage.googleapis.com/v1beta/openai/`) ✅
+- Backend: `copilot-agent.service.ts` — `CopilotAgentService` agent loop generic: LLM → parse toolCalls → `CopilotToolService.execute()` → append `role: tool` → lặp (max N rounds); `runWithFallback()` tries providers in order theo `COPILOT_LLM_PROVIDER` comma-separated chain (default: openai,minimax,deepseek,gemini); AbortController signal support ✅
+- Backend: `copilot-tools.factory.ts` — thêm `buildCopilotToolDefinitions()` (schema-only); giữ `buildCopilotTools()` deprecated cho backward compat ✅
+- Backend: `copilot-stream.service.ts` — wire `CopilotAgentService.runWithFallback()` thay `createCopilotRunner()` ✅
+- Backend: `openai.service.ts` — bỏ `createCopilotRunner()` + `chatCopilotWithTools()`; giữ `chatCopilot()`, `buildCopilotSystemPrompt()`, `classifyTransaction()`, `createEmbedding()`, `generateCopilotTitle()` ✅
+- Backend: `ai.module.ts` — register `OpenAiLlmProvider`, `MinimaxLlmProvider`, `DeepSeekLlmProvider`, `GeminiLlmProvider`, `CopilotAgentService` ✅
+- Backend: `configuration.ts` — thêm `COPILOT_LLM_PROVIDER` (default `openai,minimax,deepseek,gemini`), `COPILOT_AGENT_MAX_ROUNDS` (default 5), `DEEPSEEK_API_KEY`, `DEEPSEEK_CHAT_MODEL`, `GEMINI_API_KEY`, `GEMINI_CHAT_MODEL` ✅
+- ADR: `agent-docs/reference/copilot-llm-provider-adapter.md` ✅
+- `pnpm verify` pass 11/11 ✅
+
 **Chưa làm (Sprint 4 — còn lại):**
 - Bổ sung env production đầy đủ vào `docker-compose.yml` (OpenAI, Resend, PayOS, v.v.) + deploy lên VPS
 - SSL/HTTPS + nginx config production (domain thật, certbot) — template có tại `deploy/nginx/xcash.conf`
@@ -343,6 +360,7 @@ paypilot-ai/                                   ← tên folder local có thể k
 │       ├── payos-billing-plan.md              ← PayOS billing (đã hoàn thành) ✅
 │       ├── tt133-accounting.md                ← giải thích TT133 theo góc nhìn dev ✅
 │       └── copilot-function-calling-migration.md ← spec migrate Copilot → runTools (Phase 1 ✅; Phase 2 ✅; Phase 3 ✅)
+│       └── copilot-llm-provider-adapter.md      ← ADR: decouple agent loop khỏi OpenAI runTools ✅
 ├── apps/
 │   ├── backend/
 │   │   ├── .env.example
@@ -371,7 +389,7 @@ paypilot-ai/                                   ← tên folder local có thể k
 │   │   └── src/
 │   │       ├── main.ts
 │   │       ├── app.module.ts                  # imports: Auth, Cas, Health, Onboarding, Banking, Ai, AuditLog, ChartOfAccounts, Classification, Report, Transaction, Settings, Team, Billing, Partner, Notification, Profile; StorageModule; + ThrottlerModule + APP_GUARD (TenantThrottlerGuard)
-│   │       ├── config/configuration.ts        # + RATE_LIMIT_PER_MINUTE, AZURE_STORAGE_*, COPILOT_USE_FUNCTION_CALLING, COPILOT_CONTEXT_CACHE_TTL_SECONDS
+│   │       ├── config/configuration.ts        # + RATE_LIMIT_PER_MINUTE, AZURE_STORAGE_*, COPILOT_USE_FUNCTION_CALLING, COPILOT_LLM_PROVIDER (comma-separated chain), COPILOT_AGENT_MAX_ROUNDS, DEEPSEEK_*, GEMINI_*
 │   │       ├── common/
 │   │       │   ├── constants/
 │   │       │   │   ├── quota-policy.ts          # OVERAGE_PLANS, QUOTA_WARNING_RATIO, isOveragePlan() — shared across billing/banking ✅
@@ -405,15 +423,22 @@ paypilot-ai/                                   ← tên folder local có thể k
 │   │           │   ├── ai-usage-log.service.ts    # AiUsageLogService.record() — fire-and-forget AI token logging (seam duy nhất) ✅
 │   │           │   ├── ai-usage-log.service.spec.ts  # 4 tests: classify/embedding/copilot/error-swallow ✅
 │   │           │   ├── copilot.controller.ts      # POST /ai/copilot + POST /ai/copilot/stream + 4 conversation CRUD endpoints — CopilotQuotaGuard method-level (chat+stream only); controller deps 3 (CopilotStreamService, CopilotConversationService, RedisService) ✅
-│   │           │   ├── copilot-stream.service.ts  # chat() + streamChat() — toàn bộ streaming pipeline, tool calling, abort/partial, quota (extracted from controller) ✅
+│   │           │   ├── copilot-stream.service.ts  # chat() + streamChat() — wire CopilotAgentService.runWithFallback() thay createCopilotRunner() ✅
 │   │           │   ├── copilot-quota.service.ts   # incrementAndNotify() — quota check + increment + notify (extracted from controller) ✅
 │   │           │   ├── copilot-activity.helper.ts # TOOL_ACTIVITIES, getStreamingActivityMeta(), buildActivities() — extracted from OpenAiService ✅
 │   │           │   ├── copilot-conversation.service.ts  # CRUD conversations + messages, cursor pagination, auto-title fire-and-forget, deleteMessage() dangling cleanup (Phase 6) ✅
 │   │           │   ├── copilot-context.service.ts # Fallback: preload summary tháng hiện tại (dùng khi flag=0)
 │   │           │   ├── copilot-tool.service.ts    # execute(tenantId, name, args, role?) — 8 tools + Redis cache (+ search_casso_public + 2 action-tool: propose_confirm_transaction_classification, propose_correct_transaction_classification, khi bật) ✅
 │   │           │   ├── copilot-tool.service.spec.ts  # 2 describe block: propose_confirm (3 test: review/non-review/viewer) + propose_correct (4 test: hợp lệ/viewer/non-review/mã TK sai) ✅
-│   │           │   ├── copilot-tools.factory.ts   # buildCopilotTools() → 8 Tool[] (+ search_casso_public riêng flag; + 2 action-tool dùng chung COPILOT_ACTION_TOOLS_ENABLED) ✅
+│   │           │   ├── copilot-tools.factory.ts   # buildCopilotTools() [deprecated] + buildCopilotToolDefinitions() (schema-only for agent loop) ✅
+│   │           │   ├── copilot-agent.service.ts   # CopilotAgentService — generic agent loop (LLM → toolCalls → execute → append → loop), runWithFallback() ✅
 │   │           │   ├── copilot-cas-faq.ts         # FAQ tĩnh Casso/Cas Link (4 topics)
+│   │           │   ├── llm/
+│   │           │   │   ├── llm-provider.interface.ts  # LlmProviderAdapter, LlmMessage, LlmToolCall, LlmChatResult, LlmToolDefinition ✅
+│   │           │   │   ├── openai-llm.provider.ts     # OpenAiLlmProvider — chat.completions.create, tool_calls filter ✅
+│   │           │   │   ├── minimax-llm.provider.ts    # MinimaxLlmProvider — OpenAI-compatible, reasoning tag strip ✅
+│   │           │   │   ├── deepseek-llm.provider.ts   # DeepSeekLlmProvider — OpenAI-compatible, baseurl api.deepseek.com/v1 ✅
+│   │           │   │   └── gemini-llm.provider.ts     # GeminiLlmProvider — Google AI OpenAI-compatible endpoint ✅
 │   │           │   └── dto/
 │   │           │       └── copilot-conversation.dto.ts  # ListConversationsQueryDto, GetConversationQueryDto, RenameConversationDto ✅
 │   │           ├── chart-of-accounts/         # CRUD + seedTt133() ✅

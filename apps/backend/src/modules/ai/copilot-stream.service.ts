@@ -1,20 +1,19 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import type { CopilotActivity } from '@xcash/shared-types';
 import type { Response } from 'express';
 import type { AuthenticatedUser } from '../../common/types/authenticated-user.type';
 import { AiUsageLogService } from './ai-usage-log.service';
 import {
-  buildActivities,
   COPILOT_INITIAL_STREAM_ACTIVITY,
   getStreamingActivityMeta,
 } from './copilot-activity.helper';
+import { CopilotAgentService } from './copilot-agent.service';
 import { CopilotContextService } from './copilot-context.service';
 import { CopilotConversationService } from './copilot-conversation.service';
 import { CopilotQuotaService } from './copilot-quota.service';
 import { CopilotToolService } from './copilot-tool.service';
 import { OpenAiService } from './openai.service';
-import { isQuotaOrBillingError } from './utils/llm-error.util';
-import { sanitizeCopilotOutput } from './utils/llm-output.util';
 
 interface CopilotStreamMessage {
   message: string;
@@ -28,6 +27,7 @@ export class CopilotStreamService {
 
   constructor(
     private readonly openAiService: OpenAiService,
+    private readonly agentService: CopilotAgentService,
     private readonly conversationService: CopilotConversationService,
     private readonly copilotToolService: CopilotToolService,
     private readonly copilotQuotaService: CopilotQuotaService,
@@ -61,23 +61,37 @@ export class CopilotStreamService {
       : dto.history;
 
     let reply: string;
-    let activities: ReturnType<typeof buildActivities> = [];
-    let meta: { activities: ReturnType<typeof buildActivities> } | undefined;
+    let activities: CopilotActivity[] = [];
+    let meta: { activities: CopilotActivity[] } | undefined;
 
     try {
       if (useFunctionCalling) {
-        const result = await this.openAiService.chatCopilotWithTools(
+        const result = await this.agentService.runWithFallback({
           tenantId,
-          dto.message,
+          message: dto.message,
           history,
-          this.copilotToolService,
-          conversation.id,
-          user.role,
+          toolService: this.copilotToolService,
+          systemPrompt: this.openAiService.buildCopilotSystemPrompt(
+            this.configService.get<boolean>('COPILOT_CASSO_SEARCH_ENABLED') ?? false,
+          ),
+          role: user.role,
+          conversationId: conversation.id,
           financialContext,
-        );
+        });
         reply = result.reply;
         activities = result.activities;
         meta = activities.length > 0 ? { activities } : undefined;
+
+        if (result.usage) {
+          this.aiUsageLogService.record({
+            tenantId,
+            callType: 'copilot',
+            model: result.model,
+            tokensIn: result.usage.promptTokens,
+            tokensOut: result.usage.completionTokens,
+            conversationId: conversation.id,
+          });
+        }
       } else {
         reply = await this.openAiService.chatCopilot(
           dto.message,
@@ -140,8 +154,8 @@ export class CopilotStreamService {
 
     const finishStream = async (
       reply: string,
-      meta: { activities: ReturnType<typeof buildActivities> } | undefined,
-      activities: ReturnType<typeof buildActivities>,
+      meta: { activities: CopilotActivity[] } | undefined,
+      activities: CopilotActivity[],
     ) => {
       writeEvent('done', { reply, meta, conversationId: conversation.id });
       void this.conversationService
@@ -160,13 +174,11 @@ export class CopilotStreamService {
 
     let wasAborted = false;
     let accumulatedContent = '';
-    let runnerInstance: NonNullable<
-      ReturnType<typeof this.openAiService.createCopilotRunner>
-    > | null = null;
 
+    const abortController = new AbortController();
     reqOnClose(() => {
       wasAborted = true;
-      runnerInstance?.abort();
+      abortController.abort();
     });
 
     try {
@@ -182,64 +194,43 @@ export class CopilotStreamService {
         return;
       }
 
-      const resultsCapture = new Map<string, unknown>();
-      const runner = this.openAiService.createCopilotRunner(
+      const result = await this.agentService.runWithFallback({
         tenantId,
-        dto.message,
+        message: dto.message,
         history,
-        this.copilotToolService,
-        resultsCapture,
-        user.role,
-      );
-
-      if (!runner) {
-        if (!wasAborted) {
-          const reply = await this.openAiService.chatCopilot(
-            dto.message,
-            history,
-            financialContext,
-            tenantId,
-            conversation.id,
-          );
-          await finishStream(reply, undefined, []);
-        }
-        return;
-      }
-
-      runnerInstance = runner;
-      const calledTools: string[] = [];
-
-      runner.on('functionToolCall', (call) => {
-        calledTools.push(call.name);
-        const meta = getStreamingActivityMeta(call.name);
-        if (meta) writeEvent('activity', meta);
+        toolService: this.copilotToolService,
+        systemPrompt: this.openAiService.buildCopilotSystemPrompt(
+          this.configService.get<boolean>('COPILOT_CASSO_SEARCH_ENABLED') ?? false,
+        ),
+        role: user.role,
+        conversationId: conversation.id,
+        financialContext,
+        onToolCall: (name) => {
+          const meta = getStreamingActivityMeta(name);
+          if (meta) writeEvent('activity', meta);
+        },
+        onDelta: (delta) => {
+          if (delta) {
+            accumulatedContent += delta;
+            writeEvent('delta', { content: delta });
+          }
+        },
+        abortSignal: abortController.signal,
       });
-
-      runner.on('content', (delta: string) => {
-        if (delta) {
-          accumulatedContent += delta;
-          writeEvent('delta', { content: delta });
-        }
-      });
-
-      const reply = sanitizeCopilotOutput(
-        (await runner.finalContent()) ?? '',
-        'Xin lỗi, tôi không thể trả lời lúc này.',
-      );
-      const activities = buildActivities(calledTools, resultsCapture);
-      const meta = activities.length > 0 ? { activities } : undefined;
 
       if (!wasAborted) {
-        const usage = await runner.totalUsage();
-        this.aiUsageLogService.record({
-          tenantId,
-          callType: 'copilot',
-          model: this.openAiService.getChatModel(),
-          tokensIn: usage.prompt_tokens,
-          tokensOut: usage.completion_tokens,
-          conversationId: conversation.id,
-        });
-        await finishStream(reply, meta, activities);
+        if (result.usage) {
+          this.aiUsageLogService.record({
+            tenantId,
+            callType: 'copilot',
+            model: result.model,
+            tokensIn: result.usage.promptTokens,
+            tokensOut: result.usage.completionTokens,
+            conversationId: conversation.id,
+          });
+        }
+        const meta = result.activities.length > 0 ? { activities: result.activities } : undefined;
+        await finishStream(result.reply, meta, result.activities);
       }
     } catch (err) {
       if (!wasAborted) {
@@ -249,9 +240,7 @@ export class CopilotStreamService {
         }
 
         this.logger.warn(
-          isQuotaOrBillingError(err)
-            ? 'Copilot runTools hết quota/credit, chuyển simple chat (MiniMax) ngay'
-            : 'Copilot stream runTools failed, falling back to simple chat',
+          'Copilot agent failed, falling back to simple chat',
           err instanceof Error ? err.message : String(err),
         );
         const reply = await this.openAiService.chatCopilot(

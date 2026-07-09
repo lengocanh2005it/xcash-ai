@@ -1,15 +1,9 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import type { CopilotActivity, Role } from '@xcash/shared-types';
 import OpenAI from 'openai';
 import { AiUsageLogService } from './ai-usage-log.service';
-import { buildActivities } from './copilot-activity.helper';
-import type { CopilotToolService } from './copilot-tool.service';
-import { buildCopilotTools } from './copilot-tools.factory';
 import { isQuotaOrBillingError, shouldFallbackProvider } from './utils/llm-error.util';
 import { sanitizeCopilotOutput } from './utils/llm-output.util';
-
-export type { CopilotActivity };
 
 export interface ClassificationResult {
   debitAccount: string;
@@ -48,14 +42,12 @@ export class OpenAiService {
     this.chatModel = this.configService.get<string>('OPENAI_CHAT_MODEL', 'gpt-4o-mini');
     this.client = apiKey ? new OpenAI({ apiKey, maxRetries: 0 }) : null;
 
-    // Jina fallback for embeddings
     const jinaKey = this.configService.get<string>('JINA_API_KEY', '');
     this.jinaModel = this.configService.get<string>('JINA_EMBEDDING_MODEL', 'jina-embeddings-v3');
     this.jinaClient = jinaKey
       ? new OpenAI({ apiKey: jinaKey, baseURL: 'https://api.jina.ai/v1', maxRetries: 2 })
       : null;
 
-    // MiniMax fallback for LLM chat
     const minimaxKey = this.configService.get<string>('MINIMAX_API_KEY', '');
     this.minimaxModel = this.configService.get<string>('MINIMAX_CHAT_MODEL', 'MiniMax-M3');
     this.minimaxClient = minimaxKey
@@ -88,7 +80,6 @@ export class OpenAiService {
       return null;
     }
 
-    // Try OpenAI first
     if (this.client) {
       try {
         const response = await this.client.embeddings.create({
@@ -119,7 +110,6 @@ export class OpenAiService {
       }
     }
 
-    // Fallback: Jina
     if (this.jinaClient) {
       const response = await this.jinaClient.embeddings.create({
         model: this.jinaModel,
@@ -174,7 +164,6 @@ ${financialContext}`;
       { role: 'user' as const, content: message },
     ];
 
-    // Try OpenAI first
     if (this.client) {
       try {
         const response = await this.client.chat.completions.create({
@@ -215,7 +204,6 @@ ${financialContext}`;
       }
     }
 
-    // Fallback: MiniMax
     if (this.minimaxClient) {
       try {
         const response = await this.minimaxClient.chat.completions.create({
@@ -249,77 +237,6 @@ ${financialContext}`;
     }
 
     return 'Xin lỗi, có lỗi xảy ra. Vui lòng thử lại.';
-  }
-
-  async chatCopilotWithTools(
-    tenantId: string,
-    message: string,
-    history: Array<{ role: 'user' | 'assistant'; content: string }>,
-    toolService: CopilotToolService,
-    conversationId?: string,
-    role?: Role,
-    financialContext?: string,
-  ): Promise<{ reply: string; activities: CopilotActivity[] }> {
-    const calledTools: string[] = [];
-    const resultsCapture = new Map<string, unknown>();
-
-    try {
-      const runner = this.createCopilotRunner(
-        tenantId,
-        message,
-        history,
-        toolService,
-        resultsCapture,
-        role,
-      );
-      if (!runner) {
-        const reply = await this.chatCopilot(
-          message,
-          history,
-          financialContext ?? '',
-          tenantId,
-          conversationId,
-        );
-        return { reply, activities: [] };
-      }
-
-      runner.on('functionToolCall', (call) => {
-        this.logger.debug(`Copilot tool called: ${call.name}`);
-        calledTools.push(call.name);
-      });
-
-      const reply = sanitizeCopilotOutput(
-        (await runner.finalContent()) ?? '',
-        'Xin lỗi, tôi không thể trả lời lúc này.',
-      );
-      const usage = await runner.totalUsage();
-      this.aiUsageLogService.record({
-        tenantId,
-        callType: 'copilot',
-        model: this.chatModel,
-        tokensIn: usage.prompt_tokens,
-        tokensOut: usage.completion_tokens,
-        conversationId,
-      });
-
-      const activities = buildActivities(calledTools, resultsCapture);
-      return { reply, activities };
-    } catch (error) {
-      this.logger.error(
-        'Copilot runTools failed, falling back to simple chat',
-        error instanceof Error ? error.message : String(error),
-      );
-
-      // Fallback to simple chat (has MiniMax fallback built-in)
-      const reply = await this.chatCopilot(
-        message,
-        history,
-        financialContext ?? '',
-        tenantId,
-        conversationId,
-      );
-      return { reply, activities: [] };
-    }
   }
 
   buildCopilotSystemPrompt(cassoSearchEnabled = false): string {
@@ -380,44 +297,6 @@ Khi nhận data từ knowledge về AI Copilot:
 Không tiết lộ tên tool kỹ thuật, grantId, accessToken, JSON thô. Luôn trả lời tiếng Việt.`;
   }
 
-  createCopilotRunner(
-    tenantId: string,
-    message: string,
-    history: Array<{ role: 'user' | 'assistant'; content: string }>,
-    toolService: CopilotToolService,
-    resultsCapture?: Map<string, unknown>,
-    role?: Role,
-  ) {
-    if (!this.client) return null;
-
-    const cassoSearchEnabled =
-      this.configService.get<boolean>('COPILOT_CASSO_SEARCH_ENABLED') ?? false;
-    const tools = buildCopilotTools(
-      tenantId,
-      toolService,
-      this.configService,
-      resultsCapture,
-      role,
-    );
-    return this.client.chat.completions.runTools(
-      {
-        model: this.chatModel,
-        messages: [
-          { role: 'system', content: this.buildCopilotSystemPrompt(cassoSearchEnabled) },
-          ...history.map((h) => ({ role: h.role as 'user' | 'assistant', content: h.content })),
-          { role: 'user', content: message },
-        ],
-        // biome-ignore lint/suspicious/noExplicitAny: OpenAI SDK tool type requires cast
-        tools: tools as any,
-        tool_choice: 'auto',
-        temperature: 0.3,
-        max_tokens: 1024,
-        stream: true,
-      },
-      { maxChatCompletions: 5, maxRetries: 0 },
-    );
-  }
-
   async generateCopilotTitle(
     firstMessage: string,
     tenantId?: string,
@@ -433,7 +312,6 @@ Không tiết lộ tên tool kỹ thuật, grantId, accessToken, JSON thô. Luô
       { role: 'user' as const, content: safeInput },
     ];
 
-    // Try OpenAI first
     if (this.client) {
       try {
         const response = await this.client.chat.completions.create({
@@ -470,7 +348,6 @@ Không tiết lộ tên tool kỹ thuật, grantId, accessToken, JSON thô. Luô
       }
     }
 
-    // Fallback: MiniMax
     if (this.minimaxClient) {
       try {
         const response = await this.minimaxClient.chat.completions.create({
@@ -495,7 +372,7 @@ Không tiết lộ tên tool kỹ thuật, grantId, accessToken, JSON thô. Luô
     return 'Cuộc chat mới';
   }
 
-  /** @deprecated Dùng chatCopilotWithTools khi COPILOT_USE_FUNCTION_CALLING=1 */
+  /** @deprecated Agent loop giờ ở CopilotAgentService */
   async classifyTransaction(
     content: string,
     amount: number,

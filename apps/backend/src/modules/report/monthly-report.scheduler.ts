@@ -10,7 +10,7 @@ import {
   type EmailMonthlyReportJobData,
 } from '../notification/email.constants';
 import { SettingsService } from '../settings/settings.service';
-import { ReportService } from './report.service';
+import { ReportDataService } from './report-data.service';
 
 @Injectable()
 export class MonthlyReportScheduler {
@@ -18,7 +18,7 @@ export class MonthlyReportScheduler {
 
   constructor(
     private readonly prisma: PrismaService,
-    private readonly reportService: ReportService,
+    private readonly reportService: ReportDataService,
     private readonly settingsService: SettingsService,
     @InjectQueue('email-delivery') private readonly emailQueue: Queue<EmailMonthlyReportJobData>,
   ) {}

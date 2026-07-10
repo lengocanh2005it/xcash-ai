@@ -2,12 +2,12 @@ import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { Role } from '@xcash/shared-types';
 import { RedisService } from '../../redis/redis.service';
-import { ReportService } from '../report/report.service';
+import { ReportDataService } from '../report/report-data.service';
 
 @Injectable()
 export class CopilotContextService {
   constructor(
-    private readonly reportService: ReportService,
+    private readonly reportService: ReportDataService,
     private readonly redisService: RedisService,
     private readonly configService: ConfigService,
   ) {}

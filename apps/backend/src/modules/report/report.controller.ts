@@ -16,30 +16,30 @@ import { PlanGuard } from '../../common/guards/plan.guard';
 import type { AuthenticatedUser } from '../../common/types/authenticated-user.type';
 import { AccountBreakdownQueryDto } from './dto/account-breakdown.dto';
 import { DashboardDailyTrendQueryDto } from './dto/dashboard-charts.dto';
-import { ReportService } from './report.service';
+import { ReportDataService } from './report-data.service';
 
 @ApiTags('reports')
 @Controller('reports')
 @UseGuards(JwtAuthGuard, RolesGuard, PlanGuard)
 export class ReportController {
-  constructor(private readonly service: ReportService) {}
+  constructor(private readonly reportData: ReportDataService) {}
 
   @Get('daily-trend')
   getDailyTrend(
     @CurrentUser() user: AuthenticatedUser,
     @Query() query: DashboardDailyTrendQueryDto,
   ) {
-    return this.service.getDailyTrend(user.tenantId!, query.days ?? 7);
+    return this.reportData.getDailyTrend(user.tenantId!, query.days ?? 7);
   }
 
   @Get('status-breakdown')
   getStatusBreakdown(@CurrentUser() user: AuthenticatedUser) {
-    return this.service.getStatusBreakdown(user.tenantId!);
+    return this.reportData.getStatusBreakdown(user.tenantId!);
   }
 
   @Get('source-breakdown')
   getSourceBreakdown(@CurrentUser() user: AuthenticatedUser) {
-    return this.service.getSourceBreakdown(user.tenantId!);
+    return this.reportData.getSourceBreakdown(user.tenantId!);
   }
 
   @Get('summary')
@@ -48,7 +48,7 @@ export class ReportController {
     @Query('year', new DefaultValuePipe(new Date().getFullYear()), ParseIntPipe) year: number,
     @Query('month', new DefaultValuePipe(new Date().getMonth() + 1), ParseIntPipe) month: number,
   ) {
-    return this.service.getSummary(user.tenantId!, year, month);
+    return this.reportData.getSummary(user.tenantId!, year, month);
   }
 
   @Get('account-breakdown')
@@ -58,7 +58,12 @@ export class ReportController {
   ) {
     const year = query.year ?? new Date().getFullYear();
     const month = query.month ?? new Date().getMonth() + 1;
-    return this.service.getAccountBreakdown(user.tenantId!, year, month, query);
+    return this.reportData.getAccountBreakdown(user.tenantId!, year, month, {
+      page: query.page,
+      limit: query.limit,
+      search: query.search,
+      accountType: query.accountType,
+    });
   }
 
   @Get('by-account')
@@ -71,7 +76,7 @@ export class ReportController {
       from ??
       new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0];
     const toDate = to ?? new Date().toISOString().split('T')[0];
-    return this.service.getByAccount(user.tenantId!, fromDate, toDate);
+    return this.reportData.getByAccount(user.tenantId!, fromDate, toDate);
   }
 
   @Get('comparison')
@@ -81,7 +86,7 @@ export class ReportController {
     @Query('year', new DefaultValuePipe(new Date().getFullYear()), ParseIntPipe) year: number,
     @Query('month', new DefaultValuePipe(new Date().getMonth() + 1), ParseIntPipe) month: number,
   ) {
-    return this.service.getComparison(user.tenantId!, year, month);
+    return this.reportData.getComparison(user.tenantId!, year, month);
   }
 
   @Get('top-accounts')
@@ -92,7 +97,7 @@ export class ReportController {
     @Query('month', new DefaultValuePipe(new Date().getMonth() + 1), ParseIntPipe) month: number,
     @Query('limit', new DefaultValuePipe(5), ParseIntPipe) limit: number,
   ) {
-    return this.service.getTopAccounts(user.tenantId!, year, month, limit);
+    return this.reportData.getTopAccounts(user.tenantId!, year, month, limit);
   }
 
   @Get('export')
@@ -107,7 +112,7 @@ export class ReportController {
       from ??
       new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0];
     const toDate = to ?? new Date().toISOString().split('T')[0];
-    const file = await this.service.exportExcel(user.tenantId!, fromDate, toDate);
+    const file = await this.reportData.exportExcel(user.tenantId!, fromDate, toDate);
     res.set({
       'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
       'Content-Disposition': `attachment; filename="bao-cao-dinh-khoan-${fromDate}-${toDate}.xlsx"`,

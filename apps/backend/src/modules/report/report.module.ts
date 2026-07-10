@@ -6,7 +6,6 @@ import { NotificationModule } from '../notification/notification.module';
 import { SettingsModule } from '../settings/settings.module';
 import { MonthlyReportScheduler } from './monthly-report.scheduler';
 import { ReportController } from './report.controller';
-import { ReportService } from './report.service';
 import { ReportDataService } from './report-data.service';
 
 @Module({
@@ -17,7 +16,7 @@ import { ReportDataService } from './report-data.service';
     BullModule.registerQueue({ name: 'email-delivery' }),
   ],
   controllers: [ReportController],
-  providers: [ReportDataService, ReportService, MonthlyReportScheduler, PlanGuard],
-  exports: [ReportService],
+  providers: [ReportDataService, MonthlyReportScheduler, PlanGuard],
+  exports: [ReportDataService],
 })
 export class ReportModule {}

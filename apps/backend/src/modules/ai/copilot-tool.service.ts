@@ -1,12 +1,12 @@
 import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import type { Role } from '@xcash/shared-types';
-import { ReportService } from '../report/report.service';
+import { ReportDataService } from '../report/report-data.service';
 import { CopilotBillingService } from './copilot-billing.service';
 import { CopilotKnowledgeService } from './copilot-knowledge.service';
 import { COPILOT_TOOLS, type CopilotToolEntry } from './copilot-tool.registry';
 import { CopilotTransactionQueryService } from './copilot-tx-query.service';
 
-type MonthSummary = Awaited<ReturnType<ReportService['getSummary']>>;
+type MonthSummary = Awaited<ReturnType<ReportDataService['getSummary']>>;
 
 /**
  * Thin facade over domain services. Owns only:
@@ -20,7 +20,7 @@ export class CopilotToolService {
   private readonly registry: Map<string, CopilotToolEntry>;
 
   constructor(
-    private readonly reportService: ReportService,
+    private readonly reportService: ReportDataService,
     private readonly knowledgeService: CopilotKnowledgeService,
     private readonly txQueryService: CopilotTransactionQueryService,
     private readonly billingService: CopilotBillingService,
@@ -28,7 +28,7 @@ export class CopilotToolService {
     this.registry = new Map(COPILOT_TOOLS.map((t) => [t.name, t]));
   }
 
-  // ── Reporting (delegates to ReportService) ─────────────────────────────────
+  // ── Reporting (delegates to ReportDataService) ─────────────────────────────
 
   async getMonthSummary(tenantId: string, year: number, month: number): Promise<MonthSummary> {
     return this.reportService.getSummary(tenantId, year, month);

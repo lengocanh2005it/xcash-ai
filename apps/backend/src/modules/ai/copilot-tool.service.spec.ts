@@ -3,7 +3,7 @@ import { Role } from '@xcash/shared-types';
 import { PrismaService } from '../../prisma/prisma.service';
 import { RedisService } from '../../redis/redis.service';
 import { OnboardingService } from '../onboarding/onboarding.service';
-import { ReportService } from '../report/report.service';
+import { ReportDataService } from '../report/report-data.service';
 import { CopilotBillingService } from './copilot-billing.service';
 import { CopilotKnowledgeService } from './copilot-knowledge.service';
 import { CopilotToolService } from './copilot-tool.service';
@@ -382,7 +382,7 @@ describe('CopilotToolService — facade dispatch', () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         CopilotToolService,
-        { provide: ReportService, useValue: mockReportService },
+        { provide: ReportDataService, useValue: mockReportService },
         { provide: CopilotKnowledgeService, useValue: mockKnowledgeService },
         { provide: CopilotTransactionQueryService, useValue: mockTxQueryService },
         { provide: CopilotBillingService, useValue: mockBillingService },

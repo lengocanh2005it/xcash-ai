@@ -1,8 +1,10 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, StreamableFile } from '@nestjs/common';
 import { Prisma, TransactionDirection, TransactionSource, TransactionStatus } from '@prisma/client';
 import type { AccountSummary } from '@xcash/shared-types';
+import * as XLSX from 'xlsx';
 import { paginateParams, paginateResult } from '../../common/util/pagination.util';
 import { PrismaService } from '../../prisma/prisma.service';
+import { buildExportWorkbook } from './report-excel.util';
 
 interface DailyTrendSqlRow {
   day_key: string;
@@ -519,6 +521,26 @@ export class ReportDataService {
         reason: c.reason,
       })),
     };
+  }
+
+  async exportExcel(tenantId: string, fromDate: string, toDate: string): Promise<StreamableFile> {
+    const data = await this.fetchExportData(tenantId, fromDate, toDate);
+
+    const wb = buildExportWorkbook({
+      businessName: data.businessName,
+      fromDate,
+      toDate,
+      exportedAt: new Date(),
+      summary: data.summary,
+      accounts: data.accounts,
+      details: data.details,
+    });
+
+    const buffer = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' }) as Buffer;
+    return new StreamableFile(buffer, {
+      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      disposition: `attachment; filename="bao-cao-dinh-khoan-${fromDate}-${toDate}.xlsx"`,
+    });
   }
 
   async getComparison(tenantId: string, year: number, month: number) {

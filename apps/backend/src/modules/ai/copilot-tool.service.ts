@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, Logger } from '@nestjs/common';
+import { BadRequestException, Injectable } from '@nestjs/common';
 import type { Role } from '@xcash/shared-types';
 import { ReportDataService } from '../report/report-data.service';
 import { CopilotBillingService } from './copilot-billing.service';
@@ -16,7 +16,6 @@ type MonthSummary = Awaited<ReturnType<ReportDataService['getSummary']>>;
  */
 @Injectable()
 export class CopilotToolService {
-  private readonly logger = new Logger(CopilotToolService.name);
   private readonly registry: Map<string, CopilotToolEntry>;
 
   constructor(

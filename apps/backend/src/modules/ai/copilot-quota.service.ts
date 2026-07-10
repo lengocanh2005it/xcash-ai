@@ -1,11 +1,9 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { NotificationService } from '../notification/notification.service';
 
 @Injectable()
 export class CopilotQuotaService {
-  private readonly logger = new Logger(CopilotQuotaService.name);
-
   constructor(
     private readonly prisma: PrismaService,
     private readonly notificationService: NotificationService,

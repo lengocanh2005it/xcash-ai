@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { ForbiddenException, Injectable, Logger } from '@nestjs/common';
+import { ForbiddenException, Injectable } from '@nestjs/common';
 import type * as XLSX from 'xlsx';
 
 const MAX_ROWS = 500;
@@ -35,8 +35,6 @@ export interface ParseResult {
 
 @Injectable()
 export class ImportParserService {
-  private readonly logger = new Logger(ImportParserService.name);
-
   normalizeAmount(raw: unknown): number | null {
     if (raw === null || raw === undefined || raw === '') return null;
     const str = String(raw).replace(/[^\d]/g, '');
@@ -64,8 +62,6 @@ export class ImportParserService {
     cell: XLSX.CellObject | undefined,
     formattedValue: unknown,
   ): { date: Date | null; displayValue: string; errorMessage?: string } {
-    const XLSX = require('xlsx') as typeof import('xlsx');
-
     const displayValue =
       this.getDateDisplayText(cell, formattedValue) ?? String(formattedValue ?? '');
 

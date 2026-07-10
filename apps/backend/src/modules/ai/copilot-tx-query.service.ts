@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { type AccountType, type Prisma, TransactionStatus } from '@prisma/client';
 import { Role } from '@xcash/shared-types';
 import { PrismaService } from '../../prisma/prisma.service';
@@ -9,8 +9,6 @@ const CONFIRMABLE_ROLES = new Set<Role>([Role.ADMIN, Role.ACCOUNTANT]);
 
 @Injectable()
 export class CopilotTransactionQueryService {
-  private readonly logger = new Logger(CopilotTransactionQueryService.name);
-
   constructor(
     private readonly prisma: PrismaService,
     private readonly onboardingService: OnboardingService,

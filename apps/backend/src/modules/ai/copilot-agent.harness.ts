@@ -133,8 +133,20 @@ export class CopilotAgentHarness extends EventEmitter {
       }
     }
 
-    // Chạm giới hạn vòng lặp mà chưa có câu trả lời cuối — trả rỗng,
-    // caller (sanitizeCopilotOutput) sẽ dùng câu fallback lịch sự.
-    return '';
+    // Chạm giới hạn vòng lặp mà model vẫn muốn gọi tool tiếp — ép 1 lượt cuối
+    // KHÔNG kèm tools để buộc model tổng hợp câu trả lời từ dữ liệu tool đã
+    // thu thập được, thay vì vứt bỏ toàn bộ và trả rỗng.
+    if (this.aborted) return '';
+
+    const acc = new ToolCallAccumulator();
+    for await (const chunk of adapter.streamChatCompletion(messages, [])) {
+      if (this.aborted) return '';
+      acc.push(chunk);
+      const delta = chunk.choices[0]?.delta?.content;
+      if (delta) this.emit('content', delta);
+    }
+    const result = acc.result();
+    this.usage = mergeUsage(this.usage, result.usage);
+    return result.content;
   }
 }

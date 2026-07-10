@@ -149,25 +149,35 @@ describe('CopilotAgentHarness', () => {
     expect(adapter.callCount).toBe(2);
   });
 
-  it('stops after maxIterations and returns empty content', async () => {
-    const adapter = new FakeAdapter('primary', () => [
-      toolCallChunk('call_x', 'get_banking_status', '{}'),
-      doneChunk('tool_calls'),
-    ]);
+  it('forces one final no-tool call after maxIterations to summarize instead of returning empty', async () => {
+    const adapter = new FakeAdapter('primary', (callIndex) => {
+      if (callIndex < 2) {
+        return [toolCallChunk('call_x', 'get_banking_status', '{}'), doneChunk('tool_calls')];
+      }
+      return [contentChunk('Tổng hợp: ngân hàng đã liên kết.'), doneChunk('stop')];
+    });
     const executeTool = jest.fn().mockResolvedValue({ ok: true });
+    const toolsSeenPerCall: number[] = [];
+    const originalStream = adapter.streamChatCompletion.bind(adapter);
+    adapter.streamChatCompletion = (messages, tools) => {
+      toolsSeenPerCall.push(tools.length);
+      return originalStream(messages, tools);
+    };
 
     const harness = new CopilotAgentHarness(
       [adapter],
       'system prompt',
       [],
       'hello',
-      [],
+      [{ type: 'function', function: { name: 'get_banking_status', parameters: {} } }],
       executeTool,
       2,
     );
 
-    await expect(harness.finalContent()).resolves.toBe('');
-    expect(adapter.callCount).toBe(2);
+    await expect(harness.finalContent()).resolves.toBe('Tổng hợp: ngân hàng đã liên kết.');
+    expect(adapter.callCount).toBe(3);
+    // 2 vòng tool-calling truyền đủ tools, lượt cuối ép tổng hợp truyền tools rỗng
+    expect(toolsSeenPerCall).toEqual([1, 1, 0]);
   });
 
   it('reports the primary adapter with fallback=false when it answers directly', async () => {

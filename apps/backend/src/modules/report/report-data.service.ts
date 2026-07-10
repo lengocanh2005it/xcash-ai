@@ -1,37 +1,12 @@
 import { Injectable, StreamableFile } from '@nestjs/common';
-import { Prisma, TransactionDirection, TransactionSource, TransactionStatus } from '@prisma/client';
+import { TransactionSource, TransactionStatus } from '@prisma/client';
 import type { AccountSummary } from '@xcash/shared-types';
 import * as XLSX from 'xlsx';
 import { paginateParams, paginateResult } from '../../common/util/pagination.util';
 import { PrismaService } from '../../prisma/prisma.service';
+import { ReportSqlBuilder } from './report.sql';
+import { buildDailyTrendBuckets, formatDayKey, periodBounds, startOfDay } from './report-date.util';
 import { buildExportWorkbook } from './report-excel.util';
-
-interface DailyTrendSqlRow {
-  day_key: string;
-  activity_count: bigint;
-  classified_count: bigint;
-  revenue_amount: unknown;
-  expense_amount: unknown;
-}
-
-interface AccountSideSqlRow {
-  account_code: string;
-  total: unknown;
-  tx_count: bigint;
-}
-
-export interface DailyTrendPoint {
-  date: string;
-  label: string;
-  /** @deprecated use classifiedCount */
-  count: number;
-  /** @deprecated use revenueAmount */
-  amount: number;
-  activityCount: number;
-  classifiedCount: number;
-  revenueAmount: number;
-  expenseAmount: number;
-}
 
 export interface StatusBreakdownItem {
   status: TransactionStatus;
@@ -47,88 +22,23 @@ export type { AccountSummary } from '@xcash/shared-types';
 
 @Injectable()
 export class ReportDataService {
-  constructor(private readonly prisma: PrismaService) {}
-
-  private periodBounds(year: number, month: number) {
-    return {
-      from: new Date(year, month - 1, 1),
-      to: new Date(year, month, 1),
-    };
-  }
-
-  private startOfDay(date: Date) {
-    const normalized = new Date(date);
-    normalized.setHours(0, 0, 0, 0);
-    return normalized;
-  }
-
-  private formatDayKey(date: Date) {
-    const day = this.startOfDay(date);
-    const year = day.getFullYear();
-    const month = String(day.getMonth() + 1).padStart(2, '0');
-    const dayOfMonth = String(day.getDate()).padStart(2, '0');
-    return `${year}-${month}-${dayOfMonth}`;
-  }
-
-  private formatDayLabel(dayKey: string) {
-    const [, month, day] = dayKey.split('-');
-    return `${day}/${month}`;
-  }
-
-  private buildDailyTrendBuckets(days: number): DailyTrendPoint[] {
-    const today = this.startOfDay(new Date());
-    return Array.from({ length: days }, (_, index) => {
-      const date = new Date(today);
-      date.setDate(today.getDate() - (days - 1 - index));
-      const dayKey = this.formatDayKey(date);
-      return {
-        date: dayKey,
-        label: this.formatDayLabel(dayKey),
-        count: 0,
-        amount: 0,
-        activityCount: 0,
-        classifiedCount: 0,
-        revenueAmount: 0,
-        expenseAmount: 0,
-      };
-    });
-  }
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly sql: ReportSqlBuilder,
+  ) {}
 
   async getDailyTrend(tenantId: string, days = 7) {
     const clampedDays = Math.min(31, Math.max(1, days));
-    const buckets = this.buildDailyTrendBuckets(clampedDays);
+    const buckets = buildDailyTrendBuckets(clampedDays);
     const from = buckets[0]?.date
       ? new Date(`${buckets[0].date}T00:00:00`)
-      : this.startOfDay(new Date());
-    const to = this.startOfDay(new Date());
+      : startOfDay(new Date());
+    const to = startOfDay(new Date());
     to.setHours(23, 59, 59, 999);
 
     const bucketByDay = new Map(buckets.map((bucket) => [bucket.date, bucket]));
 
-    const rows = await this.prisma.$queryRaw<DailyTrendSqlRow[]>`
-      SELECT
-        to_char(date_trunc('day', t.transaction_date), 'YYYY-MM-DD') AS day_key,
-        COUNT(*)::bigint AS activity_count,
-        COUNT(*) FILTER (WHERE t.status::text = ${TransactionStatus.classified})::bigint AS classified_count,
-        COALESCE(SUM(
-          CASE WHEN t.status::text = ${TransactionStatus.classified} AND (
-            (t.source::text = ${TransactionSource.import} AND t.direction::text = ${TransactionDirection.in})
-            OR (t.source::text <> ${TransactionSource.import} AND t.amount > 0)
-          ) THEN ABS(t.amount) ELSE 0 END
-        ), 0) AS revenue_amount,
-        COALESCE(SUM(
-          CASE WHEN t.status::text = ${TransactionStatus.classified} AND (
-            (t.source::text = ${TransactionSource.import} AND t.direction::text = ${TransactionDirection.out})
-            OR (t.source::text <> ${TransactionSource.import} AND t.amount < 0)
-          ) THEN ABS(t.amount) ELSE 0 END
-        ), 0) AS expense_amount
-      FROM transactions t
-      WHERE t.tenant_id = ${tenantId}
-        AND t.transaction_date >= ${from}
-        AND t.transaction_date <= ${to}
-      GROUP BY 1
-      ORDER BY 1
-    `;
+    const rows = await this.sql.fetchDashboardDailyTrend(tenantId, from, to);
 
     for (const row of rows) {
       const bucket = bucketByDay.get(row.day_key);
@@ -150,8 +60,8 @@ export class ReportDataService {
 
     return {
       days: clampedDays,
-      from: buckets[0]?.date ?? this.formatDayKey(from),
-      to: buckets.at(-1)?.date ?? this.formatDayKey(to),
+      from: buckets[0]?.date ?? formatDayKey(from),
+      to: buckets.at(-1)?.date ?? formatDayKey(to),
       points: buckets,
     };
   }
@@ -190,87 +100,13 @@ export class ReportDataService {
     return { items, total };
   }
 
-  private async fetchClassificationSides(
-    tenantId: string,
-    from: Date,
-    to: Date,
-    inclusiveEnd = false,
-  ): Promise<{ debits: AccountSideSqlRow[]; credits: AccountSideSqlRow[] }> {
-    const dateEnd = inclusiveEnd
-      ? Prisma.sql`t.transaction_date <= ${to}`
-      : Prisma.sql`t.transaction_date < ${to}`;
-
-    const [debits, credits] = await Promise.all([
-      this.prisma.$queryRaw<AccountSideSqlRow[]>`
-        SELECT
-          tc.debit_account AS account_code,
-          COALESCE(SUM(tc.amount::numeric), 0) AS total,
-          COUNT(*)::bigint AS tx_count
-        FROM transaction_classifications tc
-        INNER JOIN transactions t ON t.id = tc.transaction_id
-        WHERE tc.tenant_id = ${tenantId}
-          AND tc.status::text = ${TransactionStatus.classified}
-          AND t.transaction_date >= ${from}
-          AND ${dateEnd}
-        GROUP BY tc.debit_account
-      `,
-      this.prisma.$queryRaw<AccountSideSqlRow[]>`
-        SELECT
-          tc.credit_account AS account_code,
-          COALESCE(SUM(tc.amount::numeric), 0) AS total,
-          COUNT(*)::bigint AS tx_count
-        FROM transaction_classifications tc
-        INNER JOIN transactions t ON t.id = tc.transaction_id
-        WHERE tc.tenant_id = ${tenantId}
-          AND tc.status::text = ${TransactionStatus.classified}
-          AND t.transaction_date >= ${from}
-          AND ${dateEnd}
-        GROUP BY tc.credit_account
-      `,
-    ]);
-
-    return { debits, credits };
-  }
-
-  private mergeAccountSideAggregates(
-    map: Map<string, AccountSummary>,
-    rows: AccountSideSqlRow[],
-    side: 'debit' | 'credit',
-  ): void {
-    for (const row of rows) {
-      const amount = Number(row.total);
-      const count = Number(row.tx_count);
-      const existing = map.get(row.account_code);
-      if (existing) {
-        if (side === 'debit') {
-          existing.totalDebit += amount;
-        } else {
-          existing.totalCredit += amount;
-        }
-        existing.transactionCount += count;
-        existing.net = existing.totalCredit - existing.totalDebit;
-        continue;
-      }
-
-      map.set(row.account_code, {
-        accountCode: row.account_code,
-        accountName: row.account_code,
-        accountType: 'unknown',
-        totalDebit: side === 'debit' ? amount : 0,
-        totalCredit: side === 'credit' ? amount : 0,
-        net: (side === 'credit' ? amount : 0) - (side === 'debit' ? amount : 0),
-        transactionCount: count,
-      });
-    }
-  }
-
   async buildAccountSummaries(
     tenantId: string,
     from: Date,
     to: Date,
     inclusiveEnd = false,
   ): Promise<AccountSummary[]> {
-    const { debits, credits } = await this.fetchClassificationSides(
+    const { debits, credits } = await this.sql.fetchClassificationSides(
       tenantId,
       from,
       to,
@@ -278,15 +114,12 @@ export class ReportDataService {
     );
 
     const accountMap = new Map<string, AccountSummary>();
-    this.mergeAccountSideAggregates(accountMap, debits, 'debit');
-    this.mergeAccountSideAggregates(accountMap, credits, 'credit');
+    this.sql.mergeAccountSideAggregates(accountMap, debits, 'debit');
+    this.sql.mergeAccountSideAggregates(accountMap, credits, 'credit');
 
     const codes = [...accountMap.keys()];
     if (codes.length > 0) {
-      const accounts = await this.prisma.chartOfAccount.findMany({
-        where: { tenantId, accountCode: { in: codes } },
-        select: { accountCode: true, accountName: true, accountType: true },
-      });
+      const accounts = await this.sql.fetchAccountNames(tenantId, codes);
       for (const a of accounts) {
         const entry = accountMap.get(a.accountCode);
         if (entry) {
@@ -300,7 +133,7 @@ export class ReportDataService {
   }
 
   async getSummary(tenantId: string, year: number, month: number) {
-    const { from, to } = this.periodBounds(year, month);
+    const { from, to } = periodBounds(year, month);
 
     const [byAccount, reviewCount, totalCount, classifiedCount] = await Promise.all([
       this.buildAccountSummaries(tenantId, from, to),
@@ -389,7 +222,7 @@ export class ReportDataService {
     month: number,
     filters: { page?: number; limit?: number; search?: string; accountType?: string },
   ) {
-    const { from, to } = this.periodBounds(year, month);
+    const { from, to } = periodBounds(year, month);
     const page = filters.page ?? 1;
     const limit = filters.limit ?? 20;
     const search = filters.search?.trim().toLowerCase();
@@ -569,22 +402,15 @@ export class ReportDataService {
   }
 
   async getTopAccounts(tenantId: string, year: number, month: number, limit: number) {
-    const from = new Date(year, month - 1, 1);
-    const to = new Date(year, month, 1);
+    const { from, to } = periodBounds(year, month);
 
-    const { debits, credits } = await this.fetchClassificationSides(tenantId, from, to, false);
+    const { debits, credits } = await this.sql.fetchClassificationSides(tenantId, from, to, false);
 
     const expenseMap = new Map(debits.map((row) => [row.account_code, Number(row.total)]));
     const revenueMap = new Map(credits.map((row) => [row.account_code, Number(row.total)]));
 
     const codes = [...new Set([...expenseMap.keys(), ...revenueMap.keys()])];
-    const accounts =
-      codes.length > 0
-        ? await this.prisma.chartOfAccount.findMany({
-            where: { tenantId, accountCode: { in: codes } },
-            select: { accountCode: true, accountName: true, accountType: true },
-          })
-        : [];
+    const accounts = codes.length > 0 ? await this.sql.fetchAccountNames(tenantId, codes) : [];
 
     const accountInfo = new Map(accounts.map((a) => [a.accountCode, a]));
 

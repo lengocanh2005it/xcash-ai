@@ -2,7 +2,7 @@
 
 > Mục đích: cho biết **chính xác** cái gì đã tồn tại trong repo ngay lúc này, để agent không cần `find`/`grep`/`ls` lại từ đầu mỗi session mới. File này phải được cập nhật mỗi khi có thay đổi cấu trúc đáng kể (thêm module, thêm page, đổi dependency lớn, thêm service hạ tầng). Nếu file này và thực tế code lệch nhau, **tin thực tế code**, và sửa lại file này ngay sau đó.
 
-Cập nhật lần cuối: **Copilot Agent improvements** — streaming support, token counting/truncation, tool argument validation, agent reasoning logs, feature flag removal. Branch `main`.
+Cập nhật lần cuối: **Copilot Agent quality improvements** — parallel tool execution (`Promise.allSettled`), maxRounds default 8, chain-of-thought system prompt. Branch `feat/copilot-llm-provider-adapter`.
 
 Trước đó — **File-level refactoring (Round 1 + Round 2)** — split large files into focused modules. Branch `feat/copilot-llm-provider-adapter`, PR #34.
 
@@ -314,7 +314,7 @@ Trước đó — **Phase 7 polish + UX hardening** — Settings tab phân trang
 - Backend: `copilot-stream.service.ts` — wire `CopilotAgentService.runWithFallback()` thay `createCopilotRunner()` ✅
 - Backend: `openai.service.ts` — bỏ `createCopilotRunner()` + `chatCopilotWithTools()`; giữ `chatCopilot()`, `buildCopilotSystemPrompt()`, `classifyTransaction()`, `createEmbedding()`, `generateCopilotTitle()` ✅
 - Backend: `ai.module.ts` — register `OpenAiLlmProvider`, `MinimaxLlmProvider`, `DeepSeekLlmProvider`, `GeminiLlmProvider`, `CopilotAgentService` ✅
-- Backend: `configuration.ts` — thêm `COPILOT_LLM_PROVIDER` (default `openai,minimax,deepseek,gemini`), `COPILOT_AGENT_MAX_ROUNDS` (default 5), `DEEPSEEK_API_KEY`, `DEEPSEEK_CHAT_MODEL`, `GEMINI_API_KEY`, `GEMINI_CHAT_MODEL` ✅
+- Backend: `configuration.ts` — thêm `COPILOT_LLM_PROVIDER` (default `openai,minimax,deepseek,gemini`), `COPILOT_AGENT_MAX_ROUNDS` (default **8**), `DEEPSEEK_API_KEY`, `DEEPSEEK_CHAT_MODEL`, `GEMINI_API_KEY`, `GEMINI_CHAT_MODEL` ✅
 - ADR: `agent-docs/reference/copilot-llm-provider-adapter.md` ✅
 - `pnpm verify` pass 11/11 ✅
 
@@ -337,6 +337,12 @@ Trước đó — **Phase 7 polish + UX hardening** — Settings tab phân trang
 - Backend: `CopilotAgentService` thêm agent reasoning/latency logs — per-round LLM + tool execution timing, total loop time, history truncation info ✅
 - Backend: `CopilotStreamService.streamChat()` smarter fallback — last resort non-FC `chatCopilot()` only when agent loop fails entirely ✅
 - Config: removed `COPILOT_USE_FUNCTION_CALLING` from `configuration.ts` + `.env.example`; added `COPILOT_AGENT_MAX_CONTEXT_TOKENS` ✅
+- `pnpm verify` pass 11/11 ✅
+
+**Đã xong (Copilot Agent quality improvements):**
+- Backend: `CopilotAgentService` — parallel tool execution: thay sequential `for` loop bằng `Promise.allSettled()` trong cả `runWithProvider` + `runStreamingWithProvider`; khi LLM trả về nhiều tool calls 1 lượt, tất cả chạy song song, kết quả push theo đúng thứ tự `toolCallId`; `Promise.allSettled` đảm bảo 1 tool fail không kill cả round ✅
+- Backend: `CopilotAgentService` — `COPILOT_AGENT_MAX_ROUNDS` default tăng từ **5 lên 8** — cho phép chain tool phức tạp hơn trước khi bị cắt; vẫn override được qua env ✅
+- Backend: `OpenAiService.buildCopilotSystemPrompt()` — thêm section **"Cách suy luận trước khi trả lời"** (chain-of-thought): 4 bước (xác định dữ liệu cần → chọn đúng tool → đánh giá kết quả → trả lời chính xác); hướng dẫn gọi tool song song khi nhiều dữ liệu độc lập; yêu cầu nói rõ khi không có dữ liệu thay vì phỏng đoán ✅
 - `pnpm verify` pass 11/11 ✅
 
 **Chưa làm (Sprint 4 — còn lại):**

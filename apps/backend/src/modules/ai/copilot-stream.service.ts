@@ -22,6 +22,16 @@ interface CopilotStreamMessage {
   conversationId?: string;
 }
 
+interface ConversationSetup {
+  tenantId: string;
+  isNewConv: boolean;
+  useFunctionCalling: boolean;
+  conversation: Awaited<ReturnType<CopilotConversationService['findOrCreate']>>;
+  userMsg: Awaited<ReturnType<CopilotConversationService['saveUserMessage']>>;
+  history: CopilotStreamMessage['history'];
+  financialContext: Awaited<ReturnType<CopilotContextService['getFinancialContext']>>;
+}
+
 @Injectable()
 export class CopilotStreamService {
   private readonly logger = new Logger(CopilotStreamService.name);
@@ -36,20 +46,16 @@ export class CopilotStreamService {
     private readonly configService: ConfigService,
   ) {}
 
-  async chat(
+  private async setupConversation(
     user: AuthenticatedUser,
     dto: CopilotStreamMessage,
-    subMeta: { id: string } | undefined,
-  ) {
+  ): Promise<ConversationSetup> {
     const tenantId = user.tenantId!;
     const isNewConv = !dto.conversationId;
-    const useFunctionCalling = this.configService.get<boolean>('COPILOT_USE_FUNCTION_CALLING');
+    const useFunctionCalling =
+      this.configService.get<boolean>('COPILOT_USE_FUNCTION_CALLING') ?? false;
 
-    const userInfo = {
-      name: user.name,
-      role: user.role,
-      businessName: user.businessName,
-    };
+    const userInfo = { name: user.name, role: user.role, businessName: user.businessName };
     const [conversation, financialContext] = await Promise.all([
       this.conversationService.findOrCreate(tenantId, user.id, dto.conversationId),
       this.copilotContextService.getFinancialContext(tenantId, userInfo),
@@ -59,6 +65,59 @@ export class CopilotStreamService {
     const history = dto.conversationId
       ? await this.conversationService.getHistoryForContext(conversation.id, userMsg.id)
       : dto.history;
+
+    return {
+      tenantId,
+      isNewConv,
+      useFunctionCalling,
+      conversation,
+      userMsg,
+      history,
+      financialContext,
+    };
+  }
+
+  private async finalizeChat(opts: {
+    conversationId: string;
+    reply: string;
+    activities: ReturnType<typeof buildActivities>;
+    tenantId: string;
+    subMeta: { id: string } | undefined;
+    isNewConv: boolean;
+    dto: CopilotStreamMessage;
+    isPartial?: boolean;
+  }): Promise<void> {
+    void this.conversationService
+      .saveAssistantMessage(
+        opts.conversationId,
+        opts.reply,
+        opts.activities,
+        opts.isPartial ?? false,
+      )
+      .catch(() => {});
+    if (opts.isNewConv)
+      this.conversationService.triggerAutoTitle(
+        opts.conversationId,
+        opts.dto.message,
+        opts.tenantId,
+      );
+    await this.copilotQuotaService.incrementAndNotify(opts.tenantId, opts.subMeta);
+  }
+
+  async chat(
+    user: AuthenticatedUser,
+    dto: CopilotStreamMessage,
+    subMeta: { id: string } | undefined,
+  ) {
+    const {
+      tenantId,
+      isNewConv,
+      useFunctionCalling,
+      conversation,
+      userMsg,
+      history,
+      financialContext,
+    } = await this.setupConversation(user, dto);
 
     let reply: string;
     let activities: ReturnType<typeof buildActivities> = [];
@@ -92,12 +151,15 @@ export class CopilotStreamService {
       throw err;
     }
 
-    void this.conversationService
-      .saveAssistantMessage(conversation.id, reply, activities)
-      .catch(() => {});
-    if (isNewConv)
-      this.conversationService.triggerAutoTitle(conversation.id, dto.message, tenantId);
-    void this.copilotQuotaService.incrementAndNotify(tenantId, subMeta);
+    await this.finalizeChat({
+      conversationId: conversation.id,
+      reply,
+      activities,
+      tenantId,
+      subMeta,
+      isNewConv,
+      dto,
+    });
 
     return { reply, meta, conversationId: conversation.id };
   }
@@ -109,24 +171,8 @@ export class CopilotStreamService {
     res: Response,
     reqOnClose: (cb: () => void) => void,
   ): Promise<void> {
-    const tenantId = user.tenantId!;
-    const isNewConv = !dto.conversationId;
-    const useFunctionCalling = this.configService.get<boolean>('COPILOT_USE_FUNCTION_CALLING');
-
-    const userInfo = {
-      name: user.name,
-      role: user.role,
-      businessName: user.businessName,
-    };
-    const [conversation, financialContext] = await Promise.all([
-      this.conversationService.findOrCreate(tenantId, user.id, dto.conversationId),
-      this.copilotContextService.getFinancialContext(tenantId, userInfo),
-    ]);
-    const userMsg = await this.conversationService.saveUserMessage(conversation.id, dto.message);
-
-    const history = dto.conversationId
-      ? await this.conversationService.getHistoryForContext(conversation.id, userMsg.id)
-      : dto.history;
+    const { tenantId, isNewConv, useFunctionCalling, conversation, history, financialContext } =
+      await this.setupConversation(user, dto);
 
     res.setHeader('Content-Type', 'text/event-stream');
     res.setHeader('Cache-Control', 'no-cache');
@@ -144,12 +190,15 @@ export class CopilotStreamService {
       activities: ReturnType<typeof buildActivities>,
     ) => {
       writeEvent('done', { reply, meta, conversationId: conversation.id });
-      void this.conversationService
-        .saveAssistantMessage(conversation.id, reply, activities)
-        .catch(() => {});
-      if (isNewConv)
-        this.conversationService.triggerAutoTitle(conversation.id, dto.message, tenantId);
-      await this.copilotQuotaService.incrementAndNotify(tenantId, subMeta);
+      await this.finalizeChat({
+        conversationId: conversation.id,
+        reply,
+        activities,
+        tenantId,
+        subMeta,
+        isNewConv,
+        dto,
+      });
     };
 
     res.flushHeaders();
@@ -265,11 +314,16 @@ export class CopilotStreamService {
       }
     } finally {
       if (wasAborted && accumulatedContent.trim()) {
-        void this.conversationService
-          .saveAssistantMessage(conversation.id, accumulatedContent, [], true)
-          .catch(() => {});
-        if (isNewConv)
-          this.conversationService.triggerAutoTitle(conversation.id, dto.message, tenantId);
+        await this.finalizeChat({
+          conversationId: conversation.id,
+          reply: accumulatedContent,
+          activities: [],
+          tenantId,
+          subMeta,
+          isNewConv,
+          dto,
+          isPartial: true,
+        });
       }
       if (!res.writableEnded) res.end();
     }

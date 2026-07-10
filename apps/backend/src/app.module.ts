@@ -8,7 +8,8 @@ import { TenantThrottlerGuard } from './common/guards/tenant-throttler.guard';
 import { ResponseInterceptor } from './common/interceptors/response.interceptor';
 import { RequestIdMiddleware } from './common/middleware/request-id.middleware';
 import configuration from './config/configuration';
-import { AiModule } from './modules/ai/ai.module';
+import { ClassificationPipelineModule } from './modules/ai/ai.module';
+import { CopilotModule } from './modules/ai/copilot.module';
 import { AuditLogModule } from './modules/audit-log/audit-log.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { BankingModule } from './modules/banking/banking.module';
@@ -59,7 +60,8 @@ import { StorageModule } from './storage/storage.module';
     HealthModule,
     OnboardingModule,
     BankingModule,
-    AiModule,
+    ClassificationPipelineModule,
+    CopilotModule,
     AuditLogModule,
     ChartOfAccountsModule,
     ClassificationModule,

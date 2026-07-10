@@ -2,9 +2,8 @@ import { Processor, WorkerHost } from '@nestjs/bullmq';
 import { Logger } from '@nestjs/common';
 import type { Job } from 'bullmq';
 import { WEBHOOK_QUEUE } from '../../queue/queue.module';
+import { AI_CLASSIFY_JOB } from './classification.constants';
 import { ClassificationService } from './classification.service';
-
-export const AI_CLASSIFY_JOB = 'ai-classify';
 
 export interface AiClassifyJobData {
   transactionDbId: string;

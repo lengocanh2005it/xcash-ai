@@ -16,7 +16,7 @@ import { verifyWebhookSignature } from '../../common/util/webhook-signature.util
 import { PrismaService } from '../../prisma/prisma.service';
 import { WEBHOOK_QUEUE } from '../../queue/queue.module';
 import { RedisService } from '../../redis/redis.service';
-import { AI_CLASSIFY_JOB } from '../ai/classification.processor';
+import { AI_CLASSIFY_JOB } from '../ai/classification.constants';
 import type { CasWebhookDto } from './dto/banking.dto';
 
 export interface CasWebhookResult {

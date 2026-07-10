@@ -1,7 +1,7 @@
 import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { TransactionStatus } from '@prisma/client';
 import type { Queue } from 'bullmq';
-import { AI_CLASSIFY_JOB } from '../ai/classification.processor';
+import { AI_CLASSIFY_JOB } from '../ai/classification.constants';
 import { TransactionService } from './transaction.service';
 
 describe('TransactionService', () => {

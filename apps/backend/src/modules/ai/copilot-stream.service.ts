@@ -9,7 +9,6 @@ import {
   getStreamingActivityMeta,
 } from './copilot-activity.helper';
 import { CopilotAgentService } from './copilot-agent.service';
-import { CopilotContextService } from './copilot-context.service';
 import { CopilotConversationService } from './copilot-conversation.service';
 import { CopilotQuotaService } from './copilot-quota.service';
 import { CopilotToolService } from './copilot-tool.service';
@@ -32,7 +31,6 @@ export class CopilotStreamService {
     private readonly copilotToolService: CopilotToolService,
     private readonly copilotQuotaService: CopilotQuotaService,
     private readonly aiUsageLogService: AiUsageLogService,
-    private readonly copilotContextService: CopilotContextService,
     private readonly configService: ConfigService,
   ) {}
 
@@ -43,17 +41,13 @@ export class CopilotStreamService {
   ) {
     const tenantId = user.tenantId!;
     const isNewConv = !dto.conversationId;
-    const useFunctionCalling = this.configService.get<boolean>('COPILOT_USE_FUNCTION_CALLING');
 
-    const userInfo = {
-      name: user.name,
-      role: user.role,
-      businessName: user.businessName,
-    };
-    const [conversation, financialContext] = await Promise.all([
-      this.conversationService.findOrCreate(tenantId, user.id, dto.conversationId),
-      this.copilotContextService.getFinancialContext(tenantId, userInfo),
-    ]);
+    const conversation = await this.conversationService.findOrCreate(
+      tenantId,
+      user.id,
+      dto.conversationId,
+    );
+
     const userMsg = await this.conversationService.saveUserMessage(conversation.id, dto.message);
 
     const history = dto.conversationId
@@ -65,41 +59,30 @@ export class CopilotStreamService {
     let meta: { activities: CopilotActivity[] } | undefined;
 
     try {
-      if (useFunctionCalling) {
-        const result = await this.agentService.runWithFallback({
-          tenantId,
-          message: dto.message,
-          history,
-          toolService: this.copilotToolService,
-          systemPrompt: this.openAiService.buildCopilotSystemPrompt(
-            this.configService.get<boolean>('COPILOT_CASSO_SEARCH_ENABLED') ?? false,
-          ),
-          role: user.role,
-          conversationId: conversation.id,
-          financialContext,
-        });
-        reply = result.reply;
-        activities = result.activities;
-        meta = activities.length > 0 ? { activities } : undefined;
+      const result = await this.agentService.runWithFallback({
+        tenantId,
+        message: dto.message,
+        history,
+        toolService: this.copilotToolService,
+        systemPrompt: this.openAiService.buildCopilotSystemPrompt(
+          this.configService.get<boolean>('COPILOT_CASSO_SEARCH_ENABLED') ?? false,
+        ),
+        role: user.role,
+        conversationId: conversation.id,
+      });
+      reply = result.reply;
+      activities = result.activities;
+      meta = activities.length > 0 ? { activities } : undefined;
 
-        if (result.usage) {
-          this.aiUsageLogService.record({
-            tenantId,
-            callType: 'copilot',
-            model: result.model,
-            tokensIn: result.usage.promptTokens,
-            tokensOut: result.usage.completionTokens,
-            conversationId: conversation.id,
-          });
-        }
-      } else {
-        reply = await this.openAiService.chatCopilot(
-          dto.message,
-          history,
-          financialContext,
+      if (result.usage) {
+        this.aiUsageLogService.record({
           tenantId,
-          conversation.id,
-        );
+          callType: 'copilot',
+          model: result.model,
+          tokensIn: result.usage.promptTokens,
+          tokensOut: result.usage.completionTokens,
+          conversationId: conversation.id,
+        });
       }
     } catch (err) {
       await this.conversationService.deleteMessage(userMsg.id);
@@ -125,17 +108,14 @@ export class CopilotStreamService {
   ): Promise<void> {
     const tenantId = user.tenantId!;
     const isNewConv = !dto.conversationId;
-    const useFunctionCalling = this.configService.get<boolean>('COPILOT_USE_FUNCTION_CALLING');
 
-    const userInfo = {
-      name: user.name,
-      role: user.role,
-      businessName: user.businessName,
-    };
-    const [conversation, financialContext] = await Promise.all([
-      this.conversationService.findOrCreate(tenantId, user.id, dto.conversationId),
-      this.copilotContextService.getFinancialContext(tenantId, userInfo),
-    ]);
+    // When function calling is ON, tools fetch data on-demand — skip preload
+    const conversation = await this.conversationService.findOrCreate(
+      tenantId,
+      user.id,
+      dto.conversationId,
+    );
+
     const userMsg = await this.conversationService.saveUserMessage(conversation.id, dto.message);
 
     const history = dto.conversationId
@@ -168,9 +148,7 @@ export class CopilotStreamService {
 
     res.flushHeaders();
 
-    if (useFunctionCalling) {
-      writeEvent('activity', COPILOT_INITIAL_STREAM_ACTIVITY);
-    }
+    writeEvent('activity', COPILOT_INITIAL_STREAM_ACTIVITY);
 
     let wasAborted = false;
     let accumulatedContent = '';
@@ -182,19 +160,7 @@ export class CopilotStreamService {
     });
 
     try {
-      if (!useFunctionCalling) {
-        const reply = await this.openAiService.chatCopilot(
-          dto.message,
-          history,
-          financialContext,
-          tenantId,
-          conversation.id,
-        );
-        if (!wasAborted) await finishStream(reply, undefined, []);
-        return;
-      }
-
-      const result = await this.agentService.runWithFallback({
+      const result = await this.agentService.runWithStreamingFallback({
         tenantId,
         message: dto.message,
         history,
@@ -204,7 +170,6 @@ export class CopilotStreamService {
         ),
         role: user.role,
         conversationId: conversation.id,
-        financialContext,
         onToolCall: (name) => {
           const meta = getStreamingActivityMeta(name);
           if (meta) writeEvent('activity', meta);
@@ -239,18 +204,20 @@ export class CopilotStreamService {
           return;
         }
 
-        this.logger.warn(
-          'Copilot agent failed, falling back to simple chat',
-          err instanceof Error ? err.message : String(err),
-        );
-        const reply = await this.openAiService.chatCopilot(
-          dto.message,
-          history,
-          financialContext,
-          tenantId,
-          conversation.id,
-        );
-        await finishStream(reply, undefined, []);
+        this.logger.warn('Copilot agent failed', err instanceof Error ? err.message : String(err));
+        // Last resort: non-streaming fallback (no tools)
+        try {
+          const reply = await this.openAiService.chatCopilot(
+            dto.message,
+            history,
+            '',
+            tenantId,
+            conversation.id,
+          );
+          await finishStream(reply, undefined, []);
+        } catch {
+          await finishStream('Xin lỗi, có lỗi xảy ra. Vui lòng thử lại.', undefined, []);
+        }
       }
     } finally {
       if (wasAborted && accumulatedContent.trim()) {

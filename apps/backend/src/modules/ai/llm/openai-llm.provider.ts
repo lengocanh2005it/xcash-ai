@@ -5,6 +5,7 @@ import type {
   LlmChatResult,
   LlmMessage,
   LlmProviderAdapter,
+  LlmStreamChunk,
   LlmToolDefinition,
 } from './llm-provider.interface';
 
@@ -84,6 +85,96 @@ export class OpenAiLlmProvider implements LlmProviderAdapter {
         : undefined,
       model: response.model,
     };
+  }
+
+  async *chatStream(params: {
+    model: string;
+    messages: LlmMessage[];
+    tools?: LlmToolDefinition[];
+    toolChoice?: 'auto' | 'none';
+    temperature?: number;
+    maxTokens?: number;
+    signal?: AbortSignal;
+  }): AsyncGenerator<LlmStreamChunk> {
+    if (!this.client) {
+      throw new Error('OpenAI client not configured');
+    }
+
+    const { model, messages, tools, toolChoice, temperature, maxTokens, signal } = params;
+
+    const requestParams: OpenAI.ChatCompletionCreateParamsStreaming = {
+      model,
+      messages: messages.map((m) => this.toOpenAiMessage(m)),
+      temperature: temperature ?? 0.3,
+      max_tokens: maxTokens ?? 1024,
+      stream: true,
+      stream_options: { include_usage: true },
+    };
+
+    if (tools?.length) {
+      requestParams.tools = tools.map((t) => ({
+        type: 'function' as const,
+        function: {
+          name: t.name,
+          description: t.description,
+          parameters: t.parameters,
+        },
+      }));
+      requestParams.tool_choice = toolChoice ?? 'auto';
+    }
+
+    const stream = await this.client.chat.completions.create(requestParams, { signal });
+
+    // Accumulate tool calls across chunks (OpenAI sends them incrementally)
+    const toolCallAccumulators = new Map<number, { id: string; name: string; arguments: string }>();
+
+    for await (const chunk of stream) {
+      const choice = chunk.choices[0];
+      const delta = choice?.delta;
+
+      // Emit text delta
+      if (delta?.content) {
+        yield { delta: delta.content, model: chunk.model, done: false };
+      }
+
+      // Accumulate tool call deltas
+      if (delta?.tool_calls) {
+        for (const tc of delta.tool_calls) {
+          const idx = tc.index ?? 0;
+          const existing = toolCallAccumulators.get(idx);
+          if (existing) {
+            existing.arguments += tc.function?.arguments ?? '';
+          } else {
+            toolCallAccumulators.set(idx, {
+              id: tc.id ?? `call_${idx}`,
+              name: tc.function?.name ?? '',
+              arguments: tc.function?.arguments ?? '',
+            });
+          }
+        }
+      }
+
+      // Final chunk with usage
+      if (chunk.usage) {
+        const toolCalls =
+          toolCallAccumulators.size > 0 ? Array.from(toolCallAccumulators.values()) : undefined;
+        yield {
+          toolCalls,
+          usage: {
+            promptTokens: chunk.usage.prompt_tokens,
+            completionTokens: chunk.usage.completion_tokens,
+          },
+          model: chunk.model,
+          done: true,
+        };
+        return;
+      }
+    }
+
+    // Fallback: stream ended without usage chunk (shouldn't happen with stream_options)
+    const toolCalls =
+      toolCallAccumulators.size > 0 ? Array.from(toolCallAccumulators.values()) : undefined;
+    yield { toolCalls, model, done: true };
   }
 
   isQuotaOrBillingError(error: unknown): boolean {

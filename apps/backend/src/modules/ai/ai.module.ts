@@ -15,7 +15,6 @@ import { ClassificationService } from './classification.service';
 import { CopilotController } from './copilot.controller';
 import { CopilotAgentService } from './copilot-agent.service';
 import { CopilotBillingService } from './copilot-billing.service';
-import { CopilotContextService } from './copilot-context.service';
 import { CopilotConversationService } from './copilot-conversation.service';
 import { CopilotKnowledgeService } from './copilot-knowledge.service';
 import { CopilotQuotaService } from './copilot-quota.service';
@@ -50,7 +49,6 @@ import { OpenAiService } from './openai.service';
     EmbeddingService,
     ClassificationService,
     ClassificationProcessor,
-    CopilotContextService,
     CopilotConversationService,
     CopilotKnowledgeService,
     CopilotTransactionQueryService,

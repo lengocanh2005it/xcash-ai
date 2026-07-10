@@ -72,9 +72,12 @@ export default () => ({
     process.env.AZURE_STORAGE_MAX_FILE_SIZE ?? '5242880',
     10,
   ),
-  COPILOT_USE_FUNCTION_CALLING: process.env.COPILOT_USE_FUNCTION_CALLING === '1',
   COPILOT_LLM_PROVIDER: process.env.COPILOT_LLM_PROVIDER ?? 'openai,minimax,deepseek,gemini',
   COPILOT_AGENT_MAX_ROUNDS: Number.parseInt(process.env.COPILOT_AGENT_MAX_ROUNDS ?? '5', 10),
+  COPILOT_AGENT_MAX_CONTEXT_TOKENS: Number.parseInt(
+    process.env.COPILOT_AGENT_MAX_CONTEXT_TOKENS ?? '8000',
+    10,
+  ),
   COPILOT_CONTEXT_CACHE_TTL_SECONDS: Number.parseInt(
     process.env.COPILOT_CONTEXT_CACHE_TTL_SECONDS ?? '300',
     10,

@@ -48,11 +48,6 @@ export class BillingService {
     const sub = await this.subscriptionQuery.findActive(tenantId);
     if (!sub) throw new NotFoundException('Không tìm thấy gói dịch vụ');
 
-    const planPricing = await this.prisma.planPricing.findUnique({
-      where: { plan: sub.plan },
-      select: { copilotQuota: true },
-    });
-
     const [fromBank, fromImport] = await Promise.all([
       this.prisma.transaction.count({
         where: {
@@ -78,7 +73,7 @@ export class BillingService {
       currentCycleStart: sub.currentCycleStart,
       currentCycleEnd: sub.currentCycleEnd,
       status: sub.status,
-      copilotQuota: planPricing?.copilotQuota ?? -1,
+      copilotQuota: sub.copilotQuota,
       copilotUsed: sub.copilotUsedThisCycle,
       usageBreakdown: { fromBank, fromImport },
     };

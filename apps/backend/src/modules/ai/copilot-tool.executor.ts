@@ -2,6 +2,7 @@ import { BadRequestException } from '@nestjs/common';
 import type { Role } from '@xcash/shared-types';
 import { BillingService } from '../billing/billing.service';
 import { ReportDataService } from '../report/report-data.service';
+import { ReportExportService } from '../report/report-export.service';
 import { CopilotKnowledgeService } from './copilot-knowledge.service';
 import { COPILOT_TOOLS, type CopilotToolEntry } from './copilot-tool.registry';
 import { CopilotTransactionQueryService } from './copilot-tx-query.service';
@@ -11,6 +12,7 @@ export interface ToolDeps {
   txQueryService: CopilotTransactionQueryService;
   knowledgeService: CopilotKnowledgeService;
   billingService: BillingService;
+  exportService: ReportExportService;
 }
 
 const registry = new Map(COPILOT_TOOLS.map((t) => [t.name, t]));

@@ -1,3 +1,4 @@
+import { BadRequestException } from '@nestjs/common';
 import type { CopilotActivity, Role } from '@xcash/shared-types';
 import type { ToolDeps } from './copilot-tool.executor';
 
@@ -702,9 +703,79 @@ export const COPILOT_TOOLS: CopilotToolEntry[] = [
         .join('\n');
     },
   },
+  {
+    name: 'export_report',
+    description:
+      'Xuất báo cáo định khoản ra file Excel hoặc PDF theo tháng hoặc khoảng ngày tùy chỉnh. Chỉ dùng khi user yêu cầu rõ ràng xuất/tải file báo cáo.',
+    parameters: {
+      type: 'object',
+      properties: {
+        format: {
+          type: 'string',
+          enum: ['excel', 'pdf'],
+          description: 'Định dạng file: excel hoặc pdf',
+        },
+        year: { type: 'integer', description: 'Năm, vd 2026 — dùng cùng month' },
+        month: {
+          type: 'integer',
+          minimum: 1,
+          maximum: 12,
+          description: 'Tháng từ 1 đến 12 — dùng cùng year',
+        },
+        startDate: {
+          type: 'string',
+          format: 'date',
+          description: 'Ngày bắt đầu (YYYY-MM-DD) — dùng cùng endDate, thay cho year/month',
+        },
+        endDate: {
+          type: 'string',
+          format: 'date',
+          description: 'Ngày kết thúc (YYYY-MM-DD) — dùng cùng startDate, thay cho year/month',
+        },
+      },
+      required: ['format'],
+      additionalProperties: false,
+    },
+    activity: {
+      final: { kind: 'file_export', label: 'Xuất báo cáo', source: 'X-Cash AI' },
+      streaming: { kind: 'file_export', label: 'Đang xuất báo cáo…', source: 'X-Cash AI' },
+    },
+    execute: (deps, tenantId, args) => {
+      const format = args.format as 'excel' | 'pdf';
+      const hasMonth = args.year != null && args.month != null;
+      const hasRange = args.startDate != null && args.endDate != null;
+
+      if (hasMonth === hasRange) {
+        throw new BadRequestException(
+          'Cần truyền đúng 1 trong 2: (year và month) HOẶC (startDate và endDate), không được thiếu cả hai hoặc cả hai cùng lúc.',
+        );
+      }
+
+      let fromDate: string;
+      let toDate: string;
+      if (hasMonth) {
+        const year = Number(args.year);
+        const month = Number(args.month);
+        const pad = (n: number) => String(n).padStart(2, '0');
+        const lastDay = new Date(year, month, 0).getDate();
+        fromDate = `${year}-${pad(month)}-01`;
+        toDate = `${year}-${pad(month)}-${pad(lastDay)}`;
+      } else {
+        fromDate = String(args.startDate);
+        toDate = String(args.endDate);
+      }
+
+      return deps.exportService.createExport(tenantId, format, fromDate, toDate);
+    },
+  },
 ];
 
 /** Set of tool names that produce action cards in the UI. */
 export const ACTION_CARD_TOOLS = new Set(
   COPILOT_TOOLS.filter((t) => t.activity.final.kind === 'action_card').map((t) => t.name),
+);
+
+/** Set of tool names that produce file_export activities in the UI. */
+export const FILE_EXPORT_TOOLS = new Set(
+  COPILOT_TOOLS.filter((t) => t.activity.final.kind === 'file_export').map((t) => t.name),
 );

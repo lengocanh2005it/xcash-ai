@@ -143,6 +143,9 @@ function fakeToolDeps(): { toolDeps: ToolDeps; calls: string[] } {
       getCurrentPlan: track('get_billing_current_plan'),
       getUsageHistory: track('get_payment_history'),
     } as never,
+    exportService: {
+      createExport: track('export_report'),
+    } as never,
   };
   return { toolDeps, calls };
 }

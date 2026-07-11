@@ -6,6 +6,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { BillingService } from '../billing/billing.service';
 import { NotificationService } from '../notification/notification.service';
 import { ReportDataService } from '../report/report-data.service';
+import { ReportExportService } from '../report/report-export.service';
 import { AiUsageLogService } from './ai-usage-log.service';
 import {
   buildActivities,
@@ -47,6 +48,7 @@ export class CopilotStreamService {
     private readonly copilotContextService: CopilotContextService,
     private readonly aiUsageLogService: AiUsageLogService,
     private readonly reportService: ReportDataService,
+    private readonly exportService: ReportExportService,
     private readonly txQueryService: CopilotTransactionQueryService,
     private readonly knowledgeService: CopilotKnowledgeService,
     private readonly billingService: BillingService,
@@ -58,6 +60,7 @@ export class CopilotStreamService {
   private getToolDeps(): ToolDeps {
     return {
       reportService: this.reportService,
+      exportService: this.exportService,
       txQueryService: this.txQueryService,
       knowledgeService: this.knowledgeService,
       billingService: this.billingService,

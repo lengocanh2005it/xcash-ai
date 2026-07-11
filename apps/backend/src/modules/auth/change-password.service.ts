@@ -1,15 +1,9 @@
 import { randomInt } from 'node:crypto';
 import { InjectQueue } from '@nestjs/bullmq';
-import {
-  BadRequestException,
-  HttpException,
-  HttpStatus,
-  Injectable,
-  Logger,
-  NotFoundException,
-} from '@nestjs/common';
+import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { Queue } from 'bullmq';
+import { throwOtpCooldownException } from '../../common/util/otp-cooldown.util';
 import { EMAIL_QUEUE } from '../../queue/queue.module';
 import { RedisService } from '../../redis/redis.service';
 import {
@@ -72,18 +66,13 @@ export class ChangePasswordService {
       attempts: 0,
     };
 
-    await this.redisService.client.set(
+    await this.redisService.set(
       this.otpKey(userId),
       JSON.stringify(payload),
       'EX',
       this.otpTtlSeconds,
     );
-    await this.redisService.client.set(
-      this.resendKey(userId),
-      '1',
-      'EX',
-      this.resendCooldownSeconds,
-    );
+    await this.redisService.set(this.resendKey(userId), '1', 'EX', this.resendCooldownSeconds);
 
     await this.emailQueue.add(
       EMAIL_CHANGE_PASSWORD_OTP_JOB,
@@ -96,7 +85,7 @@ export class ChangePasswordService {
   }
 
   async resend(userId: string): Promise<number> {
-    const raw = await this.redisService.client.get(this.otpKey(userId));
+    const raw = await this.redisService.get(this.otpKey(userId));
     if (!raw) {
       throw new BadRequestException(
         'Không có yêu cầu đổi mật khẩu đang chờ. Vui lòng nhập lại mật khẩu.',
@@ -113,18 +102,13 @@ export class ChangePasswordService {
       attempts: 0,
     };
 
-    await this.redisService.client.set(
+    await this.redisService.set(
       this.otpKey(userId),
       JSON.stringify(payload),
       'EX',
       this.otpTtlSeconds,
     );
-    await this.redisService.client.set(
-      this.resendKey(userId),
-      '1',
-      'EX',
-      this.resendCooldownSeconds,
-    );
+    await this.redisService.set(this.resendKey(userId), '1', 'EX', this.resendCooldownSeconds);
 
     await this.emailQueue.add(
       EMAIL_CHANGE_PASSWORD_OTP_JOB,
@@ -136,7 +120,7 @@ export class ChangePasswordService {
   }
 
   async verifyAndConsume(userId: string, otp: string): Promise<string> {
-    const raw = await this.redisService.client.get(this.otpKey(userId));
+    const raw = await this.redisService.get(this.otpKey(userId));
 
     if (!raw) {
       throw new BadRequestException('Mã OTP đã hết hạn hoặc không tồn tại. Vui lòng gửi lại mã.');
@@ -149,31 +133,28 @@ export class ChangePasswordService {
     }
 
     if (payload.attempts >= this.maxAttempts) {
-      await this.redisService.client.del(this.otpKey(userId));
+      await this.redisService.del(this.otpKey(userId));
       throw new BadRequestException('Đã nhập sai quá số lần cho phép. Vui lòng gửi lại mã OTP.');
     }
 
     if (payload.otp !== otp) {
       payload.attempts += 1;
-      const ttl = await this.redisService.client.ttl(this.otpKey(userId));
+      const ttl = await this.redisService.ttl(this.otpKey(userId));
       if (ttl > 0) {
-        await this.redisService.client.set(this.otpKey(userId), JSON.stringify(payload), 'EX', ttl);
+        await this.redisService.set(this.otpKey(userId), JSON.stringify(payload), 'EX', ttl);
       }
       throw new BadRequestException('Mã OTP không đúng');
     }
 
-    await this.redisService.client.del(this.otpKey(userId));
+    await this.redisService.del(this.otpKey(userId));
     return payload.newPasswordHash;
   }
 
   private async assertResendAllowed(userId: string): Promise<void> {
-    const cooldown = await this.redisService.client.get(this.resendKey(userId));
+    const cooldown = await this.redisService.get(this.resendKey(userId));
     if (cooldown) {
-      const ttl = await this.redisService.client.ttl(this.resendKey(userId));
-      throw new HttpException(
-        `Vui lòng đợi ${Math.max(ttl, 1)} giây trước khi gửi lại mã OTP`,
-        HttpStatus.TOO_MANY_REQUESTS,
-      );
+      const ttl = await this.redisService.ttl(this.resendKey(userId));
+      throwOtpCooldownException(ttl);
     }
   }
 

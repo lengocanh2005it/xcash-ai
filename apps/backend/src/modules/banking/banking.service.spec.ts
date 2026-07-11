@@ -1,7 +1,5 @@
-import { createHmac } from 'node:crypto';
 import { getQueueToken } from '@nestjs/bullmq';
-import { ForbiddenException, UnauthorizedException } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
+import { ForbiddenException } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import { SubscriptionPlan, TransactionStatus } from '@prisma/client';
 import { QuotaNotificationService } from '../../common/services/quota-notification.service';
@@ -9,6 +7,8 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { WEBHOOK_QUEUE } from '../../queue/queue.module';
 import { RedisService } from '../../redis/redis.service';
 import { BankingService } from './banking.service';
+import type { CasWebhookPayload } from './cas-webhook.handler';
+import { CasWebhookHandler } from './cas-webhook.handler';
 
 describe('BankingService', () => {
   let service: BankingService;
@@ -31,23 +31,31 @@ describe('BankingService', () => {
     $transaction: jest.fn(),
   };
 
-  const configValues: Record<string, string> = {
-    WEBHOOK_SKIP_SIGNATURE_VERIFY: 'true',
-    WEBHOOK_IDEMPOTENCY_TTL_SECONDS: '86400',
-    CAS_SECRET_KEY: 'test-secret',
-    WEBHOOK_TIMESTAMP_TOLERANCE_SECONDS: '300',
+  const webhookHandler = {
+    verifySignature: jest.fn(),
+    parsePayload: jest.fn(),
   };
 
-  const payload = {
-    webhookType: 'TRANSACTIONS',
+  const parsedPayload: CasWebhookPayload = {
+    transactionId: 'txn-1',
     grantId: 'grant-1',
-    transaction: {
-      id: 'txn-1',
-      amount: 100000,
-      description: 'Test payment',
-      transactionDateTime: '2026-07-01T10:00:00.000Z',
-      counterAccountName: 'Nguyen Van A',
-    },
+    amount: 100000,
+    description: 'Test payment',
+    transactionDateTime: '2026-07-01T10:00:00.000Z',
+    counterAccountName: 'Nguyen Van A',
+    fiName: 'Test Bank',
+    isProbe: false,
+  };
+
+  const probePayload: CasWebhookPayload = {
+    transactionId: '',
+    grantId: '',
+    amount: 0,
+    description: '',
+    transactionDateTime: '',
+    counterAccountName: '',
+    fiName: '',
+    isProbe: true,
   };
 
   const webhookQueue = {
@@ -65,13 +73,8 @@ describe('BankingService', () => {
       providers: [
         BankingService,
         { provide: PrismaService, useValue: prisma },
-        { provide: RedisService, useValue: { client: redisClient } },
-        {
-          provide: ConfigService,
-          useValue: {
-            get: (key: string, defaultValue?: string) => configValues[key] ?? defaultValue,
-          },
-        },
+        { provide: RedisService, useValue: redisClient },
+        { provide: CasWebhookHandler, useValue: webhookHandler },
         { provide: getQueueToken(WEBHOOK_QUEUE), useValue: webhookQueue },
         { provide: QuotaNotificationService, useValue: quotaNotificationService },
       ],
@@ -81,7 +84,7 @@ describe('BankingService', () => {
   });
 
   it('returns probe result when Cas Console pings without transaction payload', async () => {
-    const result = await service.handleCasWebhook({ webhookType: 'TRANSACTIONS' });
+    const result = await service.handleCasWebhook(probePayload);
 
     expect(result).toEqual({ probe: true, ok: true });
     expect(redisClient.set).not.toHaveBeenCalled();
@@ -90,7 +93,7 @@ describe('BankingService', () => {
   it('returns duplicate when redis idempotency key already exists', async () => {
     redisClient.set.mockResolvedValue(null);
 
-    const result = await service.handleCasWebhook(payload);
+    const result = await service.handleCasWebhook(parsedPayload);
 
     expect(result).toEqual({ duplicate: true, transactionId: 'txn-1' });
     expect(prisma.casGrant.findUnique).not.toHaveBeenCalled();
@@ -123,7 +126,9 @@ describe('BankingService', () => {
       }),
     );
 
-    await expect(service.handleCasWebhook(payload)).rejects.toBeInstanceOf(ForbiddenException);
+    await expect(service.handleCasWebhook(parsedPayload)).rejects.toBeInstanceOf(
+      ForbiddenException,
+    );
   });
 
   it('saves transaction and increments usage on happy path', async () => {
@@ -161,7 +166,7 @@ describe('BankingService', () => {
       }),
     );
 
-    const result = await service.handleCasWebhook(payload);
+    const result = await service.handleCasWebhook(parsedPayload);
 
     expect(result).toEqual({
       duplicate: false,
@@ -171,19 +176,5 @@ describe('BankingService', () => {
     });
     expect(redisClient.set).toHaveBeenCalledWith('webhook:cas:txn:txn-1', '1', 'EX', 86400, 'NX');
     expect(webhookQueue.add).toHaveBeenCalledWith('ai-classify', { transactionDbId: 'db-txn-1' });
-  });
-
-  it('rejects invalid webhook signature when verify is enabled', () => {
-    configValues.WEBHOOK_SKIP_SIGNATURE_VERIFY = 'false';
-    const rawBody = JSON.stringify(payload);
-    const signature = createHmac('sha256', 'test-secret').update(rawBody).digest('hex');
-
-    expect(() => service.verifyWebhookSignature(rawBody, `sha256=${signature}`)).not.toThrow();
-
-    expect(() => service.verifyWebhookSignature(rawBody, 'sha256=invalid')).toThrow(
-      UnauthorizedException,
-    );
-
-    configValues.WEBHOOK_SKIP_SIGNATURE_VERIFY = 'true';
   });
 });

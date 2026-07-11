@@ -29,7 +29,7 @@ describe('ChangePasswordService', () => {
         ChangePasswordService,
         {
           provide: RedisService,
-          useValue: { client: redisClient },
+          useValue: redisClient,
         },
         {
           provide: ConfigService,

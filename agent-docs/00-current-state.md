@@ -2,9 +2,13 @@
 
 > Mục đích: cho biết **chính xác** cái gì đã tồn tại trong repo ngay lúc này, để agent không cần `find`/`grep`/`ls` lại từ đầu mỗi session mới. File này phải được cập nhật mỗi khi có thay đổi cấu trúc đáng kể (thêm module, thêm page, đổi dependency lớn, thêm service hạ tầng). Nếu file này và thực tế code lệch nhau, **tin thực tế code**, và sửa lại file này ngay sau đó.
 
-Cập nhật lần cuối: **Architecture candidates #4, #6, #7 hoàn thành** — #4 xóa `ReportService` pass-through layer (collapse 9/10 1-line delegations vào `ReportDataService`); #6 thêm ~40 domain API response types vào `packages/shared-types/src/index.ts`, FE type files là re-export barrel; #7 gộp cache key `findActivePlan()` vào chung `sub:active:{tenantId}`, thêm `copilotQuota` vào `ActiveSubscription` DTO, xóa `PrismaService`+`RedisService` khỏi `CopilotQuotaGuard`. `pnpm verify` pass 11/11.
+Cập nhật lần cuối: **Architecture candidates #3, #5, #8 hoàn thành** — #3 Redis extraction: thêm typed convenience methods (`get`, `set`, `del`, `incr`, etc.) vào `RedisService`, refactor 12 consumers dùng methods thay vì `client.*`. #5 Unified error handling: nâng cấp `AllExceptionsFilter` (Prisma error mapping P2002→409/P2025→404/P2003→409 + Sentry.captureException), tạo `otp-cooldown.util.ts` shared helper, refactor 3 auth services. #8 Webhook separation: tạo `CasWebhookHandler` (verifySignature + parsePayload), tách adapter concerns khỏi `BankingService` business logic, `WebhookController` dispatch qua handler. `pnpm verify` pass 29/29 tests.
 
-Trước đó — **Architecture candidates #4, #6, #7** — #4 xóa `ReportService` (pass-through layer, 9/11 methods 1-line delegation), chuyển `exportExcel()` vào `ReportDataService`, 3 consumer files inject `ReportDataService` trực tiếp; #6 thêm ~40 domain API response types vào shared-types (Auth/Profile/Transaction/Review/Onboarding/Billing/Reports/Partner/Copilot/Common `ApiResponse<T>`), FE type files thành barrel re-export; #7 hợp nhất cache key `findActivePlan()` vào `sub:active:{tenantId}`, thêm `copilotQuota` vào `ActiveSubscription` DTO, `CopilotQuotaGuard` đọc `copilotQuota` từ sub (xóa `PrismaService`+`RedisService` inject + own Redis cache 30s), `BillingService.getCurrentPlan()` xóa redundant `planPricing` query. `pnpm verify` pass 11/11.
+Trước đó — **Architecture candidate #2 hoàn thành** — split `packages/shared-types/src/index.ts` (611 dòng, 61 exports) thành 11 domain files (auth, profile, transaction, copilot, billing, report, partner, onboarding, notification, import, common); `src/index.ts` giữ role re-export barrel (backward compatible); thêm 12 sub-path exports trong `package.json` (`@xcash/shared-types/auth`, `@xcash/shared-types/copilot`, etc.). `pnpm verify` pass 11/11.
+
+Trước đó — **Architecture candidate #1 hoàn thành** — collapse Copilot tool chain từ 7 levels of indirection xuống 2 layers: tạo `copilot-tool.executor.ts` (pure function `executeTool()` + `ToolDeps` interface + `getToolRegistry()`), sửa `copilot-tool.registry.ts` (execute signature nhận `ToolDeps` thay vì `CopilotToolService`), sửa `openai.service.ts` (chatCopilotWithTools + createCopilotRunner nhận `ToolDeps`), inline quota vào `copilot-stream.service.ts` (10 deps, added `getToolDeps()` + `incrementCopilotQuota()`), xóa `copilot-tool.service.ts` + `copilot-billing.service.ts` + `copilot-quota.service.ts`, sửa `copilot.module.ts` (xóa 3 providers), migrate tests. `pnpm verify` pass 11/11.
+
+Trước đó — **Architecture candidates #4, #6, #7** — #4 xóa `ReportService` pass-through layer (collapse 9/10 1-line delegations vào `ReportDataService`); #6 thêm ~40 domain API response types vào `packages/shared-types/src/index.ts`, FE type files là re-export barrel; #7 gộp cache key `findActivePlan()` vào chung `sub:active:{tenantId}`, thêm `copilotQuota` vào `ActiveSubscription` DTO, xóa `PrismaService`+`RedisService` khỏi `CopilotQuotaGuard`. `pnpm verify` pass 11/11.
 
 Trước đó — **Copilot action-tool đầu tiên — `propose_confirm_transaction_classification`** (branch `feat/copilot-confirm-action`, đã merge vào main qua PR #23). Tool read-only/dry-run, gated `COPILOT_ACTION_TOOLS_ENABLED` (default 0); FE render "action card" trong chat (`CopilotActionCard.tsx`) — re-check status live qua `useQuery`, xác nhận qua `useMutation` gọi thẳng `POST /review/:id/confirm` (không qua AI); endpoint đó nhận thêm optional `source?: 'copilot'` để audit trail. `CopilotActivity` (shared-types) thêm variant `kind: 'action_card'` + field `actionCard`. `getReviewQueue()` giờ select thêm `transaction.id`; `ReviewPage` có cột "Mã GD" (`CopyIdButton.tsx`, copy-to-clipboard) để lấy transactionId dán vào Copilot. `pnpm verify` pass 10/10.
 
@@ -87,10 +91,10 @@ Trước đó — **Phase 7 polish + UX hardening** — Settings tab phân trang
 
 **Đã xong (Copilot Function Calling — Phase 1a–1d):**
 - Backend: migrate `POST /ai/copilot` sang OpenAI `runTools` — 7 tools ban đầu (thay `get_cas_integration_help` bằng `search_knowledge_base` + pgvector sau); hiện factory có 8 tool cố định + `search_casso_public` tùy chọn + `propose_confirm_transaction_classification` tùy chọn (action-tool, xem block riêng bên dưới) ✅
-- Backend: `CopilotToolService` (execute + Redis cache per-tool), `buildCopilotTools` factory, `copilot-cas-faq.ts` (FAQ tĩnh Cas Link), `CopilotContextService` sửa lỗi `formatFinancialContext` không tồn tại ✅
+- Backend: `executeTool()` pure function + `ToolDeps` interface + `getToolRegistry()` (thay cho `CopilotToolService` class), `buildCopilotTools` factory, `copilot-cas-faq.ts` (FAQ tĩnh Cas Link), `CopilotContextService` sửa lỗi `formatFinancialContext` không tồn tại ✅
 - Backend: `OpenAiService.chatCopilotWithTools()` trả `{ reply, activities }` — track tool calls qua `runner.on('functionToolCall')`, map sang `CopilotActivity[]` với nhãn tiếng Việt ✅
 - Backend: Feature flag `COPILOT_USE_FUNCTION_CALLING=1` — khi bật dùng agent loop (`CopilotAgentHarness`, xem block riêng bên dưới), khi tắt fallback về `CopilotContextService` + `chatCopilot()` cũ ✅
-- Backend: `ReportModule` export `ReportService` (cần thiết cho `CopilotToolService`); `AiModule` import `ReportModule` + `OnboardingModule` ✅
+- Backend: `AiModule` import `ReportModule` + `OnboardingModule` ✅
 - Frontend: `CopilotSourceChips.tsx` — chip nguồn (`internal_data`/`knowledge`/`web_search`) với icon Lucide + link `rel=noopener` cho web chip ✅
 - Frontend: `CopilotPage.tsx` — handle `meta.activities` từ response, thêm 2 gợi ý câu hỏi Casso, greeting message cập nhật ✅
 - Env mới: `COPILOT_USE_FUNCTION_CALLING`, `COPILOT_CONTEXT_CACHE_TTL_SECONDS` (cả `configuration.ts` lẫn `.env.example`) ✅
@@ -114,7 +118,7 @@ Trước đó — **Phase 7 polish + UX hardening** — Settings tab phân trang
 - Backend: `chatCopilotWithTools()` truyền `resultsCapture` Map → `buildActivities()` có snippet + knowledge chips trên cả JSON path (khớp stream path) ✅
 - Backend: `TOOL_ACTIVITIES` + `getStreamingActivityMeta()` — một nguồn label streaming vs chip cuối (gồm `search_knowledge_base`) ✅
 - Backend: `search_transactions` schema — `source` optional + enum `all`; handler vẫn lọc `cas`/`import`/tất cả ✅
-- Backend: `CopilotToolService` inject `OpenAiService.createEmbedding()` (bỏ `import('openai')` mỗi lần); Tavily client singleton trong constructor ✅
+- Backend: `CopilotTransactionQueryService` inject `OpenAiService.createEmbedding()` (bỏ `import('openai')` mỗi lần); Tavily client singleton trong constructor ✅
 - Frontend: `CopilotPage` — SSE buffer giữ frame cắt TCP; throw nếu stream kết thúc không có `done` → fallback `sendViaJson` ✅
 
 **Đã xong (UX polish — tenant + partner):**
@@ -249,8 +253,8 @@ Trước đó — **Phase 7 polish + UX hardening** — Settings tab phân trang
 - **Responsive tables (5 pages):** `AccountsPage` (4 cols), `PaymentHistoryTable` (7 cols), `PartnerAiCostsPage` summary (5 cols) + detail (7 cols), `PartnerPlansPage` (6 cols), `AuditLogPanel` (5-6 cols) — mobile card layout + desktop table ✅
 
 **Đã xong (Copilot action-tool đầu tiên — confirm_transaction_classification):**
-- Backend: tool mới `propose_confirm_transaction_classification` trong `CopilotToolService` — read-only/dry-run, đọc `TransactionClassification` theo `transactionId`, trả `{ transactionId, classificationId, debitAccount, creditAccount, confidence, status, content, amount, canConfirm, reason? }`; `canConfirm=false` (không throw) khi role không phải `admin`/`accountant` (`CONFIRMABLE_ROLES`), khi `status !== 'review'`, hoặc khi không tìm thấy classification ✅
-- Backend: đăng ký tool qua `buildCopilotTools()` gated bởi flag mới `COPILOT_ACTION_TOOLS_ENABLED` (default `0`); `role: Role` được thread xuyên suốt `CopilotToolService.execute()` → `buildCopilotTools()` → `OpenAiService.createCopilotRunner()`/`chatCopilotWithTools()` → `CopilotStreamService` (lấy từ `user.role`) ✅
+- Backend: tool mới `propose_confirm_transaction_classification` trong `copilot-tool.registry.ts` — read-only/dry-run, đọc `TransactionClassification` theo `transactionId`, trả `{ transactionId, classificationId, debitAccount, creditAccount, confidence, status, content, amount, canConfirm, reason? }`; `canConfirm=false` (không throw) khi role không phải `admin`/`accountant` (`CONFIRMABLE_ROLES`), khi `status !== 'review'`, hoặc khi không tìm thấy classification ✅
+- Backend: đăng ký tool qua `buildCopilotTools()` gated bởi flag mới `COPILOT_ACTION_TOOLS_ENABLED` (default `0`); `role: Role` được thread xuyên suốt `executeTool()` → `buildCopilotTools()` → `OpenAiService.createCopilotRunner()`/`chatCopilotWithTools()` → `CopilotStreamService` (lấy từ `user.role`) ✅
 - Backend: `ClassificationService.confirm()` nhận thêm tham số optional `source?: 'copilot'`, ghi vào `auditLog.afterState` nếu có — hành vi cũ giữ nguyên khi không truyền; DTO `ConfirmClassificationDto` (`{ source?: 'copilot' }`) thêm vào `POST /review/:id/confirm` ✅
 - Backend: `getReviewQueue()` select thêm `transaction.id` (trước đây API không expose transactionId nào để user copy dùng cho Copilot) ✅
 - shared-types: `CopilotActivity.kind` thêm variant `'action_card'` + field optional `actionCard?: CopilotActionCardData` (interface mới, xem block shared-types bên dưới) ✅
@@ -258,12 +262,12 @@ Trước đó — **Phase 7 polish + UX hardening** — Settings tab phân trang
 - Frontend: `CopilotActionCard.tsx` (mới) — card hiện trong chat, `useQuery` re-check status live (`GET /transactions/:id/classification`) trước khi cho phép bấm (không tin status đã lưu trong lịch sử), `useMutation` gọi `POST /review/:id/confirm` với `source: 'copilot'`, `onSuccess` invalidate `['review-queue']` + `['review', 'count']` + toast (đúng convention TanStack Query của repo) ✅
 - Frontend: `CopilotMessageBubble.tsx` tách activity `kind === 'action_card'` ra render `CopilotActionCard` riêng (không lẫn vào `CopilotSourceChips`); `CopilotSourceChips.tsx` thêm icon cho kind mới (`CheckSquare`) ✅
 - Frontend: `CopyIdButton.tsx` (mới, `components/shared/`) — copy-to-clipboard mã giao dịch rút gọn, dùng trong `ReviewPage.tsx` (cột "Mã GD" desktop table + mobile card) để user lấy transactionId dán vào Copilot ✅
-- Backend test: `copilot-tool.service.spec.ts` (3 case: review/non-review/viewer), `classification.service.spec.ts` (confirm với/không `source`) ✅
+- Backend test: `copilot-tx-query.service.spec.ts` (3 case: review/non-review/viewer), `classification.service.spec.ts` (confirm với/không `source`) ✅
 - Env mới: `COPILOT_ACTION_TOOLS_ENABLED` (`.env.example` + `configuration.ts`, default `0`) ✅
 - PRD: [Issue #22](https://github.com/lengocanh2005it/xcash-ai/issues/22), branch `feat/copilot-confirm-action`, PR #23 đã merge vào main ✅
 
 **Đã xong (Copilot action-tool thứ hai — correct_transaction_classification):**
-- Backend: tool mới `propose_correct_transaction_classification` trong `CopilotToolService` — nhận `{ transactionId, debitAccount, creditAccount }` (2 mã TK mới do **user** tự nêu, model không tự đề xuất); thứ tự check role (`CONFIRMABLE_ROLES` tái dùng) → status (`review`) → validate 2 mã TK mới tồn tại + `isActive` trong `ChartOfAccount` của tenant (1 query `findMany` với `accountCode: { in: [...] }`, không gọi lại tool `lookup_chart_account`) ✅
+- Backend: tool mới `propose_correct_transaction_classification` trong `copilot-tool.registry.ts` — nhận `{ transactionId, debitAccount, creditAccount }` (2 mã TK mới do **user** tự nêu, model không tự đề xuất); thứ tự check role (`CONFIRMABLE_ROLES` tái dùng) → status (`review`) → validate 2 mã TK mới tồn tại + `isActive` trong `ChartOfAccount` của tenant (1 query `findMany` với `accountCode: { in: [...] }`, không gọi lại tool `lookup_chart_account`) ✅
 - Backend: trả `{ ...trường cũ từ propose_confirm, proposedDebitAccount, proposedCreditAccount, canCorrect, reason? }` — không throw ở mọi nhánh fail, đồng nhất pattern `propose_confirm_transaction_classification` ✅
 - Backend: đăng ký tool qua `buildCopilotTools()` dùng chung flag `COPILOT_ACTION_TOOLS_ENABLED` (không tạo flag riêng) ✅
 - Backend: `CorrectClassificationDto` + `ClassificationService.correct()` nhận thêm optional `source?: 'copilot'`, ghi vào `auditLog.afterState` cùng `beforeState`/`afterState` debit/credit đã có — đồng nhất `confirm()` ✅
@@ -271,7 +275,7 @@ Trước đó — **Phase 7 polish + UX hardening** — Settings tab phân trang
 - Backend: `copilot-activity.helper.ts` — `TOOL_ACTIVITIES` thêm entry; `ACTION_CARD_TOOLS` (Set) generalize nhánh xử lý action-card trong `buildActivities()` cho cả 2 tool (trước đây hard-code tên tool đầu tiên) ✅
 - Frontend: `CopilotCorrectionCard.tsx` (mới) — card so sánh định khoản cũ (`debitAccount`/`creditAccount`) vs đề xuất mới (`proposedDebitAccount`/`proposedCreditAccount`), cùng pattern `useQuery` re-check status + `useMutation` gọi `POST /review/:id/correct` với `source: 'copilot'` như `CopilotActionCard` ✅
 - Frontend: `CopilotMessageBubble.tsx` discriminate theo `actionCard.tool` để chọn render `CopilotActionCard` hay `CopilotCorrectionCard` ✅
-- Backend test: mở rộng `copilot-tool.service.spec.ts` (4 case mới: hợp lệ/viewer/non-review/mã TK sai), mở rộng `classification.service.spec.ts` (`correct()` với/không `source`) ✅
+- Backend test: mở rộng `copilot-tx-query.service.spec.ts` (4 case mới: hợp lệ/viewer/non-review/mã TK sai), mở rộng `classification.service.spec.ts` (`correct()` với/không `source`) ✅
 - PRD: [Issue #24](https://github.com/lengocanh2005it/xcash-ai/issues/24), branch `feat/copilot-correct-action`, PR chưa tạo ✅
 
 **Đã xong (Edge Case Hardening):**
@@ -381,7 +385,10 @@ paypilot-ai/                                   ← tên folder local có thể k
 │   │       │   ├── services/
 │   │   │   │   └── subscription-query.adapter.ts  # SubscriptionQueryAdapter — single seam for "active subscription by tenant" queries; findActive() trả ActiveSubscription kèm copilotQuota; findActivePlan() dùng chung cache sub:active:{tenantId}; Redis 60s cache ✅
 │   │       │   ├── decorators/                # @Roles, @RequiresPlan, @Public
-│   │       │   ├── guards/auth.guards.ts       # JwtAuthGuard, RolesGuard, PartnerGuard
+│   │           │   ├── common/
+│   │           │   │   ├── filters/all-exceptions.filter.ts  # Prisma error mapping (P2002→409, P2025→404, P2003→409) + Sentry.captureException ✅
+│   │           │   │   └── util/otp-cooldown.util.ts  # throwOtpCooldownException() shared helper ✅
+│   │           │   ├── guards/auth.guards.ts       # JwtAuthGuard, RolesGuard, PartnerGuard
 │   │       │   ├── guards/plan.guard.ts         # PlanGuard — uses SubscriptionQueryAdapter ✅
 │   │       │   ├── guards/copilot-quota.guard.ts  # CopilotQuotaGuard — uses SubscriptionQueryAdapter; reads copilotQuota from sub.copilotQuota (embedded in ActiveSubscription); removed own planPricing cache ✅
 │   │       │   ├── guards/copilot-throttler.guard.ts  # CopilotThrottlerGuard — per-user rate limit riêng cho Copilot (Phase 6) ✅
@@ -392,6 +399,7 @@ paypilot-ai/                                   ← tên folder local có thể k
 │   │       │   └── types/authenticated-user.type.ts
 │   │       ├── prisma/
 │   │       ├── redis/
+│   │       │   └── redis.service.ts              # Typed convenience methods (get, set, del, incr, etc.) + pipeline ✅
 │   │       ├── queue/queue.module.ts
 │   │       ├── storage/                       # AzureBlobService (avatar upload) ✅
 │   │       │   ├── storage.module.ts
@@ -403,18 +411,26 @@ paypilot-ai/                                   ← tên folder local có thể k
 │   │           │   ├── password-reset.service.ts
 │   │           │   └── change-password.service.ts
 │   │           ├── banking/                   # POST /webhook/cas → enqueue ai-classify ✅
+│   │           │   ├── banking.service.ts          # handleCasWebhook() — business logic only (no signature verification) ✅
+│   │           │   ├── banking.service.spec.ts     # 4 tests: probe/duplicate/quota-block/happy-path ✅
+│   │           │   ├── banking.module.ts           # imports RedisModule, provides CasWebhookHandler ✅
+│   │           │   ├── cas-webhook.handler.ts      # CasWebhookHandler: verifySignature() + parsePayload() — adapter concerns ✅
+│   │           │   ├── cas-webhook.handler.spec.ts # 4 tests: probe/parse/optional-fields/skip-verify ✅
+│   │           │   ├── webhook.controller.ts       # HTTP intake layer → dispatches to CasWebhookHandler + BankingService ✅
+│   │           │   └── dto/banking.dto.ts          # CasWebhookDto, CasWebhookTransactionDto ✅
 │   │           ├── ai/                        # openai.service, embedding.service, classification.service, classification.processor, copilot.controller ✅
 │   │           │   ├── ai-usage-log.service.ts    # AiUsageLogService.record() — fire-and-forget AI token logging (seam duy nhất) ✅
 │   │           │   ├── ai-usage-log.service.spec.ts  # 4 tests: classify/embedding/copilot/error-swallow ✅
 │   │           │   ├── copilot.controller.ts      # POST /ai/copilot + POST /ai/copilot/stream + 4 conversation CRUD endpoints — CopilotQuotaGuard method-level (chat+stream only); controller deps 3 (CopilotStreamService, CopilotConversationService, RedisService) ✅
 │   │           │   ├── copilot-stream.service.ts  # chat() + streamChat() — toàn bộ streaming pipeline, tool calling, abort/partial, quota (extracted from controller) ✅
-│   │           │   ├── copilot-quota.service.ts   # incrementAndNotify() — quota check + increment + notify (extracted from controller) ✅
 │   │           │   ├── copilot-activity.helper.ts # TOOL_ACTIVITIES, getStreamingActivityMeta(), buildActivities() — extracted from OpenAiService ✅
 │   │           │   ├── copilot-conversation.service.ts  # CRUD conversations + messages, cursor pagination, auto-title fire-and-forget, deleteMessage() dangling cleanup (Phase 6) ✅
 │   │           │   ├── copilot-context.service.ts # Fallback: preload summary tháng hiện tại (dùng khi flag=0)
-│   │           │   ├── copilot-tool.service.ts    # execute(tenantId, name, args, role?) — 8 tools + Redis cache (+ search_casso_public + 2 action-tool: propose_confirm_transaction_classification, propose_correct_transaction_classification, khi bật) ✅
-│   │           │   ├── copilot-tool.service.spec.ts  # 2 describe block: propose_confirm (3 test: review/non-review/viewer) + propose_correct (4 test: hợp lệ/viewer/non-review/mã TK sai) ✅
-│   │           │   ├── copilot-tools.factory.ts   # buildCopilotToolSchemas() → LlmTool[] (chỉ JSON schema, KHÔNG gắn executor — harness gọi thẳng CopilotToolService.execute()) ✅
+│   │           │   ├── copilot-tool.executor.ts   # Pure function executeTool() + ToolDeps interface + getToolRegistry() — 2-layer architecture thay cho 7-level indirection ✅
+│   │           │   ├── copilot-tool.executor.spec.ts  # 4 tests: executeTool unknown/review/non-review/viewer + getToolRegistry completeness ✅
+│   │           │   ├── copilot-tx-query.service.ts    # CopilotTransactionQueryService — searchTransactions() + lookupChartAccount() (tách từ CopilotToolService) ✅
+│   │           │   ├── copilot-tx-query.service.spec.ts  # 2 describe block: propose_confirm (3 test: review/non-review/viewer) + propose_correct (4 test: hợp lệ/viewer/non-review/mã TK sai) ✅
+│   │           │   ├── copilot-tools.factory.ts   # buildCopilotToolSchemas() → LlmTool[] (chỉ JSON schema, KHÔNG gắn executor — harness gọi thẳng executeTool()) ✅
 │   │           │   ├── copilot-agent.harness.ts   # CopilotAgentHarness — agent loop thủ công (không dùng OpenAI SDK runTools()) + fallback adapter theo priority ✅ (issue #35)
 │   │           │   ├── copilot-agent.harness.spec.ts  # 6 test: no-tool reply, fallback khi quota, không fallback khi lỗi thường, tool-call loop, max-iteration cutoff, streaming delta ✅
 │   │           │   ├── llm-adapter.interface.ts   # LlmAdapter interface (streamChatCompletion) — contract dùng thẳng type OpenAI SDK, harness tráo được provider OpenAI-compatible ✅
@@ -589,7 +605,20 @@ paypilot-ai/                                   ← tên folder local có thể k
 │           │       ├── PartnerAuditPage.tsx       # /partner/audit-logs — audit log toàn hệ thống ✅
 │           │       ├── PartnerPlansPage.tsx       # 4 plan cards, bảng giá, dialog chỉnh giá + mobile card layout ✅
 │           │       └── PartnerAiCostsPage.tsx     # Chi phí AI — date filter, bảng tenant ranked by cost, breakdown badges, Sheet detail per-call + mobile card layout ✅
-├── packages/shared-types/src/index.ts        # TransactionStatus.CLASSIFIED (bỏ MATCHED), ClassificationType, AccountType ✅
+├── packages/shared-types/src/
+│   ├── index.ts              # Re-export barrel (backward compatible) ✅
+│   ├── generated/enums.ts    # Auto-generated from Prisma schema (13 enums) ✅
+│   ├── auth.ts               # AuthenticatedUser ✅
+│   ├── profile.ts            # UserProfile, UpdateProfileInput ✅
+│   ├── transaction.ts        # TransactionSummary, ClassificationItem, ReviewQueueResponse ✅
+│   ├── copilot.ts            # CopilotActivity, CopilotConversationSummary, CopilotActionCardData ✅
+│   ├── billing.ts            # PlanData, PaymentOrder, BillingPlan, CycleTransaction ✅
+│   ├── report.ts             # SummaryData, AccountSummary, ComparisonData, TopAccountsData ✅
+│   ├── partner.ts            # PartnerTenant, DashboardStats, AiCostRow, etc. ✅
+│   ├── onboarding.ts         # OnboardingStatus, GrantTokenResponse, BankingCallbackResponse ✅
+│   ├── notification.ts       # AppNotification, NotificationListResult ✅
+│   ├── import.ts             # ImportValidateResult, ImportResult, ImportHistoryItem ✅
+│   └── common.ts             # ApiResponse<T>, meetsPlan(), PLAN_RANK, PLAN_LABEL ✅
 ├── biome.json, package.json, turbo.json, pnpm-workspace.yaml
 ```
 
@@ -838,12 +867,12 @@ postinstall      → prisma generate
 - **Audit log actor:** field `actor` trong DB là string — userId (UUID), `'system'`, `'ai'`, hoặc legacy `'cas_partner'`. API đọc map sang label tiếng Việt; Partner mới ghi `userId` thật.
 - **`dto.role as unknown as import('@prisma/client').Role`** — cast cần thiết trong `team.service.ts` vì `Role` từ `@xcash/shared-types` (dùng cho DTO/RBAC) không trùng type với `Role` enum của Prisma Client dù cùng giá trị string.
 - **Frontend dependencies đáng chú ý:** `qrcode.react` (`QRCodeSVG`) — PayOS v2 trả về raw VietQR string, không phải URL; phải render bằng `QRCodeSVG` thay vì `<img src>`. Import: `import { QRCodeSVG } from 'qrcode.react'`.
-- **Copilot function calling:** `COPILOT_USE_FUNCTION_CALLING=1` bật agent loop qua `CopilotAgentHarness` — model gọi đúng tool khi cần, không preload context cố định. `tenantId` chỉ từ JWT closure (không expose trong tool schema). Tránh circular dep: `CopilotToolService` dùng Prisma trực tiếp cho `review_count` và `search_transactions`, không import `ClassificationModule`/`TransactionModule`. `AiModule` import `OnboardingModule` (không import `BankingModule`). Vòng lặp tối đa 5 (`maxIterations`), `temperature` không còn set cứng ở tầng harness (adapter tự gọi API thô). Response: `{ reply, meta?: { activities: CopilotActivity[] } }` — FE hiện chip nguồn bằng `CopilotSourceChips`.
+- **Copilot function calling:** `COPILOT_USE_FUNCTION_CALLING=1` bật agent loop qua `CopilotAgentHarness` — model gọi đúng tool khi cần, không preload context cố định. `tenantId` chỉ từ JWT closure (không expose trong tool schema). Tránh circular dep: `CopilotTransactionQueryService` dùng Prisma trực tiếp cho `review_count` và `search_transactions`, không import `ClassificationModule`/`TransactionModule`. `AiModule` import `OnboardingModule` (không import `BankingModule`). Vòng lặp tối đa 5 (`maxIterations`), `temperature` không còn set cứng ở tầng harness (adapter tự gọi API thô). Response: `{ reply, meta?: { activities: CopilotActivity[] } }` — FE hiện chip nguồn bằng `CopilotSourceChips`.
 - **LLM adapter tráo được (harness cố định, refactor issue [#35](https://github.com/lengocanh2005it/xcash-ai/issues/35)):** `OpenAiService.createCopilotRunner()` không còn dùng `client.chat.completions.runTools()` (helper riêng OpenAI SDK) — thay bằng `CopilotAgentHarness` tự viết agent loop thủ công, nhận danh sách `LlmAdapter` theo thứ tự ưu tiên (`[openai, minimax]`, bỏ qua adapter thiếu API key) và tự fallback sang adapter kế tiếp khi lỗi thuộc nhóm `shouldFallbackProvider()` (quota/billing/transient). Nhờ đó **fallback MiniMax giờ vẫn giữ được tool-calling** (trước đây fallback rẽ hẳn sang `chatCopilot()` không tool, MiniMax mất khả năng tra dữ liệu thật). `ToolCallAccumulator` tự ráp `tool_calls` từ stream chunk (SDK cũ làm việc này ẩn bên trong `runTools()`). `chatCopilot()` (đường non-tool khi tắt hẳn flag `COPILOT_USE_FUNCTION_CALLING`) giữ nguyên, không đổi — ngoài phạm vi refactor này. Harness còn: cảnh báo user (`appendFallbackNotice`) khi câu trả lời thực sự đến từ adapter fallback; khi chạm `maxIterations` (5), ép 1 lượt cuối KHÔNG kèm tools để buộc model tổng hợp thay vì trả rỗng; dedupe tool call trùng (cùng name+args) trong 1 request qua `toolResultCache`.
 - **Eval tool-routing (không chạy trong `pnpm verify`):** `apps/backend/src/scripts/eval-copilot-tool-routing.ts` — gọi OpenAI thật, kiểm tra model có gọi đúng tool theo "Quy tắc gọi tool" trong `buildCopilotSystemPrompt()` không (11 case mẫu). Chạy thủ công `pnpm --filter @xcash/backend eval:copilot-tools` (cần `OPENAI_API_KEY` export sẵn) sau khi sửa system prompt, tránh rule cũ bị "quên" khi prompt phình to theo thời gian.
 - **Copilot SSE streaming (Phase 2 + hardening):** `POST /ai/copilot/stream` dùng `@Res()` bypass `ResponseInterceptor`. Activity label từ `getStreamingActivityMeta()` / `TOOL_ACTIVITIES` (một nguồn với chip cuối). Runner emit `functionToolCall` → SSE `activity`; `content` → `delta`; sau `finalContent()` → `done` (`{ reply, meta }`). Controller bọc logic sau `flushHeaders()` trong `try/catch` — lỗi vẫn emit `done` với message lỗi. FE: `fetch` + `ReadableStream` + SSE buffer (`feedSseChunk`/`flushSsePending`) xử lý frame cắt TCP; throw nếu không nhận `done` → fallback axios `/ai/copilot`.
 - **`search_transactions` tool:** Prisma trực tiếp — `content`+`senderAccount` ILIKE keyword; `source` optional (`cas` → `grantId: { not: null }`, `import` → `grantId: null`, `all`/bỏ trống = không lọc source); limit 1–20 (required trong schema).
-- **`search_casso_public` tool (Phase 3):** Tavily `@tavily/core` singleton trong `CopilotToolService`, query thêm `site:casso.vn`, cache 24h theo base64(query) key. Chỉ active khi `COPILOT_CASSO_SEARCH_ENABLED=1` + `TAVILY_API_KEY` set. `buildCopilotTools()` nhận `configService?` để kiểm tra flag — nếu không truyền (backward compat) thì tool không xuất hiện. `TOOL_ACTIVITIES` có entry `web_search` cho tool này.
+- **`search_casso_public` tool (Phase 3):** Tavily `@tavily/core` singleton trong `CopilotTransactionQueryService`, query thêm `site:casso.vn`, cache 24h theo base64(query) key. Chỉ active khi `COPILOT_CASSO_SEARCH_ENABLED=1` + `TAVILY_API_KEY` set. `buildCopilotTools()` nhận `configService?` để kiểm tra flag — nếu không truyền (backward compat) thì tool không xuất hiện. `TOOL_ACTIVITIES` có entry `web_search` cho tool này.
 - **Copilot tools cache keys:** `copilot:tool:summary:{tenantId}:{y}-{m}` TTL=300s; `copilot:tool:banking:{tenantId}` TTL=60s. Key cũ `copilot:context:{tenantId}:{y}-{m}` còn dùng khi flag=0 (fallback).
 - **`propose_confirm_transaction_classification` tool (action-tool đầu tiên):** dry-run — KHÔNG BAO GIỜ ghi DB. Chỉ đọc `TransactionClassification` theo `transactionId`. Gated bởi `COPILOT_ACTION_TOOLS_ENABLED` (default `0`), theo đúng pattern `cassoSearchEnabled` (đọc qua `configService?.get()` trong `buildCopilotTools()`, không truyền = tool không xuất hiện). `canConfirm: false` (không throw) trong 3 case: role không phải `admin`/`accountant`, `status !== 'review'`, hoặc không tìm thấy classification (case này trả thêm placeholder rỗng cho các field bắt buộc của `CopilotActionCardData` để không vỡ contract type — xem code review đã catch bug FE dùng `classificationId` rỗng làm React `key`, giờ FE dùng `transactionId` làm key thay thế). Việc ghi DB thật luôn đi qua `POST /review/:id/confirm` có sẵn, do FE gọi trực tiếp khi user bấm nút trên `CopilotActionCard` — AI không có quyền tự thực thi side-effect.
 - **Vì sao cần cột "Mã GD" (`CopyIdButton`) ở `ReviewPage`:** tool cần `transactionId` chính xác để hoạt động; test thực tế cho thấy nếu chỉ dựa vào model tự suy ra ID từ nội dung tiếng Việt (có dấu, dễ gõ sai) thì Copilot từ chối vì thiếu thông tin cụ thể — user cần copy đúng ID để dán vào chat. Đây là gap phát hiện khi test tay, không phải thiết kế ban đầu.

@@ -166,7 +166,7 @@ Nguồn sự thật palette brand: mục **Brand palette** trong `reference/ui-d
 
 ## Types dùng chung với backend
 
-Import enum/type từ `@xcash/shared-types` thay vì tự định nghĩa lại (vd: `Role`, `TransactionStatus`, `ClassificationType`, `AccountType`, `SubscriptionPlan`). Nếu BE trả thêm field mới, cập nhật type ở `packages/shared-types/src/index.ts` trước, rồi dùng lại ở FE — không duplicate định nghĩa.
+Import enum/type từ `@xcash/shared-types` (hoặc sub-path如 `@xcash/shared-types/copilot`, `@xcash/shared-types/billing`) thay vì tự định nghĩa lại (vd: `Role`, `TransactionStatus`, `ClassificationType`, `AccountType`, `SubscriptionPlan`). Nếu BE trả thêm field mới, cập nhật type ở domain file tương ứng trong `packages/shared-types/src/` trước, rồi dùng lại ở FE — không duplicate định nghĩa.
 
 ## States bắt buộc cho mọi màn hình danh sách/bảng
 

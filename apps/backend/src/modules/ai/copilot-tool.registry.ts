@@ -1,5 +1,5 @@
 import type { CopilotActivity, Role } from '@xcash/shared-types';
-import type { CopilotToolService } from './copilot-tool.service';
+import type { ToolDeps } from './copilot-tool.executor';
 
 type ToolActivityMeta = Omit<CopilotActivity, 'urls'>;
 
@@ -9,7 +9,7 @@ export interface CopilotToolEntry {
   parameters: object;
   activity: { final: ToolActivityMeta; streaming: ToolActivityMeta };
   execute: (
-    service: CopilotToolService,
+    deps: ToolDeps,
     tenantId: string,
     args: Record<string, unknown>,
     role?: Role,
@@ -41,8 +41,8 @@ export const COPILOT_TOOLS: CopilotToolEntry[] = [
         source: 'X-Cash AI',
       },
     },
-    execute: (service, tenantId, args) =>
-      service.getMonthSummary(tenantId, Number(args.year), Number(args.month)),
+    execute: (deps, tenantId, args) =>
+      deps.reportService.getSummary(tenantId, Number(args.year), Number(args.month)),
     formatSnippet: (data) => {
       if (data == null) return undefined;
       const d = data as {
@@ -79,8 +79,8 @@ export const COPILOT_TOOLS: CopilotToolEntry[] = [
       final: { kind: 'internal_data', label: 'So sánh tháng', source: 'X-Cash AI' },
       streaming: { kind: 'internal_data', label: 'Đang so sánh tháng…', source: 'X-Cash AI' },
     },
-    execute: (service, tenantId, args) =>
-      service.getMonthComparison(tenantId, Number(args.year), Number(args.month)),
+    execute: (deps, tenantId, args) =>
+      deps.reportService.getComparison(tenantId, Number(args.year), Number(args.month)),
     formatSnippet: (data) => {
       if (data == null) return undefined;
       const d = data as {
@@ -117,8 +117,8 @@ export const COPILOT_TOOLS: CopilotToolEntry[] = [
         source: 'X-Cash AI',
       },
     },
-    execute: (service, tenantId, args) =>
-      service.getTopAccounts(
+    execute: (deps, tenantId, args) =>
+      deps.reportService.getTopAccounts(
         tenantId,
         Number(args.year),
         Number(args.month),
@@ -168,8 +168,8 @@ export const COPILOT_TOOLS: CopilotToolEntry[] = [
         source: 'X-Cash AI',
       },
     },
-    execute: (service, tenantId, args) =>
-      service.getReviewQueueCount(
+    execute: (deps, tenantId, args) =>
+      deps.txQueryService.getReviewQueueCount(
         tenantId,
         args.year != null ? Number(args.year) : undefined,
         args.month != null ? Number(args.month) : undefined,
@@ -212,8 +212,8 @@ export const COPILOT_TOOLS: CopilotToolEntry[] = [
         source: 'X-Cash AI',
       },
     },
-    execute: (service, tenantId, args) =>
-      service.listReviewQueue(
+    execute: (deps, tenantId, args) =>
+      deps.txQueryService.listReviewQueue(
         tenantId,
         Number(args.limit ?? 10),
         args.year != null ? Number(args.year) : undefined,
@@ -261,8 +261,8 @@ export const COPILOT_TOOLS: CopilotToolEntry[] = [
         source: 'X-Cash AI',
       },
     },
-    execute: (service, tenantId, args) =>
-      service.lookupChartAccount(tenantId, String(args.accountCode)),
+    execute: (deps, tenantId, args) =>
+      deps.txQueryService.lookupChartAccount(tenantId, String(args.accountCode)),
     formatSnippet: (data) => {
       if (data == null) return undefined;
       const d = data as {
@@ -292,7 +292,7 @@ export const COPILOT_TOOLS: CopilotToolEntry[] = [
         source: 'X-Cash AI',
       },
     },
-    execute: (service, tenantId) => service.getBankingStatus(tenantId),
+    execute: (deps, tenantId) => deps.txQueryService.getBankingStatus(tenantId),
     formatSnippet: (data) => {
       if (data == null) return undefined;
       const d = data as {
@@ -329,7 +329,8 @@ export const COPILOT_TOOLS: CopilotToolEntry[] = [
         source: 'X-Cash AI',
       },
     },
-    execute: (service, _tenantId, args) => service.searchKnowledge(String(args.query ?? '')),
+    execute: (deps, _tenantId, args) =>
+      deps.knowledgeService.searchKnowledge(String(args.query ?? '')),
     formatSnippet: (data) => {
       if (data == null) return undefined;
       const d = data as { sections?: Array<{ title: string; content: string }> } | null;
@@ -382,7 +383,7 @@ export const COPILOT_TOOLS: CopilotToolEntry[] = [
         source: 'X-Cash AI',
       },
     },
-    execute: (service, tenantId, args) => service.searchTransactions(tenantId, args),
+    execute: (deps, tenantId, args) => deps.txQueryService.searchTransactions(tenantId, args),
     formatSnippet: (data) => {
       if (data == null) return undefined;
       const d = data as {
@@ -431,8 +432,8 @@ export const COPILOT_TOOLS: CopilotToolEntry[] = [
       },
     },
     enabledBy: 'COPILOT_ACTION_TOOLS_ENABLED',
-    execute: (service, tenantId, args, role) =>
-      service.proposeConfirmTransactionClassification(
+    execute: (deps, tenantId, args, role) =>
+      deps.txQueryService.proposeConfirmTransactionClassification(
         tenantId,
         String(args.transactionId),
         role ?? ('viewer' as Role),
@@ -471,8 +472,8 @@ export const COPILOT_TOOLS: CopilotToolEntry[] = [
       },
     },
     enabledBy: 'COPILOT_ACTION_TOOLS_ENABLED',
-    execute: (service, tenantId, args, role) =>
-      service.proposeCorrectTransactionClassification(
+    execute: (deps, tenantId, args, role) =>
+      deps.txQueryService.proposeCorrectTransactionClassification(
         tenantId,
         String(args.transactionId),
         String(args.debitAccount),
@@ -504,7 +505,8 @@ export const COPILOT_TOOLS: CopilotToolEntry[] = [
       },
     },
     enabledBy: 'COPILOT_CASSO_SEARCH_ENABLED',
-    execute: (service, _tenantId, args) => service.searchCassoPublic(String(args.query ?? '')),
+    execute: (deps, _tenantId, args) =>
+      deps.knowledgeService.searchCassoPublic(String(args.query ?? '')),
     formatSnippet: (data) => {
       if (data == null) return undefined;
       const d = data as {
@@ -534,7 +536,7 @@ export const COPILOT_TOOLS: CopilotToolEntry[] = [
         source: 'X-Cash AI',
       },
     },
-    execute: (service, tenantId) => service.getBillingCurrentPlan(tenantId),
+    execute: (deps, tenantId) => deps.billingService.getCurrentPlan(tenantId),
     formatSnippet: (data) => {
       if (data == null) return undefined;
       const d = data as {
@@ -577,7 +579,7 @@ export const COPILOT_TOOLS: CopilotToolEntry[] = [
         source: 'X-Cash AI',
       },
     },
-    execute: (service, tenantId) => service.getPaymentHistory(tenantId),
+    execute: (deps, tenantId) => deps.billingService.getUsageHistory(tenantId),
     formatSnippet: (data) => {
       if (data == null) return undefined;
       const d = data as Array<{ metric: string; value: number; recordedAt: Date | string }>;
@@ -621,8 +623,8 @@ export const COPILOT_TOOLS: CopilotToolEntry[] = [
         source: 'X-Cash AI',
       },
     },
-    execute: (service, tenantId, args) =>
-      service.listChartAccounts(
+    execute: (deps, tenantId, args) =>
+      deps.txQueryService.listChartAccounts(
         tenantId,
         args.accountType as string | undefined,
         Number(args.limit ?? 50),
@@ -670,8 +672,12 @@ export const COPILOT_TOOLS: CopilotToolEntry[] = [
         source: 'X-Cash AI',
       },
     },
-    execute: (service, tenantId, args) =>
-      service.getPeriodSummary(tenantId, String(args.startDate), String(args.endDate)),
+    execute: (deps, tenantId, args) =>
+      deps.reportService.getSummaryByDateRange(
+        tenantId,
+        String(args.startDate),
+        String(args.endDate),
+      ),
     formatSnippet: (data) => {
       if (data == null) return undefined;
       const d = data as {

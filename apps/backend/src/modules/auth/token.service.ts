@@ -70,15 +70,15 @@ export class TokenService {
       },
     );
 
-    await this.redisService.client.set(this.refreshTokenKey(jti), user.id, 'EX', refreshTtlSeconds);
-    await this.redisService.client.set(
+    await this.redisService.set(this.refreshTokenKey(jti), user.id, 'EX', refreshTtlSeconds);
+    await this.redisService.set(
       this.refreshRememberKey(jti),
       rememberMe ? '1' : '0',
       'EX',
       refreshTtlSeconds,
     );
-    await this.redisService.client.sadd(this.userSessionsKey(user.id), jti);
-    await this.redisService.client.expire(
+    await this.redisService.sadd(this.userSessionsKey(user.id), jti);
+    await this.redisService.expire(
       this.userSessionsKey(user.id),
       Math.max(this.refreshTtlSeconds, this.sessionRefreshTtlSeconds),
     );
@@ -101,12 +101,12 @@ export class TokenService {
     }
 
     const redisKey = this.refreshTokenKey(payload.jti);
-    const storedUserId = await this.redisService.client.get(redisKey);
+    const storedUserId = await this.redisService.get(redisKey);
     if (!storedUserId || storedUserId !== payload.sub) {
       throw new UnauthorizedException('Refresh token không hợp lệ hoặc đã bị thu hồi');
     }
 
-    const rememberRaw = await this.redisService.client.get(this.refreshRememberKey(payload.jti));
+    const rememberRaw = await this.redisService.get(this.refreshRememberKey(payload.jti));
     const rememberMe = rememberRaw === '1';
 
     const user = await this.prisma.user.findUnique({
@@ -117,9 +117,9 @@ export class TokenService {
       throw new UnauthorizedException('Người dùng không tồn tại');
     }
 
-    await this.redisService.client.del(redisKey);
-    await this.redisService.client.del(this.refreshRememberKey(payload.jti));
-    await this.redisService.client.srem(this.userSessionsKey(payload.sub), payload.jti);
+    await this.redisService.del(redisKey);
+    await this.redisService.del(this.refreshRememberKey(payload.jti));
+    await this.redisService.srem(this.userSessionsKey(payload.sub), payload.jti);
     const plan = await this.getActivePlan(user.tenantId);
     return this.issueTokens(
       this.toAuthenticatedUser(user, user.tenant?.businessName ?? null, plan),
@@ -139,9 +139,9 @@ export class TokenService {
           secret: this.configService.getOrThrow<string>('JWT_REFRESH_SECRET'),
         },
       );
-      await this.redisService.client.del(this.refreshTokenKey(payload.jti));
-      await this.redisService.client.del(this.refreshRememberKey(payload.jti));
-      await this.redisService.client.srem(this.userSessionsKey(payload.sub), payload.jti);
+      await this.redisService.del(this.refreshTokenKey(payload.jti));
+      await this.redisService.del(this.refreshRememberKey(payload.jti));
+      await this.redisService.srem(this.userSessionsKey(payload.sub), payload.jti);
     } catch {
       // Ignore invalid token on logout
     }
@@ -150,12 +150,12 @@ export class TokenService {
   }
 
   async revokeAllRefreshTokens(userId: string): Promise<void> {
-    const jtis = await this.redisService.client.smembers(this.userSessionsKey(userId));
+    const jtis = await this.redisService.smembers(this.userSessionsKey(userId));
     if (jtis.length === 0) {
       return;
     }
 
-    const pipeline = this.redisService.client.pipeline();
+    const pipeline = this.redisService.pipeline();
     for (const jti of jtis) {
       pipeline.del(this.refreshTokenKey(jti));
       pipeline.del(this.refreshRememberKey(jti));

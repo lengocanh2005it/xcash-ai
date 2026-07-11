@@ -8,13 +8,10 @@ import { OnboardingModule } from '../onboarding/onboarding.module';
 import { ReportModule } from '../report/report.module';
 import { AiCoreModule } from './ai-core.module';
 import { CopilotController } from './copilot.controller';
-import { CopilotBillingService } from './copilot-billing.service';
 import { CopilotContextService } from './copilot-context.service';
 import { CopilotConversationService } from './copilot-conversation.service';
 import { CopilotKnowledgeService } from './copilot-knowledge.service';
-import { CopilotQuotaService } from './copilot-quota.service';
 import { CopilotStreamService } from './copilot-stream.service';
-import { CopilotToolService } from './copilot-tool.service';
 import { CopilotTransactionQueryService } from './copilot-tx-query.service';
 
 @Module({
@@ -25,10 +22,7 @@ import { CopilotTransactionQueryService } from './copilot-tx-query.service';
     CopilotConversationService,
     CopilotKnowledgeService,
     CopilotTransactionQueryService,
-    CopilotQuotaService,
     CopilotStreamService,
-    CopilotToolService,
-    CopilotBillingService,
     PlanGuard,
     CopilotQuotaGuard,
     CopilotThrottlerGuard,

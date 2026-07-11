@@ -2,6 +2,10 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { Response } from 'express';
 import type { AuthenticatedUser } from '../../common/types/authenticated-user.type';
+import { PrismaService } from '../../prisma/prisma.service';
+import { BillingService } from '../billing/billing.service';
+import { NotificationService } from '../notification/notification.service';
+import { ReportDataService } from '../report/report-data.service';
 import { AiUsageLogService } from './ai-usage-log.service';
 import {
   buildActivities,
@@ -10,8 +14,9 @@ import {
 } from './copilot-activity.helper';
 import { CopilotContextService } from './copilot-context.service';
 import { CopilotConversationService } from './copilot-conversation.service';
-import { CopilotQuotaService } from './copilot-quota.service';
-import { CopilotToolService } from './copilot-tool.service';
+import { CopilotKnowledgeService } from './copilot-knowledge.service';
+import type { ToolDeps } from './copilot-tool.executor';
+import { CopilotTransactionQueryService } from './copilot-tx-query.service';
 import { OpenAiService } from './openai.service';
 import { isQuotaOrBillingError } from './utils/llm-error.util';
 import { appendFallbackNotice, sanitizeCopilotOutput } from './utils/llm-output.util';
@@ -39,12 +44,25 @@ export class CopilotStreamService {
   constructor(
     private readonly openAiService: OpenAiService,
     private readonly conversationService: CopilotConversationService,
-    private readonly copilotToolService: CopilotToolService,
-    private readonly copilotQuotaService: CopilotQuotaService,
-    private readonly aiUsageLogService: AiUsageLogService,
     private readonly copilotContextService: CopilotContextService,
+    private readonly aiUsageLogService: AiUsageLogService,
+    private readonly reportService: ReportDataService,
+    private readonly txQueryService: CopilotTransactionQueryService,
+    private readonly knowledgeService: CopilotKnowledgeService,
+    private readonly billingService: BillingService,
+    private readonly prisma: PrismaService,
+    private readonly notificationService: NotificationService,
     private readonly configService: ConfigService,
   ) {}
+
+  private getToolDeps(): ToolDeps {
+    return {
+      reportService: this.reportService,
+      txQueryService: this.txQueryService,
+      knowledgeService: this.knowledgeService,
+      billingService: this.billingService,
+    };
+  }
 
   private async setupConversation(
     user: AuthenticatedUser,
@@ -101,7 +119,36 @@ export class CopilotStreamService {
         opts.dto.message,
         opts.tenantId,
       );
-    await this.copilotQuotaService.incrementAndNotify(opts.tenantId, opts.subMeta);
+    await this.incrementCopilotQuota(opts.tenantId, opts.subMeta);
+  }
+
+  private async incrementCopilotQuota(
+    tenantId: string,
+    subMeta: { id: string } | undefined,
+  ): Promise<void> {
+    if (!subMeta?.id) return;
+
+    const updated = await this.prisma.subscription.update({
+      where: { id: subMeta.id },
+      data: { copilotUsedThisCycle: { increment: 1 } },
+      select: { copilotUsedThisCycle: true, currentCycleStart: true, plan: true },
+    });
+
+    const planPricing = await this.prisma.planPricing.findUnique({
+      where: { plan: updated.plan },
+      select: { copilotQuota: true },
+    });
+
+    const quota = planPricing?.copilotQuota ?? -1;
+
+    void this.notificationService
+      .checkCopilotQuotaNotifications(
+        tenantId,
+        updated.copilotUsedThisCycle,
+        quota,
+        updated.currentCycleStart,
+      )
+      .catch(() => {});
   }
 
   async chat(
@@ -129,7 +176,7 @@ export class CopilotStreamService {
           tenantId,
           dto.message,
           history,
-          this.copilotToolService,
+          this.getToolDeps(),
           conversation.id,
           user.role,
           financialContext,
@@ -236,7 +283,7 @@ export class CopilotStreamService {
         tenantId,
         dto.message,
         history,
-        this.copilotToolService,
+        this.getToolDeps(),
         resultsCapture,
         user.role,
       );

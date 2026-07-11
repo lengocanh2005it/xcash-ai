@@ -14,7 +14,7 @@
 import type { ConfigService } from '@nestjs/config';
 import type { Role } from '@xcash/shared-types';
 import type { AiUsageLogService } from '../modules/ai/ai-usage-log.service';
-import type { CopilotToolService } from '../modules/ai/copilot-tool.service';
+import type { ToolDeps } from '../modules/ai/copilot-tool.executor';
 import { OpenAiService } from '../modules/ai/openai.service';
 
 interface EvalCase {
@@ -110,32 +110,53 @@ function dummyResultFor(name: string): unknown {
   }
 }
 
-function fakeToolService(): { toolService: CopilotToolService; calls: string[] } {
+function fakeToolDeps(): { toolDeps: ToolDeps; calls: string[] } {
   const calls: string[] = [];
-  const toolService = {
-    execute: async (
-      _tenantId: string,
-      name: string,
-      _args: Record<string, unknown>,
-      _role?: Role,
-    ) => {
+  const track =
+    (name: string) =>
+    (..._args: unknown[]) => {
       calls.push(name);
       return dummyResultFor(name);
-    },
-  } as unknown as CopilotToolService;
-  return { toolService, calls };
+    };
+  const toolDeps: ToolDeps = {
+    reportService: {
+      getSummary: track('get_month_summary'),
+      getComparison: track('get_month_comparison'),
+      getTopAccounts: track('get_top_accounts'),
+      getSummaryByDateRange: track('get_period_summary'),
+    } as never,
+    txQueryService: {
+      getReviewQueueCount: track('get_review_queue_count'),
+      listReviewQueue: track('list_review_queue'),
+      lookupChartAccount: track('lookup_chart_account'),
+      getBankingStatus: track('get_banking_status'),
+      searchTransactions: track('search_transactions'),
+      proposeConfirmTransactionClassification: track('propose_confirm_transaction_classification'),
+      proposeCorrectTransactionClassification: track('propose_correct_transaction_classification'),
+      listChartAccounts: track('list_chart_accounts'),
+    } as never,
+    knowledgeService: {
+      searchKnowledge: track('search_knowledge_base'),
+      searchCassoPublic: track('search_casso_public'),
+    } as never,
+    billingService: {
+      getCurrentPlan: track('get_billing_current_plan'),
+      getUsageHistory: track('get_payment_history'),
+    } as never,
+  };
+  return { toolDeps, calls };
 }
 
 async function runCase(
   openAiService: OpenAiService,
   c: EvalCase,
 ): Promise<{ pass: boolean; actual: string[] }> {
-  const { toolService, calls } = fakeToolService();
+  const { toolDeps, calls } = fakeToolDeps();
   const runner = openAiService.createCopilotRunner(
     'eval-tenant',
     c.question,
     [],
-    toolService,
+    toolDeps,
     new Map(),
     'admin' as Role,
   );

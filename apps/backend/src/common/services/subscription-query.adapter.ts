@@ -44,7 +44,7 @@ export class SubscriptionQueryAdapter {
   async findActive(tenantId: string): Promise<ActiveSubscription | null> {
     const cacheKey = `sub:active:${tenantId}`;
     try {
-      const raw = await this.redis.client.get(cacheKey);
+      const raw = await this.redis.get(cacheKey);
       if (raw) return JSON.parse(raw) as ActiveSubscription;
     } catch {
       // cache miss
@@ -76,7 +76,7 @@ export class SubscriptionQueryAdapter {
     };
 
     try {
-      await this.redis.client.setex(cacheKey, CACHE_TTL_SECONDS, JSON.stringify(dto));
+      await this.redis.setex(cacheKey, CACHE_TTL_SECONDS, JSON.stringify(dto));
     } catch {
       // non-critical
     }
@@ -93,7 +93,7 @@ export class SubscriptionQueryAdapter {
   async findActivePlan(tenantId: string): Promise<ActivePlanInfo | null> {
     const cacheKey = `sub:active:${tenantId}`;
     try {
-      const raw = await this.redis.client.get(cacheKey);
+      const raw = await this.redis.get(cacheKey);
       if (raw) {
         const full = JSON.parse(raw) as ActiveSubscription;
         return { subscriptionId: full.id, plan: full.plan };
@@ -114,7 +114,7 @@ export class SubscriptionQueryAdapter {
    */
   async invalidateCache(tenantId: string): Promise<void> {
     try {
-      await this.redis.client.del(`sub:active:${tenantId}`);
+      await this.redis.del(`sub:active:${tenantId}`);
     } catch {
       // non-critical
     }

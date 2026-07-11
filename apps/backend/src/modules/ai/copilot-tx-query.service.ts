@@ -124,7 +124,7 @@ export class CopilotTransactionQueryService {
 
   async getBankingStatus(tenantId: string) {
     const cacheKey = `copilot:tool:banking:${tenantId}`;
-    const cached = await this.redisService.client.get(cacheKey);
+    const cached = await this.redisService.get(cacheKey);
     if (cached) return JSON.parse(cached) as object;
 
     const status = await this.onboardingService.getStatus(tenantId);
@@ -158,7 +158,7 @@ export class CopilotTransactionQueryService {
       },
     };
 
-    await this.redisService.client.set(cacheKey, JSON.stringify(payload), 'EX', 60);
+    await this.redisService.set(cacheKey, JSON.stringify(payload), 'EX', 60);
     return payload;
   }
 

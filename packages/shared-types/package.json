@@ -8,6 +8,54 @@
     ".": {
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
+    },
+    "./auth": {
+      "types": "./dist/auth.d.ts",
+      "default": "./dist/auth.js"
+    },
+    "./profile": {
+      "types": "./dist/profile.d.ts",
+      "default": "./dist/profile.js"
+    },
+    "./transaction": {
+      "types": "./dist/transaction.d.ts",
+      "default": "./dist/transaction.js"
+    },
+    "./copilot": {
+      "types": "./dist/copilot.d.ts",
+      "default": "./dist/copilot.js"
+    },
+    "./billing": {
+      "types": "./dist/billing.d.ts",
+      "default": "./dist/billing.js"
+    },
+    "./report": {
+      "types": "./dist/report.d.ts",
+      "default": "./dist/report.js"
+    },
+    "./partner": {
+      "types": "./dist/partner.d.ts",
+      "default": "./dist/partner.js"
+    },
+    "./onboarding": {
+      "types": "./dist/onboarding.d.ts",
+      "default": "./dist/onboarding.js"
+    },
+    "./notification": {
+      "types": "./dist/notification.d.ts",
+      "default": "./dist/notification.js"
+    },
+    "./import": {
+      "types": "./dist/import.d.ts",
+      "default": "./dist/import.js"
+    },
+    "./common": {
+      "types": "./dist/common.d.ts",
+      "default": "./dist/common.js"
+    },
+    "./enums": {
+      "types": "./dist/generated/enums.d.ts",
+      "default": "./dist/generated/enums.js"
     }
   },
   "scripts": {

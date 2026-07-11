@@ -5,7 +5,7 @@ import OpenAI from 'openai';
 import { AiUsageLogService } from './ai-usage-log.service';
 import { buildActivities } from './copilot-activity.helper';
 import { CopilotAgentHarness } from './copilot-agent.harness';
-import type { CopilotToolService } from './copilot-tool.service';
+import { executeTool, type ToolDeps } from './copilot-tool.executor';
 import { buildCopilotToolSchemas } from './copilot-tools.factory';
 import type { LlmAdapter, LlmMessage } from './llm-adapter.interface';
 import { OpenAiCompatibleAdapter } from './openai-compatible.adapter';
@@ -258,7 +258,7 @@ ${financialContext}`;
     tenantId: string,
     message: string,
     history: Array<{ role: 'user' | 'assistant'; content: string }>,
-    toolService: CopilotToolService,
+    toolDeps: ToolDeps,
     conversationId?: string,
     role?: Role,
     financialContext?: string,
@@ -270,7 +270,7 @@ ${financialContext}`;
       tenantId,
       message,
       history,
-      toolService,
+      toolDeps,
       resultsCapture,
       role,
     );
@@ -396,7 +396,7 @@ Không tiết lộ tên tool kỹ thuật, grantId, accessToken, JSON thô. Luô
     tenantId: string,
     message: string,
     history: Array<{ role: 'user' | 'assistant'; content: string }>,
-    toolService: CopilotToolService,
+    toolDeps: ToolDeps,
     resultsCapture?: Map<string, unknown>,
     role?: Role,
   ): CopilotAgentHarness | null {
@@ -407,8 +407,8 @@ Không tiết lộ tên tool kỹ thuật, grantId, accessToken, JSON thô. Luô
       this.configService.get<boolean>('COPILOT_CASSO_SEARCH_ENABLED') ?? false;
     const tools = buildCopilotToolSchemas(this.configService);
 
-    const executeTool = async (name: string, args: Record<string, unknown>): Promise<unknown> => {
-      const result = await toolService.execute(tenantId, name, args, role);
+    const executeToolFn = async (name: string, args: Record<string, unknown>): Promise<unknown> => {
+      const result = await executeTool(toolDeps, name, tenantId, args, role);
       resultsCapture?.set(name, result);
       return result;
     };
@@ -421,7 +421,7 @@ Không tiết lộ tên tool kỹ thuật, grantId, accessToken, JSON thô. Luô
       llmHistory,
       message,
       tools,
-      executeTool,
+      executeToolFn,
       5,
     );
   }

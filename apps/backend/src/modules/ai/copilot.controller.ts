@@ -124,10 +124,10 @@ export class CopilotController {
       | undefined;
 
     const sseKey = `copilot:sse:active:${user.id}`;
-    const activeConnections = await this.redisService.client.incr(sseKey);
-    await this.redisService.client.expire(sseKey, 120);
+    const activeConnections = await this.redisService.incr(sseKey);
+    await this.redisService.expire(sseKey, 120);
     if (activeConnections > 3) {
-      await this.redisService.client.decr(sseKey);
+      await this.redisService.decr(sseKey);
       res.status(429).json({
         message: 'Quá nhiều cuộc trò chuyện đồng thời. Vui lòng đóng bớt tab.',
       });
@@ -139,7 +139,7 @@ export class CopilotController {
         req.on('close', cb),
       );
     } finally {
-      await this.redisService.client.decr(sseKey);
+      await this.redisService.decr(sseKey);
     }
   }
 }

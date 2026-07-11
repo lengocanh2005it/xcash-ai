@@ -65,7 +65,7 @@ export class CopilotKnowledgeService {
     const cacheKey = `copilot:embed:${createHash('sha256').update(normalized).digest('hex')}`;
 
     try {
-      const cached = await this.redisService.client.get(cacheKey);
+      const cached = await this.redisService.get(cacheKey);
       if (cached) return JSON.parse(cached) as number[];
     } catch {
       // cache miss — proceed to OpenAI
@@ -76,7 +76,7 @@ export class CopilotKnowledgeService {
 
     try {
       const ttl = this.configService.get<number>('COPILOT_EMBEDDING_CACHE_TTL_SECONDS', 3600);
-      await this.redisService.client.set(cacheKey, JSON.stringify(vector), 'EX', ttl);
+      await this.redisService.set(cacheKey, JSON.stringify(vector), 'EX', ttl);
     } catch {
       // non-critical
     }
@@ -97,7 +97,7 @@ export class CopilotKnowledgeService {
       | 'basic'
       | 'advanced';
     const cacheKey = `copilot:tool:casso_search:${searchDepth}:${Buffer.from(safeQuery).toString('base64').slice(0, 60)}`;
-    const cached = await this.redisService.client.get(cacheKey);
+    const cached = await this.redisService.get(cacheKey);
     if (cached) return JSON.parse(cached) as object;
 
     const apiKey = this.configService.get<string>('TAVILY_API_KEY', '');
@@ -142,7 +142,7 @@ export class CopilotKnowledgeService {
         'Thông tin từ website công khai của Casso. Để biết chi tiết tích hợp trong X-Cash AI, vào Cài đặt → Ngân hàng.',
     };
 
-    await this.redisService.client.set(cacheKey, JSON.stringify(payload), 'EX', 86400);
+    await this.redisService.set(cacheKey, JSON.stringify(payload), 'EX', 86400);
     return payload;
   }
 }

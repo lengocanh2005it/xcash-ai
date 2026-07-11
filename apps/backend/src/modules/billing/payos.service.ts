@@ -66,12 +66,12 @@ export class PayosService {
     if (this.payos === null) {
       throw new Error('PayOS not configured — cannot verify webhook');
     }
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    // biome-ignore lint/suspicious/noExplicitAny: @payos/node lacks typed webhook verification
     const data = await this.payos.webhooks.verify(body as any);
     return {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      // biome-ignore lint/suspicious/noExplicitAny: @payos/node lacks typed webhook verification
       orderCode: String((data as any).orderCode ?? (data as any).data?.orderCode ?? ''),
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      // biome-ignore lint/suspicious/noExplicitAny: @payos/node lacks typed webhook verification
       code: String((data as any).code ?? '00'),
     };
   }

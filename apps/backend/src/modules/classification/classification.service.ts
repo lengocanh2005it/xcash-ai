@@ -1,4 +1,4 @@
-import { Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { ConflictException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { ClassificationType, Prisma, TransactionStatus } from '@prisma/client';
 import { createAuditLog } from '../../common/util/audit-log.util';
 import { paginateParams, paginateResult } from '../../common/util/pagination.util';
@@ -82,14 +82,17 @@ export class ClassificationService {
     const classification = await this.findInQueue(tenantId, classificationId);
 
     await this.prisma.$transaction(async (tx) => {
-      await tx.transactionClassification.update({
-        where: { id: classificationId },
+      const { count } = await tx.transactionClassification.updateMany({
+        where: { id: classificationId, status: TransactionStatus.review },
         data: {
           status: TransactionStatus.classified,
           classificationType: ClassificationType.manual,
           classifiedBy: userId,
         },
       });
+      if (count === 0) {
+        throw new ConflictException('Giao dịch đã được xử lý bởi người khác, vui lòng tải lại');
+      }
       await tx.transaction.update({
         where: { id: classification.transactionId },
         data: { status: TransactionStatus.classified },
@@ -116,8 +119,8 @@ export class ClassificationService {
     const classification = await this.findInQueue(tenantId, classificationId);
 
     await this.prisma.$transaction(async (tx) => {
-      await tx.transactionClassification.update({
-        where: { id: classificationId },
+      const { count } = await tx.transactionClassification.updateMany({
+        where: { id: classificationId, status: TransactionStatus.review },
         data: {
           debitAccount: dto.debitAccount,
           creditAccount: dto.creditAccount,
@@ -127,6 +130,9 @@ export class ClassificationService {
           confidenceScore: 100,
         },
       });
+      if (count === 0) {
+        throw new ConflictException('Giao dịch đã được xử lý bởi người khác, vui lòng tải lại');
+      }
       await tx.transaction.update({
         where: { id: classification.transactionId },
         data: { status: TransactionStatus.classified },
@@ -158,10 +164,13 @@ export class ClassificationService {
     const classification = await this.findInQueue(tenantId, classificationId);
 
     await this.prisma.$transaction(async (tx) => {
-      await tx.transactionClassification.update({
-        where: { id: classificationId },
+      const { count } = await tx.transactionClassification.updateMany({
+        where: { id: classificationId, status: TransactionStatus.review },
         data: { status: TransactionStatus.skipped },
       });
+      if (count === 0) {
+        throw new ConflictException('Giao dịch đã được xử lý bởi người khác, vui lòng tải lại');
+      }
       await tx.transaction.update({
         where: { id: classification.transactionId },
         data: { status: TransactionStatus.skipped },

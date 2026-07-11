@@ -22,7 +22,13 @@ import { formatVND, formatVNDAxis } from '@/lib/format-vnd';
 import { hasPlanAccess } from '@/lib/plan';
 import type { ComparisonData, TopAccountsData } from '@/types/api/analytics';
 
-const COLORS = ['#16AB64', '#0ea5e9', '#f59e0b', '#ef4444', '#8b5cf6'];
+const COLORS = [
+  'var(--chart-1)',
+  'var(--chart-2)',
+  'var(--chart-3)',
+  'var(--chart-4)',
+  'var(--chart-5)',
+];
 
 function PctBadge({ value }: { value: number }) {
   const positive = value >= 0;
@@ -239,8 +245,18 @@ export default function AnalyticsPage() {
                     <Tooltip
                       formatter={(v) => (typeof v === 'number' ? formatVND(v) : String(v))}
                     />
-                    <Bar dataKey="revenue" name="Doanh thu" fill="#16AB64" radius={[4, 4, 0, 0]} />
-                    <Bar dataKey="expense" name="Chi phí" fill="#ef4444" radius={[4, 4, 0, 0]} />
+                    <Bar
+                      dataKey="revenue"
+                      name="Doanh thu"
+                      fill="var(--chart-1)"
+                      radius={[4, 4, 0, 0]}
+                    />
+                    <Bar
+                      dataKey="expense"
+                      name="Chi phí"
+                      fill="var(--chart-4)"
+                      radius={[4, 4, 0, 0]}
+                    />
                   </BarChart>
                 </ResponsiveContainer>
               </CardContent>

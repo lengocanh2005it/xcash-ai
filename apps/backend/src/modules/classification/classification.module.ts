@@ -1,10 +1,10 @@
 import { Module } from '@nestjs/common';
-import { AiModule } from '../ai/ai.module';
+import { ClassificationPipelineModule } from '../ai/ai.module';
 import { ClassificationController } from './classification.controller';
 import { ClassificationService } from './classification.service';
 
 @Module({
-  imports: [AiModule],
+  imports: [ClassificationPipelineModule],
   controllers: [ClassificationController],
   providers: [ClassificationService],
   exports: [ClassificationService],

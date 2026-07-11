@@ -1,11 +1,15 @@
 import {
   ArgumentsHost,
   Catch,
+  ConflictException,
   ExceptionFilter,
   HttpException,
   HttpStatus,
   Logger,
+  NotFoundException,
 } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
+import * as Sentry from '@sentry/node';
 import type { ApiResponse } from '@xcash/shared-types';
 import type { Request, Response } from 'express';
 
@@ -18,18 +22,23 @@ export class AllExceptionsFilter implements ExceptionFilter {
     const response = ctx.getResponse<Response>();
     const request = ctx.getRequest<Request & { requestId?: string }>();
 
+    const mapped = this.mapException(exception);
+
     const status =
-      exception instanceof HttpException ? exception.getStatus() : HttpStatus.INTERNAL_SERVER_ERROR;
+      mapped instanceof HttpException ? mapped.getStatus() : HttpStatus.INTERNAL_SERVER_ERROR;
 
     const { message, code } =
-      exception instanceof HttpException
-        ? this.extractError(exception)
+      mapped instanceof HttpException
+        ? this.extractError(mapped)
         : { message: 'Đã xảy ra lỗi hệ thống', code: undefined };
 
     if (status >= HttpStatus.INTERNAL_SERVER_ERROR) {
       this.logger.error(
         `${request.method} ${request.url}`,
         exception instanceof Error ? exception.stack : String(exception),
+      );
+      Sentry.captureException(
+        exception instanceof Error ? exception : new Error(String(exception)),
       );
     }
 
@@ -47,6 +56,25 @@ export class AllExceptionsFilter implements ExceptionFilter {
     };
 
     response.status(status).json(body);
+  }
+
+  private mapException(exception: unknown): unknown {
+    if (exception instanceof HttpException) return exception;
+
+    if (exception instanceof Prisma.PrismaClientKnownRequestError) {
+      switch (exception.code) {
+        case 'P2002':
+          return new ConflictException('Dữ liệu đã tồn tại trong hệ thống');
+        case 'P2025':
+          return new NotFoundException('Không tìm thấy bản ghi yêu cầu');
+        case 'P2003':
+          return new ConflictException('Dữ liệu tham chiếu không hợp lệ');
+        default:
+          return exception;
+      }
+    }
+
+    return exception;
   }
 
   private extractError(exception: HttpException): { message: string; code?: string } {

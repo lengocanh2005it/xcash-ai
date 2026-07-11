@@ -1,4 +1,4 @@
-import { ForbiddenException, Injectable, Logger } from '@nestjs/common';
+import { ForbiddenException, Injectable } from '@nestjs/common';
 import { Prisma, SubscriptionPlan } from '@prisma/client';
 import { isOveragePlan } from '../../common/constants/quota-policy';
 import { QuotaNotificationService } from '../../common/services/quota-notification.service';
@@ -6,8 +6,6 @@ import { PrismaService } from '../../prisma/prisma.service';
 
 @Injectable()
 export class TransactionQuotaService {
-  private readonly logger = new Logger(TransactionQuotaService.name);
-
   constructor(
     private readonly prisma: PrismaService,
     private readonly quotaNotificationService: QuotaNotificationService,

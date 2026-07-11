@@ -1,4 +1,8 @@
-import { sanitizeCopilotOutput, stripLlmReasoningTags } from './llm-output.util';
+import {
+  appendFallbackNotice,
+  sanitizeCopilotOutput,
+  stripLlmReasoningTags,
+} from './llm-output.util';
 
 describe('stripLlmReasoningTags', () => {
   it('removes closed think blocks', () => {
@@ -38,5 +42,13 @@ describe('sanitizeCopilotOutput', () => {
   it('uses fallback when only reasoning remains', () => {
     const input = ['<think>internal only', '</think>'].join('\n');
     expect(sanitizeCopilotOutput(input, 'fallback')).toBe('fallback');
+  });
+});
+
+describe('appendFallbackNotice', () => {
+  it('appends a disclaimer after the reply', () => {
+    const result = appendFallbackNotice('Doanh thu tháng này là **12.000.000đ**.');
+    expect(result.startsWith('Doanh thu tháng này là **12.000.000đ**.')).toBe(true);
+    expect(result).toContain('hệ thống dự phòng');
   });
 });

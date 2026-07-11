@@ -58,7 +58,7 @@ src/common/
 ├── guards/
 │   ├── auth.guards.ts             # JwtAuthGuard, RolesGuard, PartnerGuard
 │   ├── plan.guard.ts              # kiểm tra gói subscription qua SubscriptionQueryAdapter (Redis cache 60s)
-│   ├── copilot-quota.guard.ts     # kiểm tra quota Copilot — adapter cho subscription, own Redis cache 30s cho copilotQuota từ planPricing
+│   ├── copilot-quota.guard.ts     # kiểm tra quota Copilot — adapter cho subscription, đọc copilotQuota từ ActiveSubscription (không cần query planPricing riêng)
 │   ├── copilot-throttler.guard.ts # per-user rate limit riêng cho Copilot (30 req/min)
 │   └── tenant-throttler.guard.ts  # rate limit theo tenantId (global APP_GUARD)
 ├── services/

@@ -28,6 +28,7 @@
     "prisma:seed:partners": "ts-node --transpile-only prisma/seed-partners-demo.ts",
     "seed:knowledge": "ts-node --transpile-only -r tsconfig-paths/register src/scripts/seed-knowledge.ts",
     "migrate:embedding-dims": "ts-node --transpile-only -r tsconfig-paths/register src/scripts/migrate-embedding-dims.ts",
+    "eval:copilot-tools": "ts-node --transpile-only -r tsconfig-paths/register src/scripts/eval-copilot-tool-routing.ts",
     "postinstall": "prisma generate"
   },
   "prisma": {
@@ -55,7 +56,6 @@
     "class-transformer": "^0.5.1",
     "class-validator": "^0.15.1",
     "cookie-parser": "^1.4.7",
-    "cron": "^4.4.0",
     "helmet": "^8.2.0",
     "ioredis": "^5.11.1",
     "multer": "^2.0.2",
@@ -86,7 +86,6 @@
     "source-map-support": "^0.5.21",
     "supertest": "^7.0.0",
     "ts-jest": "^29.2.5",
-    "ts-loader": "^9.5.2",
     "ts-node": "^10.9.2",
     "tsconfig-paths": "^4.2.0",
     "typescript": "^5.7.3"

@@ -175,6 +175,12 @@ export function PartnerLayout() {
 
   return (
     <div className="flex h-svh items-stretch overflow-hidden bg-muted">
+      <a
+        href="#main-content"
+        className="sr-only focus:not-sr-only focus:absolute focus:z-50 focus:m-2 focus:rounded-md focus:bg-primary focus:px-4 focus:py-2 focus:text-primary-foreground"
+      >
+        Chuyển đến nội dung chính
+      </a>
       <DesktopPartnerSidebar
         collapsed={sidebarCollapsed}
         onToggleCollapsed={toggleSidebarCollapsed}
@@ -199,7 +205,7 @@ export function PartnerLayout() {
           </div>
         </div>
 
-        <main className="min-w-0 flex-1 overflow-y-auto">
+        <main id="main-content" tabIndex={-1} className="min-w-0 flex-1 overflow-y-auto">
           <Outlet />
         </main>
       </div>

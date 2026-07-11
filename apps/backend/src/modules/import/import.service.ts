@@ -12,7 +12,7 @@ import { createAuditLog } from '../../common/util/audit-log.util';
 import { paginateParams, paginateResult } from '../../common/util/pagination.util';
 import { PrismaService } from '../../prisma/prisma.service';
 import { WEBHOOK_QUEUE } from '../../queue/queue.module';
-import { AI_CLASSIFY_JOB } from '../ai/classification.processor';
+import { AI_CLASSIFY_JOB } from '../ai/classification.constants';
 import { TransactionQuotaService } from '../billing/transaction-quota.service';
 import { ImportParserService } from './import-parser.service';
 

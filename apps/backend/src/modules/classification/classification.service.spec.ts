@@ -1,4 +1,4 @@
-import { NotFoundException } from '@nestjs/common';
+import { ConflictException, NotFoundException } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import { PrismaService } from '../../prisma/prisma.service';
 import { EmbeddingService } from '../ai/embedding.service';
@@ -9,7 +9,7 @@ describe('ClassificationService.confirm', () => {
 
   const auditLogCreate = jest.fn();
   const tx = {
-    transactionClassification: { update: jest.fn() },
+    transactionClassification: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
     transaction: { update: jest.fn() },
     auditLog: { create: auditLogCreate },
   };
@@ -84,6 +84,23 @@ describe('ClassificationService.confirm', () => {
       }),
     );
   });
+
+  it('throws 409 khi giao dịch đã bị xử lý bởi request khác giữa lúc đọc và lúc ghi (race condition)', async () => {
+    prisma.transactionClassification.findFirst.mockResolvedValue({
+      id: 'class-1',
+      transactionId: 'txn-1',
+      debitAccount: '642',
+      creditAccount: '112',
+      transaction: { content: 'Thanh toán điện nước' },
+    });
+    tx.transactionClassification.updateMany.mockResolvedValueOnce({ count: 0 });
+
+    await expect(service.confirm('tenant-1', 'class-1', 'user-1')).rejects.toBeInstanceOf(
+      ConflictException,
+    );
+    expect(tx.transaction.update).not.toHaveBeenCalled();
+    expect(auditLogCreate).not.toHaveBeenCalled();
+  });
 });
 
 describe('ClassificationService.correct', () => {
@@ -91,7 +108,7 @@ describe('ClassificationService.correct', () => {
 
   const auditLogCreate = jest.fn();
   const tx = {
-    transactionClassification: { update: jest.fn() },
+    transactionClassification: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
     transaction: { update: jest.fn() },
     auditLog: { create: auditLogCreate },
   };
@@ -159,5 +176,18 @@ describe('ClassificationService.correct', () => {
         }),
       }),
     );
+  });
+
+  it('throws 409 khi giao dịch đã bị xử lý bởi request khác giữa lúc đọc và lúc ghi (race condition)', async () => {
+    tx.transactionClassification.updateMany.mockResolvedValueOnce({ count: 0 });
+
+    await expect(
+      service.correct('tenant-1', 'class-1', 'user-1', {
+        debitAccount: '641',
+        creditAccount: '111',
+      }),
+    ).rejects.toBeInstanceOf(ConflictException);
+    expect(tx.transaction.update).not.toHaveBeenCalled();
+    expect(auditLogCreate).not.toHaveBeenCalled();
   });
 });

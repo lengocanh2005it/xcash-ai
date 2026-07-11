@@ -41,7 +41,7 @@ export class BillingOverageService {
     }
 
     const pricing = await this.prisma.planPricing.findUnique({ where: { plan: sub.plan } });
-    if (!pricing || !pricing.overagePricePerTransaction) {
+    if (!pricing?.overagePricePerTransaction) {
       throw new BadRequestException('Gói này không có cấu hình phí vượt quota');
     }
 

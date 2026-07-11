@@ -2,12 +2,12 @@ import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { Role } from '@xcash/shared-types';
 import { RedisService } from '../../redis/redis.service';
-import { ReportService } from '../report/report.service';
+import { ReportDataService } from '../report/report-data.service';
 
 @Injectable()
 export class CopilotContextService {
   constructor(
-    private readonly reportService: ReportService,
+    private readonly reportService: ReportDataService,
     private readonly redisService: RedisService,
     private readonly configService: ConfigService,
   ) {}
@@ -21,7 +21,7 @@ export class CopilotContextService {
     const month = now.getMonth() + 1;
     const cacheKey = `copilot:context:${tenantId}:${year}-${month}`;
 
-    const cached = await this.redisService.client.get(cacheKey);
+    const cached = await this.redisService.get(cacheKey);
     if (cached) {
       // If user info is provided, prepend it even to cached context
       if (userInfo) {
@@ -43,7 +43,7 @@ export class CopilotContextService {
 - Độ chính xác AI: ${stats.aiAccuracy}%`;
 
     const ttl = this.configService.get<number>('COPILOT_CONTEXT_CACHE_TTL_SECONDS', 300);
-    await this.redisService.client.set(cacheKey, context, 'EX', ttl);
+    await this.redisService.set(cacheKey, context, 'EX', ttl);
 
     if (userInfo) {
       const userContext = this.buildUserContext(userInfo);

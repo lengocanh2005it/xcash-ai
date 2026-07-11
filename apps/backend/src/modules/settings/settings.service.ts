@@ -47,7 +47,7 @@ export class SettingsService {
   }
 
   async getNotifications(tenantId: string): Promise<NotificationConfig> {
-    const raw = await this.redis.client.get(`settings:notifications:${tenantId}`);
+    const raw = await this.redis.get(`settings:notifications:${tenantId}`);
     if (!raw) {
       return {
         emailEnabled: false,
@@ -88,7 +88,7 @@ export class SettingsService {
       slackEnabled: dto.slackEnabled,
       slackWebhookUrl: dto.slackWebhookUrl ?? null,
     };
-    await this.redis.client.set(`settings:notifications:${tenantId}`, JSON.stringify(config));
+    await this.redis.set(`settings:notifications:${tenantId}`, JSON.stringify(config));
     return config;
   }
 

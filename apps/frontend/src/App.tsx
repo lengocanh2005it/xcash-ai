@@ -1,9 +1,10 @@
-import { Loader2 } from 'lucide-react';
 import { Suspense } from 'react';
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 import { Toaster } from 'sonner';
 import { PartnerLayout } from '@/components/layout/PartnerLayout';
 import { TenantLayout } from '@/components/layout/TenantLayout';
+import { RouteErrorBoundary } from '@/components/routing/RouteErrorBoundary';
+import { RouteFallback } from '@/components/routing/RouteFallback';
 import { ErrorBoundary } from '@/components/shared/ErrorBoundary';
 import { AuthProvider } from '@/contexts/auth-context';
 import { ThemeProvider } from '@/contexts/theme-context';
@@ -40,14 +41,6 @@ import {
   ProtectedRoute,
   TenantAuthRoute,
 } from '@/routes/ProtectedRoute';
-
-function RouteFallback() {
-  return (
-    <div className="flex min-h-[40vh] items-center justify-center">
-      <Loader2 className="size-8 animate-spin text-muted-foreground" aria-label="Đang tải trang" />
-    </div>
-  );
-}
 
 function App() {
   return (
@@ -141,14 +134,70 @@ function App() {
                     </ProtectedRoute>
                   }
                 >
-                  <Route path="/dashboard" element={<DashboardPage />} />
-                  <Route path="/transactions" element={<TransactionsPage />} />
-                  <Route path="/review" element={<ReviewPage />} />
-                  <Route path="/reports" element={<ReportsPage />} />
-                  <Route path="/analytics" element={<AnalyticsPage />} />
-                  <Route path="/accounts" element={<AccountsPage />} />
-                  <Route path="/copilot" element={<CopilotPage />} />
-                  <Route path="/settings" element={<SettingsPage />} />
+                  <Route
+                    path="/dashboard"
+                    element={
+                      <RouteErrorBoundary>
+                        <DashboardPage />
+                      </RouteErrorBoundary>
+                    }
+                  />
+                  <Route
+                    path="/transactions"
+                    element={
+                      <RouteErrorBoundary>
+                        <TransactionsPage />
+                      </RouteErrorBoundary>
+                    }
+                  />
+                  <Route
+                    path="/review"
+                    element={
+                      <RouteErrorBoundary>
+                        <ReviewPage />
+                      </RouteErrorBoundary>
+                    }
+                  />
+                  <Route
+                    path="/reports"
+                    element={
+                      <RouteErrorBoundary>
+                        <ReportsPage />
+                      </RouteErrorBoundary>
+                    }
+                  />
+                  <Route
+                    path="/analytics"
+                    element={
+                      <RouteErrorBoundary>
+                        <AnalyticsPage />
+                      </RouteErrorBoundary>
+                    }
+                  />
+                  <Route
+                    path="/accounts"
+                    element={
+                      <RouteErrorBoundary>
+                        <AccountsPage />
+                      </RouteErrorBoundary>
+                    }
+                  />
+                  <Route
+                    path="/copilot"
+                    element={
+                      <RouteErrorBoundary>
+                        <CopilotPage />
+                      </RouteErrorBoundary>
+                    }
+                  />
+                  <Route
+                    path="/settings"
+                    element={
+                      <RouteErrorBoundary>
+                        <SettingsPage />
+                      </RouteErrorBoundary>
+                    }
+                  />
                 </Route>
 
                 <Route path="*" element={<NotFoundPage />} />

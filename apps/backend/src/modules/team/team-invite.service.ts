@@ -118,7 +118,7 @@ export class TeamInviteService {
       throw new BadRequestException('Tài khoản đã được kích hoạt. Vui lòng đăng nhập.');
     }
 
-    const ttl = await this.redisService.client.ttl(this.tokenKey(token));
+    const ttl = await this.redisService.ttl(this.tokenKey(token));
 
     return {
       email: user.email,
@@ -136,26 +136,26 @@ export class TeamInviteService {
       throw new BadRequestException('Link mời không hợp lệ hoặc đã hết hạn');
     }
 
-    await this.redisService.client.del(this.tokenKey(token));
-    await this.redisService.client.del(this.userTokenKey(payload.userId));
+    await this.redisService.del(this.tokenKey(token));
+    await this.redisService.del(this.userTokenKey(payload.userId));
 
     return payload;
   }
 
   private async createToken(payload: StoredInvitePayload): Promise<string> {
-    const existingToken = await this.redisService.client.get(this.userTokenKey(payload.userId));
+    const existingToken = await this.redisService.get(this.userTokenKey(payload.userId));
     if (existingToken) {
-      await this.redisService.client.del(this.tokenKey(existingToken));
+      await this.redisService.del(this.tokenKey(existingToken));
     }
 
     const token = randomBytes(32).toString('base64url');
-    await this.redisService.client.set(
+    await this.redisService.set(
       this.tokenKey(token),
       JSON.stringify(payload),
       'EX',
       this.inviteTtlSeconds,
     );
-    await this.redisService.client.set(
+    await this.redisService.set(
       this.userTokenKey(payload.userId),
       token,
       'EX',
@@ -166,7 +166,7 @@ export class TeamInviteService {
   }
 
   private async getPayloadByToken(token: string): Promise<StoredInvitePayload | null> {
-    const raw = await this.redisService.client.get(this.tokenKey(token));
+    const raw = await this.redisService.get(this.tokenKey(token));
     if (!raw) {
       return null;
     }

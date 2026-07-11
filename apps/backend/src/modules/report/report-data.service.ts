@@ -1,33 +1,12 @@
-import { Injectable } from '@nestjs/common';
-import { TransactionDirection, TransactionSource, TransactionStatus } from '@prisma/client';
+import { Injectable, StreamableFile } from '@nestjs/common';
+import { TransactionSource, TransactionStatus } from '@prisma/client';
+import type { AccountSummary } from '@xcash/shared-types';
+import * as XLSX from 'xlsx';
 import { paginateParams, paginateResult } from '../../common/util/pagination.util';
 import { PrismaService } from '../../prisma/prisma.service';
-import {
-  AccountSummary,
-  buildAccountSummaries,
-  fetchClassificationSides,
-} from './report-account-summary';
-
-interface DailyTrendSqlRow {
-  day_key: string;
-  activity_count: bigint;
-  classified_count: bigint;
-  revenue_amount: unknown;
-  expense_amount: unknown;
-}
-
-export interface DailyTrendPoint {
-  date: string;
-  label: string;
-  /** @deprecated use classifiedCount */
-  count: number;
-  /** @deprecated use revenueAmount */
-  amount: number;
-  activityCount: number;
-  classifiedCount: number;
-  revenueAmount: number;
-  expenseAmount: number;
-}
+import { ReportSqlBuilder } from './report.sql';
+import { buildDailyTrendBuckets, formatDayKey, periodBounds, startOfDay } from './report-date.util';
+import { buildExportWorkbook } from './report-excel.util';
 
 export interface StatusBreakdownItem {
   status: TransactionStatus;
@@ -39,90 +18,27 @@ export interface SourceBreakdownItem {
   count: number;
 }
 
+export type { AccountSummary } from '@xcash/shared-types';
+
 @Injectable()
 export class ReportDataService {
-  constructor(private readonly prisma: PrismaService) {}
-
-  private periodBounds(year: number, month: number) {
-    return {
-      from: new Date(year, month - 1, 1),
-      to: new Date(year, month, 1),
-    };
-  }
-
-  private startOfDay(date: Date) {
-    const normalized = new Date(date);
-    normalized.setHours(0, 0, 0, 0);
-    return normalized;
-  }
-
-  private formatDayKey(date: Date) {
-    const day = this.startOfDay(date);
-    const year = day.getFullYear();
-    const month = String(day.getMonth() + 1).padStart(2, '0');
-    const dayOfMonth = String(day.getDate()).padStart(2, '0');
-    return `${year}-${month}-${dayOfMonth}`;
-  }
-
-  private formatDayLabel(dayKey: string) {
-    const [, month, day] = dayKey.split('-');
-    return `${day}/${month}`;
-  }
-
-  private buildDailyTrendBuckets(days: number): DailyTrendPoint[] {
-    const today = this.startOfDay(new Date());
-    return Array.from({ length: days }, (_, index) => {
-      const date = new Date(today);
-      date.setDate(today.getDate() - (days - 1 - index));
-      const dayKey = this.formatDayKey(date);
-      return {
-        date: dayKey,
-        label: this.formatDayLabel(dayKey),
-        count: 0,
-        amount: 0,
-        activityCount: 0,
-        classifiedCount: 0,
-        revenueAmount: 0,
-        expenseAmount: 0,
-      };
-    });
-  }
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly sql: ReportSqlBuilder,
+  ) {}
 
   async getDailyTrend(tenantId: string, days = 7) {
     const clampedDays = Math.min(31, Math.max(1, days));
-    const buckets = this.buildDailyTrendBuckets(clampedDays);
+    const buckets = buildDailyTrendBuckets(clampedDays);
     const from = buckets[0]?.date
       ? new Date(`${buckets[0].date}T00:00:00`)
-      : this.startOfDay(new Date());
-    const to = this.startOfDay(new Date());
+      : startOfDay(new Date());
+    const to = startOfDay(new Date());
     to.setHours(23, 59, 59, 999);
 
     const bucketByDay = new Map(buckets.map((bucket) => [bucket.date, bucket]));
 
-    const rows = await this.prisma.$queryRaw<DailyTrendSqlRow[]>`
-      SELECT
-        to_char(date_trunc('day', t.transaction_date), 'YYYY-MM-DD') AS day_key,
-        COUNT(*)::bigint AS activity_count,
-        COUNT(*) FILTER (WHERE t.status::text = ${TransactionStatus.classified})::bigint AS classified_count,
-        COALESCE(SUM(
-          CASE WHEN t.status::text = ${TransactionStatus.classified} AND (
-            (t.source::text = ${TransactionSource.import} AND t.direction::text = ${TransactionDirection.in})
-            OR (t.source::text <> ${TransactionSource.import} AND t.amount > 0)
-          ) THEN ABS(t.amount) ELSE 0 END
-        ), 0) AS revenue_amount,
-        COALESCE(SUM(
-          CASE WHEN t.status::text = ${TransactionStatus.classified} AND (
-            (t.source::text = ${TransactionSource.import} AND t.direction::text = ${TransactionDirection.out})
-            OR (t.source::text <> ${TransactionSource.import} AND t.amount < 0)
-          ) THEN ABS(t.amount) ELSE 0 END
-        ), 0) AS expense_amount
-      FROM transactions t
-      WHERE t.tenant_id = ${tenantId}
-        AND t.transaction_date >= ${from}
-        AND t.transaction_date <= ${to}
-      GROUP BY 1
-      ORDER BY 1
-    `;
+    const rows = await this.sql.fetchDashboardDailyTrend(tenantId, from, to);
 
     for (const row of rows) {
       const bucket = bucketByDay.get(row.day_key);
@@ -144,8 +60,8 @@ export class ReportDataService {
 
     return {
       days: clampedDays,
-      from: buckets[0]?.date ?? this.formatDayKey(from),
-      to: buckets.at(-1)?.date ?? this.formatDayKey(to),
+      from: buckets[0]?.date ?? formatDayKey(from),
+      to: buckets.at(-1)?.date ?? formatDayKey(to),
       points: buckets,
     };
   }
@@ -184,11 +100,43 @@ export class ReportDataService {
     return { items, total };
   }
 
+  async buildAccountSummaries(
+    tenantId: string,
+    from: Date,
+    to: Date,
+    inclusiveEnd = false,
+  ): Promise<AccountSummary[]> {
+    const { debits, credits } = await this.sql.fetchClassificationSides(
+      tenantId,
+      from,
+      to,
+      inclusiveEnd,
+    );
+
+    const accountMap = new Map<string, AccountSummary>();
+    this.sql.mergeAccountSideAggregates(accountMap, debits, 'debit');
+    this.sql.mergeAccountSideAggregates(accountMap, credits, 'credit');
+
+    const codes = [...accountMap.keys()];
+    if (codes.length > 0) {
+      const accounts = await this.sql.fetchAccountNames(tenantId, codes);
+      for (const a of accounts) {
+        const entry = accountMap.get(a.accountCode);
+        if (entry) {
+          entry.accountName = a.accountName;
+          entry.accountType = a.accountType;
+        }
+      }
+    }
+
+    return [...accountMap.values()].sort((a, b) => a.accountCode.localeCompare(b.accountCode));
+  }
+
   async getSummary(tenantId: string, year: number, month: number) {
-    const { from, to } = this.periodBounds(year, month);
+    const { from, to } = periodBounds(year, month);
 
     const [byAccount, reviewCount, totalCount, classifiedCount] = await Promise.all([
-      buildAccountSummaries(this.prisma, tenantId, from, to),
+      this.buildAccountSummaries(tenantId, from, to),
       this.prisma.transactionClassification.count({
         where: {
           tenantId,
@@ -231,7 +179,7 @@ export class ReportDataService {
     to.setHours(23, 59, 59, 999);
 
     const [byAccount, reviewCount, totalCount, classifiedCount] = await Promise.all([
-      buildAccountSummaries(this.prisma, tenantId, from, to),
+      this.buildAccountSummaries(tenantId, from, to),
       this.prisma.transactionClassification.count({
         where: {
           tenantId,
@@ -274,14 +222,14 @@ export class ReportDataService {
     month: number,
     filters: { page?: number; limit?: number; search?: string; accountType?: string },
   ) {
-    const { from, to } = this.periodBounds(year, month);
+    const { from, to } = periodBounds(year, month);
     const page = filters.page ?? 1;
     const limit = filters.limit ?? 20;
     const search = filters.search?.trim().toLowerCase();
     const accountType =
       filters.accountType && filters.accountType !== 'all' ? filters.accountType : undefined;
 
-    let items = await buildAccountSummaries(this.prisma, tenantId, from, to);
+    let items = await this.buildAccountSummaries(tenantId, from, to);
 
     if (search) {
       items = items.filter(
@@ -352,7 +300,7 @@ export class ReportDataService {
           },
           orderBy: { transaction: { transactionDate: 'asc' } },
         }),
-        buildAccountSummaries(this.prisma, tenantId, from, to, true),
+        this.buildAccountSummaries(tenantId, from, to, true),
         this.prisma.transactionClassification.count({
           where: {
             tenantId,
@@ -408,6 +356,26 @@ export class ReportDataService {
     };
   }
 
+  async exportExcel(tenantId: string, fromDate: string, toDate: string): Promise<StreamableFile> {
+    const data = await this.fetchExportData(tenantId, fromDate, toDate);
+
+    const wb = buildExportWorkbook({
+      businessName: data.businessName,
+      fromDate,
+      toDate,
+      exportedAt: new Date(),
+      summary: data.summary,
+      accounts: data.accounts,
+      details: data.details,
+    });
+
+    const buffer = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' }) as Buffer;
+    return new StreamableFile(buffer, {
+      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      disposition: `attachment; filename="bao-cao-dinh-khoan-${fromDate}-${toDate}.xlsx"`,
+    });
+  }
+
   async getComparison(tenantId: string, year: number, month: number) {
     const [current, previous] = await Promise.all([
       this.getSummary(tenantId, year, month),
@@ -434,28 +402,15 @@ export class ReportDataService {
   }
 
   async getTopAccounts(tenantId: string, year: number, month: number, limit: number) {
-    const from = new Date(year, month - 1, 1);
-    const to = new Date(year, month, 1);
+    const { from, to } = periodBounds(year, month);
 
-    const { debits, credits } = await fetchClassificationSides(
-      this.prisma,
-      tenantId,
-      from,
-      to,
-      false,
-    );
+    const { debits, credits } = await this.sql.fetchClassificationSides(tenantId, from, to, false);
 
     const expenseMap = new Map(debits.map((row) => [row.account_code, Number(row.total)]));
     const revenueMap = new Map(credits.map((row) => [row.account_code, Number(row.total)]));
 
     const codes = [...new Set([...expenseMap.keys(), ...revenueMap.keys()])];
-    const accounts =
-      codes.length > 0
-        ? await this.prisma.chartOfAccount.findMany({
-            where: { tenantId, accountCode: { in: codes } },
-            select: { accountCode: true, accountName: true, accountType: true },
-          })
-        : [];
+    const accounts = codes.length > 0 ? await this.sql.fetchAccountNames(tenantId, codes) : [];
 
     const accountInfo = new Map(accounts.map((a) => [a.accountCode, a]));
 

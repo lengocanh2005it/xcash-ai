@@ -1,4 +1,4 @@
-import { Injectable, Logger, UnauthorizedException } from '@nestjs/common';
+import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { interval, merge, Observable, Subject } from 'rxjs';
 import { filter, map } from 'rxjs/operators';
@@ -6,7 +6,6 @@ import type { NotificationItem, TransactionEvent } from './notification.service'
 
 @Injectable()
 export class NotificationStreamService {
-  private readonly logger = new Logger(NotificationStreamService.name);
   private readonly eventBus = new Subject<{ tenantId: string; notification: NotificationItem }>();
   private readonly txEventBus = new Subject<{ tenantId: string; event: TransactionEvent }>();
 

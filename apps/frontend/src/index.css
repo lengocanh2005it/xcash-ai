@@ -131,6 +131,22 @@
   }
 }
 
+/* Reduce motion for users who prefer it */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    /* biome-ignore lint/complexity/noImportantStyles: standard a11y pattern for prefers-reduced-motion */
+    animation-duration: 0.01ms !important;
+    /* biome-ignore lint/complexity/noImportantStyles: standard a11y pattern for prefers-reduced-motion */
+    animation-iteration-count: 1 !important;
+    /* biome-ignore lint/complexity/noImportantStyles: standard a11y pattern for prefers-reduced-motion */
+    transition-duration: 0.01ms !important;
+    /* biome-ignore lint/complexity/noImportantStyles: standard a11y pattern for prefers-reduced-motion */
+    scroll-behavior: auto !important;
+  }
+}
+
 @layer utilities {
   .scrollbar-hidden {
     scrollbar-width: none;

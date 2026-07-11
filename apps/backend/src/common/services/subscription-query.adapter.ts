@@ -3,6 +3,8 @@ import type { SubscriptionPlan } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { RedisService } from '../../redis/redis.service';
 
+const DEFAULT_COPILOT_QUOTA = -1;
+
 const CACHE_TTL_SECONDS = 60;
 
 export interface ActiveSubscription {
@@ -13,6 +15,7 @@ export interface ActiveSubscription {
   transactionQuota: number;
   transactionUsedThisCycle: number;
   copilotUsedThisCycle: number;
+  copilotQuota: number;
   currentCycleStart: Date;
   currentCycleEnd: Date;
 }
@@ -41,7 +44,7 @@ export class SubscriptionQueryAdapter {
   async findActive(tenantId: string): Promise<ActiveSubscription | null> {
     const cacheKey = `sub:active:${tenantId}`;
     try {
-      const raw = await this.redis.client.get(cacheKey);
+      const raw = await this.redis.get(cacheKey);
       if (raw) return JSON.parse(raw) as ActiveSubscription;
     } catch {
       // cache miss
@@ -54,6 +57,11 @@ export class SubscriptionQueryAdapter {
 
     if (!sub) return null;
 
+    const pricing = await this.prisma.planPricing.findUnique({
+      where: { plan: sub.plan },
+      select: { copilotQuota: true },
+    });
+
     const dto: ActiveSubscription = {
       id: sub.id,
       plan: sub.plan,
@@ -62,12 +70,13 @@ export class SubscriptionQueryAdapter {
       transactionQuota: sub.transactionQuota,
       transactionUsedThisCycle: sub.transactionUsedThisCycle,
       copilotUsedThisCycle: sub.copilotUsedThisCycle,
+      copilotQuota: pricing?.copilotQuota ?? DEFAULT_COPILOT_QUOTA,
       currentCycleStart: sub.currentCycleStart,
       currentCycleEnd: sub.currentCycleEnd,
     };
 
     try {
-      await this.redis.client.setex(cacheKey, CACHE_TTL_SECONDS, JSON.stringify(dto));
+      await this.redis.setex(cacheKey, CACHE_TTL_SECONDS, JSON.stringify(dto));
     } catch {
       // non-critical
     }
@@ -77,34 +86,26 @@ export class SubscriptionQueryAdapter {
 
   /**
    * Fetch only plan + subscriptionId for guards/settings/token checks.
-   * Cached 60s in Redis. Returns null if no active subscription.
+   * Shares the same cache as findActive() — reads from sub:active:{tenantId}
+   * so that a preceding findActive() or findActivePlan() warm the cache for both.
+   * Returns null if no active subscription.
    */
   async findActivePlan(tenantId: string): Promise<ActivePlanInfo | null> {
-    const cacheKey = `sub:plan:${tenantId}`;
+    const cacheKey = `sub:active:${tenantId}`;
     try {
-      const raw = await this.redis.client.get(cacheKey);
-      if (raw) return JSON.parse(raw) as ActivePlanInfo;
+      const raw = await this.redis.get(cacheKey);
+      if (raw) {
+        const full = JSON.parse(raw) as ActiveSubscription;
+        return { subscriptionId: full.id, plan: full.plan };
+      }
     } catch {
       // cache miss
     }
 
-    const sub = await this.prisma.subscription.findFirst({
-      where: { tenantId, status: 'active' },
-      orderBy: { startedAt: 'desc' },
-      select: { id: true, plan: true },
-    });
+    const full = await this.findActive(tenantId);
+    if (!full) return null;
 
-    if (!sub) return null;
-
-    const dto: ActivePlanInfo = { subscriptionId: sub.id, plan: sub.plan };
-
-    try {
-      await this.redis.client.setex(cacheKey, CACHE_TTL_SECONDS, JSON.stringify(dto));
-    } catch {
-      // non-critical
-    }
-
-    return dto;
+    return { subscriptionId: full.id, plan: full.plan };
   }
 
   /**
@@ -113,7 +114,7 @@ export class SubscriptionQueryAdapter {
    */
   async invalidateCache(tenantId: string): Promise<void> {
     try {
-      await this.redis.client.del(`sub:active:${tenantId}`, `sub:plan:${tenantId}`);
+      await this.redis.del(`sub:active:${tenantId}`);
     } catch {
       // non-critical
     }

@@ -1,8 +1,9 @@
 import { randomInt } from 'node:crypto';
 import { InjectQueue } from '@nestjs/bullmq';
-import { BadRequestException, HttpException, HttpStatus, Injectable, Logger } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { Queue } from 'bullmq';
+import { throwOtpCooldownException } from '../../common/util/otp-cooldown.util';
 import { EMAIL_QUEUE } from '../../queue/queue.module';
 import { RedisService } from '../../redis/redis.service';
 import {
@@ -50,13 +51,13 @@ export class EmailVerificationService {
     const otp = this.generateOtp();
     const payload: StoredOtpPayload = { otp, userId, attempts: 0 };
 
-    await this.redisService.client.set(
+    await this.redisService.set(
       this.otpKey(normalizedEmail),
       JSON.stringify(payload),
       'EX',
       this.otpTtlSeconds,
     );
-    await this.redisService.client.set(
+    await this.redisService.set(
       this.resendKey(normalizedEmail),
       '1',
       'EX',
@@ -77,7 +78,7 @@ export class EmailVerificationService {
 
   async verifyOtp(email: string, otp: string): Promise<string> {
     const normalizedEmail = email.toLowerCase();
-    const raw = await this.redisService.client.get(this.otpKey(normalizedEmail));
+    const raw = await this.redisService.get(this.otpKey(normalizedEmail));
 
     if (!raw) {
       throw new BadRequestException('Mã OTP đã hết hạn hoặc không tồn tại. Vui lòng gửi lại mã.');
@@ -86,15 +87,15 @@ export class EmailVerificationService {
     const payload = JSON.parse(raw) as StoredOtpPayload;
 
     if (payload.attempts >= this.maxAttempts) {
-      await this.redisService.client.del(this.otpKey(normalizedEmail));
+      await this.redisService.del(this.otpKey(normalizedEmail));
       throw new BadRequestException('Đã nhập sai quá số lần cho phép. Vui lòng gửi lại mã OTP.');
     }
 
     if (payload.otp !== otp) {
       payload.attempts += 1;
-      const ttl = await this.redisService.client.ttl(this.otpKey(normalizedEmail));
+      const ttl = await this.redisService.ttl(this.otpKey(normalizedEmail));
       if (ttl > 0) {
-        await this.redisService.client.set(
+        await this.redisService.set(
           this.otpKey(normalizedEmail),
           JSON.stringify(payload),
           'EX',
@@ -104,18 +105,15 @@ export class EmailVerificationService {
       throw new BadRequestException('Mã OTP không đúng');
     }
 
-    await this.redisService.client.del(this.otpKey(normalizedEmail));
+    await this.redisService.del(this.otpKey(normalizedEmail));
     return payload.userId;
   }
 
   private async assertResendAllowed(email: string): Promise<void> {
-    const cooldown = await this.redisService.client.get(this.resendKey(email));
+    const cooldown = await this.redisService.get(this.resendKey(email));
     if (cooldown) {
-      const ttl = await this.redisService.client.ttl(this.resendKey(email));
-      throw new HttpException(
-        `Vui lòng đợi ${Math.max(ttl, 1)} giây trước khi gửi lại mã OTP`,
-        HttpStatus.TOO_MANY_REQUESTS,
-      );
+      const ttl = await this.redisService.ttl(this.resendKey(email));
+      throwOtpCooldownException(ttl);
     }
   }
 

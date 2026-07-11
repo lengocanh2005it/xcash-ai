@@ -1,22 +1,6 @@
-import type { Role, SubscriptionPlan } from '@xcash/shared-types';
-import type { AuthenticatedUser } from '@/types/auth';
+import type { AuthenticatedUser, UserProfile } from '@xcash/shared-types';
 
-export interface UserProfile {
-  id: string;
-  email: string;
-  name: string;
-  avatarUrl: string | null;
-  role: Role;
-  tenantId: string | null;
-  businessName: string | null;
-  ownerName: string | null;
-  plan: SubscriptionPlan | null;
-}
-
-export interface UpdateProfileInput {
-  name?: string;
-  businessName?: string;
-}
+export type { UpdateProfileInput, UserProfile } from '@xcash/shared-types';
 
 export function profileToAuthUser(profile: UserProfile): AuthenticatedUser {
   return {

@@ -24,7 +24,7 @@ export const TRANSACTION_SOURCE_LABELS: Record<string, string> = {
 
 export const TRANSACTION_SOURCE_COLORS: Record<string, string> = {
   cas: 'var(--chart-3)',
-  import: '#f59e0b',
+  import: 'var(--chart-4)',
 };
 
 // ─── Types ────────────────────────────────────────────────────────────────────

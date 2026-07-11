@@ -25,3 +25,11 @@ export function sanitizeCopilotOutput(content: string, fallback: string): string
   const stripped = stripLlmReasoningTags(content);
   return stripped || fallback;
 }
+
+/**
+ * Câu trả lời đến từ adapter fallback (không phải OpenAI chính) — cảnh báo user
+ * để tránh tin nhầm số liệu chưa được xác thực bởi hệ thống chính.
+ */
+export function appendFallbackNotice(reply: string): string {
+  return `${reply}\n\n**Lưu ý:** hệ thống chính đang gián đoạn, câu trả lời trên dùng hệ thống dự phòng — số liệu có thể cần xác minh lại.`;
+}

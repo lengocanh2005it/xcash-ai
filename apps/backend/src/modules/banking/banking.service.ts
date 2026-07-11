@@ -6,18 +6,16 @@ import {
   Logger,
   NotFoundException,
 } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
 import { Prisma, SubscriptionPlan, TransactionDirection, TransactionSource } from '@prisma/client';
 import type { Queue } from 'bullmq';
 import { isOveragePlan } from '../../common/constants/quota-policy';
 import { QuotaNotificationService } from '../../common/services/quota-notification.service';
 import { createAuditLog } from '../../common/util/audit-log.util';
-import { verifyWebhookSignature } from '../../common/util/webhook-signature.util';
 import { PrismaService } from '../../prisma/prisma.service';
 import { WEBHOOK_QUEUE } from '../../queue/queue.module';
 import { RedisService } from '../../redis/redis.service';
-import { AI_CLASSIFY_JOB } from '../ai/classification.processor';
-import type { CasWebhookDto } from './dto/banking.dto';
+import { AI_CLASSIFY_JOB } from '../ai/classification.constants';
+import type { CasWebhookPayload } from './cas-webhook.handler';
 
 export interface CasWebhookResult {
   duplicate: boolean;
@@ -38,61 +36,27 @@ export class BankingService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly redisService: RedisService,
-    private readonly configService: ConfigService,
     private readonly quotaNotificationService: QuotaNotificationService,
     @InjectQueue(WEBHOOK_QUEUE) private readonly webhookQueue: Queue,
   ) {}
 
-  verifyWebhookSignature(
-    rawBody: string,
-    signatureHeader?: string,
-    timestampHeader?: string,
-  ): void {
-    const skipVerify = this.configService.get<string>('WEBHOOK_SKIP_SIGNATURE_VERIFY') === 'true';
-    const secret = this.configService.get<string>('CAS_SECRET_KEY', '');
-    const toleranceSeconds = Number.parseInt(
-      this.configService.get<string>('WEBHOOK_TIMESTAMP_TOLERANCE_SECONDS', '300'),
-      10,
-    );
-
-    verifyWebhookSignature({
-      rawBody,
-      signatureHeader,
-      timestampHeader,
-      skipVerify,
-      secret,
-      toleranceSeconds,
-    });
-  }
-
   async handleCasWebhook(
-    payload: CasWebhookDto,
+    payload: CasWebhookPayload,
   ): Promise<CasWebhookResult | CasWebhookProbeResult> {
-    if (!payload?.transaction?.id) {
+    if (payload.isProbe) {
       this.logger.log('Cas webhook probe received (no transaction) — endpoint reachable');
       return { probe: true, ok: true };
     }
-
-    const txn = payload.transaction;
 
     if (!payload.grantId) {
       throw new BadRequestException('Thiếu grantId trong payload webhook giao dịch');
     }
 
-    const transactionId = txn.id;
-    const idempotencyTtl = Number.parseInt(
-      this.configService.get<string>('WEBHOOK_IDEMPOTENCY_TTL_SECONDS', '86400'),
-      10,
-    );
+    const { transactionId, grantId } = payload;
     const idempotencyKey = `webhook:cas:txn:${transactionId}`;
+    const idempotencyTtl = 86400;
 
-    const acquired = await this.redisService.client.set(
-      idempotencyKey,
-      '1',
-      'EX',
-      idempotencyTtl,
-      'NX',
-    );
+    const acquired = await this.redisService.set(idempotencyKey, '1', 'EX', idempotencyTtl, 'NX');
 
     if (!acquired) {
       return { duplicate: true, transactionId };
@@ -106,7 +70,7 @@ export class BankingService {
       throw new NotFoundException('Không tìm thấy tenant cho grantId này');
     }
 
-    const casDirection = txn.amount >= 0 ? 'in' : 'out';
+    const casDirection = payload.amount >= 0 ? 'in' : 'out';
 
     const existingTransaction = await this.prisma.transaction.findUnique({
       where: { transactionId },
@@ -139,13 +103,13 @@ export class BankingService {
       const transaction = await tx.transaction.create({
         data: {
           tenantId: grant.tenantId,
-          grantId: payload.grantId,
+          grantId: grantId,
           transactionId,
-          amount: new Prisma.Decimal(txn.amount),
-          content: txn.description ?? null,
-          senderAccount: txn.counterAccountName ?? null,
+          amount: new Prisma.Decimal(payload.amount),
+          content: payload.description || null,
+          senderAccount: payload.counterAccountName || null,
           receiverAccount: null,
-          transactionDate: new Date(txn.transactionDateTime),
+          transactionDate: new Date(payload.transactionDateTime),
           status: 'pending',
           source: TransactionSource.cas,
           direction: casDirection === 'in' ? TransactionDirection.in : TransactionDirection.out,
@@ -178,8 +142,8 @@ export class BankingService {
         actor: 'system',
         afterState: {
           transactionId,
-          grantId: payload.grantId,
-          amount: txn.amount,
+          grantId: grantId,
+          amount: payload.amount,
         },
       });
 

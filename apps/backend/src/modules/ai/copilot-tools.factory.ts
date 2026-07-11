@@ -3,38 +3,13 @@ import type { Role } from '@xcash/shared-types';
 import { COPILOT_TOOLS } from './copilot-tool.registry';
 import type { CopilotToolService } from './copilot-tool.service';
 import type { LlmToolDefinition } from './llm/llm-provider.interface';
-
-type ToolDefinition = {
-  type: 'function';
-  function: {
-    name: string;
-    description: string;
-    strict: boolean;
-    parameters: object;
-    parse: (text: string) => unknown;
-    function: (args: Record<string, unknown>) => Promise<unknown>;
-  };
-};
+import type { LlmTool } from './llm-adapter.interface';
 
 /**
- * @deprecated Dùng buildCopilotToolDefinitions() cho agent loop mới.
- * Giữ lại cho backward compatibility với runTools() trong transition period.
+ * Chỉ build JSON schema của tool để gửi lên LLM — không gắn executor.
+ * Việc thực thi tool do CopilotAgentHarness gọi thẳng CopilotToolService.execute().
  */
-export function buildCopilotTools(
-  tenantId: string,
-  toolService: CopilotToolService,
-  configService?: ConfigService,
-  resultsCapture?: Map<string, unknown>,
-  role?: Role,
-): ToolDefinition[] {
-  const bind =
-    (name: string) =>
-    async (args: Record<string, unknown>): Promise<unknown> => {
-      const result = await toolService.execute(tenantId, name, args, role);
-      resultsCapture?.set(name, result);
-      return result;
-    };
-
+export function buildCopilotToolSchemas(configService?: ConfigService): LlmTool[] {
   return COPILOT_TOOLS.filter((entry) => {
     if (!entry.enabledBy) return true;
     return configService?.get<boolean>(entry.enabledBy) ?? false;
@@ -44,9 +19,7 @@ export function buildCopilotTools(
       name: entry.name,
       description: entry.description,
       strict: true,
-      parameters: entry.parameters,
-      parse: JSON.parse,
-      function: bind(entry.name),
+      parameters: entry.parameters as Record<string, unknown>,
     },
   }));
 }

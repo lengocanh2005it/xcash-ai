@@ -5,7 +5,7 @@ import type { Queue } from 'bullmq';
 import { paginateParams, paginateResult } from '../../common/util/pagination.util';
 import { PrismaService } from '../../prisma/prisma.service';
 import { WEBHOOK_QUEUE } from '../../queue/queue.module';
-import { AI_CLASSIFY_JOB } from '../ai/classification.processor';
+import { AI_CLASSIFY_JOB } from '../ai/classification.constants';
 import type { ListTransactionsQueryDto } from './dto/list-transactions.dto';
 
 @Injectable()

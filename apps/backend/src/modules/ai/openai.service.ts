@@ -1,9 +1,18 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import type { CopilotActivity, Role } from '@xcash/shared-types';
 import OpenAI from 'openai';
 import { AiUsageLogService } from './ai-usage-log.service';
+import { buildActivities } from './copilot-activity.helper';
+import { CopilotAgentHarness } from './copilot-agent.harness';
+import { executeTool, type ToolDeps } from './copilot-tool.executor';
+import { buildCopilotToolSchemas } from './copilot-tools.factory';
+import type { LlmAdapter, LlmMessage } from './llm-adapter.interface';
+import { OpenAiCompatibleAdapter } from './openai-compatible.adapter';
 import { isQuotaOrBillingError, shouldFallbackProvider } from './utils/llm-error.util';
-import { sanitizeCopilotOutput } from './utils/llm-output.util';
+import { appendFallbackNotice, sanitizeCopilotOutput } from './utils/llm-output.util';
+
+export type { CopilotActivity };
 
 export interface ClassificationResult {
   debitAccount: string;
@@ -42,12 +51,14 @@ export class OpenAiService {
     this.chatModel = this.configService.get<string>('OPENAI_CHAT_MODEL', 'gpt-4o-mini');
     this.client = apiKey ? new OpenAI({ apiKey, maxRetries: 0 }) : null;
 
+    // Jina fallback for embeddings
     const jinaKey = this.configService.get<string>('JINA_API_KEY', '');
     this.jinaModel = this.configService.get<string>('JINA_EMBEDDING_MODEL', 'jina-embeddings-v3');
     this.jinaClient = jinaKey
       ? new OpenAI({ apiKey: jinaKey, baseURL: 'https://api.jina.ai/v1', maxRetries: 2 })
       : null;
 
+    // MiniMax fallback for LLM chat
     const minimaxKey = this.configService.get<string>('MINIMAX_API_KEY', '');
     this.minimaxModel = this.configService.get<string>('MINIMAX_CHAT_MODEL', 'MiniMax-M3');
     this.minimaxClient = minimaxKey
@@ -80,6 +91,7 @@ export class OpenAiService {
       return null;
     }
 
+    // Try OpenAI first
     if (this.client) {
       try {
         const response = await this.client.embeddings.create({
@@ -110,6 +122,7 @@ export class OpenAiService {
       }
     }
 
+    // Fallback: Jina
     if (this.jinaClient) {
       const response = await this.jinaClient.embeddings.create({
         model: this.jinaModel,
@@ -164,6 +177,7 @@ ${financialContext}`;
       { role: 'user' as const, content: message },
     ];
 
+    // Try OpenAI first
     if (this.client) {
       try {
         const response = await this.client.chat.completions.create({
@@ -204,6 +218,7 @@ ${financialContext}`;
       }
     }
 
+    // Fallback: MiniMax
     if (this.minimaxClient) {
       try {
         const response = await this.minimaxClient.chat.completions.create({
@@ -239,6 +254,75 @@ ${financialContext}`;
     return 'Xin lỗi, có lỗi xảy ra. Vui lòng thử lại.';
   }
 
+  async chatCopilotWithTools(
+    tenantId: string,
+    message: string,
+    history: Array<{ role: 'user' | 'assistant'; content: string }>,
+    toolDeps: ToolDeps,
+    conversationId?: string,
+    role?: Role,
+    financialContext?: string,
+  ): Promise<{ reply: string; activities: CopilotActivity[] }> {
+    const calledTools: string[] = [];
+    const resultsCapture = new Map<string, unknown>();
+
+    const runner = this.createCopilotRunner(
+      tenantId,
+      message,
+      history,
+      toolDeps,
+      resultsCapture,
+      role,
+    );
+    if (!runner) {
+      const reply = await this.chatCopilot(
+        message,
+        history,
+        financialContext ?? '',
+        tenantId,
+        conversationId,
+      );
+      return { reply, activities: [] };
+    }
+
+    runner.on('functionToolCall', (call: { name: string }) => {
+      this.logger.debug(`Copilot tool called: ${call.name}`);
+      calledTools.push(call.name);
+    });
+
+    try {
+      const rawReply = sanitizeCopilotOutput(
+        await runner.finalContent(),
+        'Xin lỗi, tôi không thể trả lời lúc này.',
+      );
+      const { name: usedAdapter, fallback: usedFallback } = await runner.usedAdapterInfo();
+      const reply = usedFallback ? appendFallbackNotice(rawReply) : rawReply;
+      if (usedFallback) {
+        this.logger.warn(`Copilot trả lời qua fallback adapter: ${usedAdapter}`);
+      }
+      const usage = await runner.totalUsage();
+      if (usage) {
+        this.aiUsageLogService.record({
+          tenantId,
+          callType: 'copilot',
+          model: usedAdapter === 'minimax' ? this.minimaxModel : this.chatModel,
+          tokensIn: usage.prompt_tokens,
+          tokensOut: usage.completion_tokens,
+          conversationId,
+        });
+      }
+
+      const activities = buildActivities(calledTools, resultsCapture);
+      return { reply, activities };
+    } catch (error) {
+      this.logger.error(
+        'Copilot agent harness failed (mọi LLM adapter đều lỗi)',
+        error instanceof Error ? error.message : String(error),
+      );
+      return { reply: 'Xin lỗi, có lỗi xảy ra. Vui lòng thử lại.', activities: [] };
+    }
+  }
+
   buildCopilotSystemPrompt(cassoSearchEnabled = false): string {
     const now = new Date();
     const cassoWebRule = cassoSearchEnabled
@@ -262,13 +346,6 @@ Trả lời tất cả câu hỏi về:
 - Câu xã giao / giới thiệu bản thân: trả lời ngắn gọn; khi giới thiệu khả năng Copilot, nhắc cả **tra cứu dữ liệu** và **thẻ hành động** (duyệt/sửa GD), không chỉ hỏi đáp
 
 Từ chối (1 câu lịch sự) khi câu hỏi hoàn toàn ngoài lĩnh vực: lập trình, lịch sử, địa lý, y tế, giải trí, thời sự.
-
-## Cách suy luận trước khi trả lời
-Với mọi câu hỏi cần dữ liệu thực:
-1. Xác định **dữ liệu cần** — cần số liệu gì, khoảng thời gian nào, cấp độ chi tiết nào
-2. Chọn **đúng tool** — chỉ gọi tool thực sự cần, không gọi thừa; nếu cần nhiều dữ liệu độc lập thì gọi song song cùng 1 lượt
-3. Sau khi nhận kết quả — đọc kỹ data trả về, nếu thiếu thì gọi thêm tool; nếu đủ thì tổng hợp và trả lời thống nhất, không mâu thuẫn
-4. Trả lời **chính xác và cụ thể** — dùng số liệu thực từ tool, không phỏng đoán; nếu tool trả về lỗi hoặc rỗng thì nói rõ không có dữ liệu thay vì bịa
 
 ## Quy tắc gọi tool
 - Số liệu thu/chi/lãi-lỗ, báo cáo → gọi get_month_summary / get_month_comparison; chi nhiều nhất theo TK → get_top_accounts (đã có danh sách TK, không cần search_transactions trừ khi user muốn GD cụ thể theo mã TK)
@@ -304,6 +381,51 @@ Khi nhận data từ knowledge về AI Copilot:
 Không tiết lộ tên tool kỹ thuật, grantId, accessToken, JSON thô. Luôn trả lời tiếng Việt.`;
   }
 
+  /** Adapter theo thứ tự ưu tiên — harness tự fallback sang adapter kế tiếp khi lỗi quota/billing. */
+  private buildLlmAdapters(): LlmAdapter[] {
+    const adapters: LlmAdapter[] = [];
+    if (this.client)
+      adapters.push(new OpenAiCompatibleAdapter('openai', this.client, this.chatModel));
+    if (this.minimaxClient) {
+      adapters.push(new OpenAiCompatibleAdapter('minimax', this.minimaxClient, this.minimaxModel));
+    }
+    return adapters;
+  }
+
+  createCopilotRunner(
+    tenantId: string,
+    message: string,
+    history: Array<{ role: 'user' | 'assistant'; content: string }>,
+    toolDeps: ToolDeps,
+    resultsCapture?: Map<string, unknown>,
+    role?: Role,
+  ): CopilotAgentHarness | null {
+    const adapters = this.buildLlmAdapters();
+    if (adapters.length === 0) return null;
+
+    const cassoSearchEnabled =
+      this.configService.get<boolean>('COPILOT_CASSO_SEARCH_ENABLED') ?? false;
+    const tools = buildCopilotToolSchemas(this.configService);
+
+    const executeToolFn = async (name: string, args: Record<string, unknown>): Promise<unknown> => {
+      const result = await executeTool(toolDeps, name, tenantId, args, role);
+      resultsCapture?.set(name, result);
+      return result;
+    };
+
+    const llmHistory: LlmMessage[] = history.map((h) => ({ role: h.role, content: h.content }));
+
+    return new CopilotAgentHarness(
+      adapters,
+      this.buildCopilotSystemPrompt(cassoSearchEnabled),
+      llmHistory,
+      message,
+      tools,
+      executeToolFn,
+      5,
+    );
+  }
+
   async generateCopilotTitle(
     firstMessage: string,
     tenantId?: string,
@@ -319,6 +441,7 @@ Không tiết lộ tên tool kỹ thuật, grantId, accessToken, JSON thô. Luô
       { role: 'user' as const, content: safeInput },
     ];
 
+    // Try OpenAI first
     if (this.client) {
       try {
         const response = await this.client.chat.completions.create({
@@ -355,6 +478,7 @@ Không tiết lộ tên tool kỹ thuật, grantId, accessToken, JSON thô. Luô
       }
     }
 
+    // Fallback: MiniMax
     if (this.minimaxClient) {
       try {
         const response = await this.minimaxClient.chat.completions.create({
@@ -379,7 +503,7 @@ Không tiết lộ tên tool kỹ thuật, grantId, accessToken, JSON thô. Luô
     return 'Cuộc chat mới';
   }
 
-  /** @deprecated Agent loop giờ ở CopilotAgentService */
+  /** @deprecated Dùng chatCopilotWithTools khi COPILOT_USE_FUNCTION_CALLING=1 */
   async classifyTransaction(
     content: string,
     amount: number,

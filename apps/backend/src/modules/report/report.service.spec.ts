@@ -1,4 +1,5 @@
 import { TransactionSource, TransactionStatus } from '@prisma/client';
+import { ReportSqlBuilder } from './report.sql';
 import { ReportDataService } from './report-data.service';
 
 describe('ReportDataService dashboard charts', () => {
@@ -8,8 +9,8 @@ describe('ReportDataService dashboard charts', () => {
     transaction: {
       groupBy: jest.Mock;
     };
-    $queryRaw: jest.Mock;
   };
+  let sql: ReportSqlBuilder;
   let service: ReportDataService;
 
   beforeEach(() => {
@@ -17,14 +18,17 @@ describe('ReportDataService dashboard charts', () => {
       transaction: {
         groupBy: jest.fn(),
       },
-      $queryRaw: jest.fn(),
     };
-    service = new ReportDataService(prisma as never);
+    sql = new ReportSqlBuilder({
+      $queryRaw: jest.fn(),
+      chartOfAccount: { findMany: jest.fn() },
+    } as never);
+    service = new ReportDataService(prisma as never, sql);
   });
 
   describe('getDailyTrend', () => {
     it('returns zero-filled buckets for each day in range', async () => {
-      prisma.$queryRaw.mockResolvedValue([]);
+      jest.spyOn(sql, 'fetchDashboardDailyTrend').mockResolvedValue([]);
 
       const result = await service.getDailyTrend(tenantId, 7);
 
@@ -36,7 +40,7 @@ describe('ReportDataService dashboard charts', () => {
             point.activityCount === 0 && point.revenueAmount === 0 && point.expenseAmount === 0,
         ),
       ).toBe(true);
-      expect(prisma.$queryRaw).toHaveBeenCalledTimes(1);
+      expect(sql.fetchDashboardDailyTrend).toHaveBeenCalledTimes(1);
     });
 
     it('aggregates revenue, expense, and activity into daily buckets', async () => {
@@ -48,7 +52,7 @@ describe('ReportDataService dashboard charts', () => {
         String(today.getDate()).padStart(2, '0'),
       ].join('-');
 
-      prisma.$queryRaw.mockResolvedValue([
+      jest.spyOn(sql, 'fetchDashboardDailyTrend').mockResolvedValue([
         {
           day_key: todayKey,
           activity_count: BigInt(2),
@@ -82,7 +86,7 @@ describe('ReportDataService dashboard charts', () => {
         String(today.getDate()).padStart(2, '0'),
       ].join('-');
 
-      prisma.$queryRaw.mockResolvedValue([
+      jest.spyOn(sql, 'fetchDashboardDailyTrend').mockResolvedValue([
         {
           day_key: todayKey,
           activity_count: BigInt(1),

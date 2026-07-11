@@ -1,6 +1,7 @@
 import { Bot, StopCircle } from 'lucide-react';
 import { CopilotActionCard } from '@/components/copilot/CopilotActionCard';
 import { CopilotCorrectionCard } from '@/components/copilot/CopilotCorrectionCard';
+import { CopilotFileExportCard } from '@/components/copilot/CopilotFileExportCard';
 import { CopilotMessageActions } from '@/components/copilot/CopilotMessageActions';
 import type { CopilotActivity } from '@/components/copilot/CopilotSourceChips';
 import { CopilotSourceChips } from '@/components/copilot/CopilotSourceChips';
@@ -37,7 +38,9 @@ export function CopilotMessageBubble({ msg }: { msg: Message }) {
         {msg.activities && msg.activities.length > 0 && (
           <>
             <CopilotSourceChips
-              activities={msg.activities.filter((a) => a.kind !== 'action_card')}
+              activities={msg.activities.filter(
+                (a) => a.kind !== 'action_card' && a.kind !== 'file_export',
+              )}
             />
             {msg.activities
               .filter((a) => a.kind === 'action_card' && a.actionCard)
@@ -49,6 +52,13 @@ export function CopilotMessageBubble({ msg }: { msg: Message }) {
                 ) : (
                   <CopilotActionCard key={card.transactionId} actionCard={card} />
                 );
+              })}
+            {msg.activities
+              .filter((a) => a.kind === 'file_export' && a.fileExport)
+              .map((a) => {
+                const fileExport = a.fileExport;
+                if (!fileExport) return null;
+                return <CopilotFileExportCard key={fileExport.exportId} fileExport={fileExport} />;
               })}
           </>
         )}

@@ -2,6 +2,7 @@ import {
   Controller,
   DefaultValuePipe,
   Get,
+  Param,
   ParseIntPipe,
   Query,
   Res,
@@ -15,14 +16,19 @@ import { JwtAuthGuard, RolesGuard } from '../../common/guards/auth.guards';
 import { PlanGuard } from '../../common/guards/plan.guard';
 import type { AuthenticatedUser } from '../../common/types/authenticated-user.type';
 import { AccountBreakdownQueryDto } from './dto/account-breakdown.dto';
+import { CopilotExportQueryDto } from './dto/copilot-export-query.dto';
 import { DashboardDailyTrendQueryDto } from './dto/dashboard-charts.dto';
 import { ReportDataService } from './report-data.service';
+import { ReportExportService } from './report-export.service';
 
 @ApiTags('reports')
 @Controller('reports')
 @UseGuards(JwtAuthGuard, RolesGuard, PlanGuard)
 export class ReportController {
-  constructor(private readonly reportData: ReportDataService) {}
+  constructor(
+    private readonly reportData: ReportDataService,
+    private readonly exportService: ReportExportService,
+  ) {}
 
   @Get('daily-trend')
   getDailyTrend(
@@ -118,5 +124,24 @@ export class ReportController {
       'Content-Disposition': `attachment; filename="bao-cao-dinh-khoan-${fromDate}-${toDate}.xlsx"`,
     });
     return file;
+  }
+
+  @Get('copilot-export/:exportId')
+  async getCopilotExport(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('exportId') exportId: string,
+    @Query() query: CopilotExportQueryDto,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const file = await this.exportService.getExportFile(exportId, user.tenantId!, {
+      format: query.format ?? 'excel',
+      fromDate: query.fromDate ?? '',
+      toDate: query.toDate ?? '',
+    });
+    res.set({
+      'Content-Type': file.contentType,
+      'Content-Disposition': `attachment; filename="${file.fileName}"`,
+    });
+    return file.buffer;
   }
 }

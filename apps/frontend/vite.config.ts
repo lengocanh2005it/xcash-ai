@@ -36,6 +36,12 @@ export default defineConfig({
           if (id.includes('radix-ui') || id.includes('@radix-ui')) {
             return 'radix-ui';
           }
+          if (id.includes('lucide-react')) {
+            return 'icons';
+          }
+          if (id.includes('sonner')) {
+            return 'sonner';
+          }
         },
       },
     },

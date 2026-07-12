@@ -18,7 +18,7 @@ const deps: ToolDeps = {
   transactionService: {
     searchForCopilot: jest.fn().mockResolvedValue({ total: 0, items: [] }),
   } as never,
-  bankingService: {
+  copilotTxQueryService: {
     getBankingStatus: jest.fn().mockResolvedValue({ connected: false }),
   } as never,
   knowledgeService: {

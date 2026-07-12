@@ -3,7 +3,6 @@ import type { Role } from '@xcash/shared-types';
 import type { Response } from 'express';
 import { CopilotQuotaManager } from '../../common/services/copilot-quota-manager';
 import type { AuthenticatedUser } from '../../common/types/authenticated-user.type';
-import { BankingService } from '../banking/banking.service';
 import { BillingService } from '../billing/billing.service';
 import { ChartOfAccountsService } from '../chart-of-accounts/chart-of-accounts.service';
 import { ClassificationService } from '../classification/classification.service';
@@ -25,6 +24,7 @@ import {
 } from './copilot-conversation-setup.service';
 import { CopilotKnowledgeService } from './copilot-knowledge.service';
 import type { ToolDeps } from './copilot-tool.executor';
+import { CopilotTransactionQueryService } from './copilot-tx-query.service';
 import { OpenAiService } from './openai.service';
 import { isQuotaOrBillingError } from './utils/llm-error.util';
 import { appendFallbackNotice, sanitizeCopilotOutput } from './utils/llm-output.util';
@@ -46,7 +46,7 @@ export class CopilotStreamService {
     private readonly classificationService: ClassificationService,
     private readonly chartOfAccountsService: ChartOfAccountsService,
     private readonly transactionService: TransactionService,
-    private readonly bankingService: BankingService,
+    private readonly copilotTxQueryService: CopilotTransactionQueryService,
     private readonly knowledgeService: CopilotKnowledgeService,
     private readonly billingService: BillingService,
   ) {}
@@ -58,7 +58,7 @@ export class CopilotStreamService {
       classificationService: this.classificationService,
       chartOfAccountsService: this.chartOfAccountsService,
       transactionService: this.transactionService,
-      bankingService: this.bankingService,
+      copilotTxQueryService: this.copilotTxQueryService,
       knowledgeService: this.knowledgeService,
       billingService: this.billingService,
     };

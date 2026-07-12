@@ -1,10 +1,6 @@
 import type { CopilotActivity, CopilotFileExportData } from '@xcash/shared-types';
-import {
-  ACTION_CARD_TOOLS,
-  COPILOT_TOOLS,
-  type CopilotToolEntry,
-  FILE_EXPORT_TOOLS,
-} from './copilot-tool.registry';
+import { ACTION_CARD_TOOLS, COPILOT_TOOLS, FILE_EXPORT_TOOLS } from './copilot-tool.registry';
+import type { CopilotToolEntry } from './copilot-tool.types';
 import { KNOWLEDGE_SECTION_IDS_HIDDEN_FROM_SOURCES } from './knowledge';
 
 export type { CopilotActivity };

@@ -9,6 +9,7 @@ describe('TransactionService', () => {
     transaction: {
       findFirst: jest.fn(),
       findMany: jest.fn(),
+      count: jest.fn(),
     },
   };
   const webhookQueue = {
@@ -84,6 +85,77 @@ describe('TransactionService', () => {
         BadRequestException,
       );
       expect(webhookQueue.add).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('searchForCopilot', () => {
+    it('returns mapped items with total', async () => {
+      prisma.transaction.findMany.mockResolvedValue([
+        {
+          id: 'db-txn-1',
+          transactionId: 'TXN001',
+          content: 'Thanh toán tiền điện',
+          amount: 500000,
+          transactionDate: new Date('2026-07-01'),
+          grantId: 'grant-1',
+          classification: {
+            debitAccount: '642',
+            creditAccount: '112',
+            confidenceScore: 90,
+            status: TransactionStatus.classified,
+          },
+        },
+      ]);
+      prisma.transaction.count.mockResolvedValue(1);
+
+      const result = await service.searchForCopilot('tenant-1', { keyword: 'điện' });
+
+      expect(result.total).toBe(1);
+      expect(result.items).toHaveLength(1);
+      expect(result.items[0]).toEqual(
+        expect.objectContaining({
+          id: 'db-txn-1',
+          content: 'Thanh toán tiền điện',
+          source: 'cas',
+        }),
+      );
+    });
+
+    it('filters by source=cas', async () => {
+      prisma.transaction.findMany.mockResolvedValue([]);
+      prisma.transaction.count.mockResolvedValue(0);
+
+      await service.searchForCopilot('tenant-1', { source: 'cas' });
+
+      expect(prisma.transaction.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({ grantId: { not: null } }),
+        }),
+      );
+    });
+
+    it('filters by source=import', async () => {
+      prisma.transaction.findMany.mockResolvedValue([]);
+      prisma.transaction.count.mockResolvedValue(0);
+
+      await service.searchForCopilot('tenant-1', { source: 'import' });
+
+      expect(prisma.transaction.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({ grantId: null }),
+        }),
+      );
+    });
+
+    it('clamps limit between 1 and 20', async () => {
+      prisma.transaction.findMany.mockResolvedValue([]);
+      prisma.transaction.count.mockResolvedValue(0);
+
+      await service.searchForCopilot('tenant-1', { limit: 999 });
+
+      expect(prisma.transaction.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ take: 20 }),
+      );
     });
   });
 });

@@ -31,8 +31,8 @@ export interface ClassificationOutput {
 }
 
 @Injectable()
-export class ClassificationService {
-  private readonly logger = new Logger(ClassificationService.name);
+export class TransactionClassifierService {
+  private readonly logger = new Logger(TransactionClassifierService.name);
 
   constructor(
     private readonly prisma: PrismaService,

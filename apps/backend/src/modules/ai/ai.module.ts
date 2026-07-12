@@ -5,8 +5,8 @@ import { WEBHOOK_QUEUE } from '../../queue/queue.module';
 import { NotificationModule } from '../notification/notification.module';
 import { AiCoreModule } from './ai-core.module';
 import { ClassificationProcessor } from './classification.processor';
-import { ClassificationService } from './classification.service';
 import { EmbeddingService } from './embedding.service';
+import { TransactionClassifierService } from './transaction-classifier.service';
 
 @Module({
   imports: [
@@ -15,7 +15,7 @@ import { EmbeddingService } from './embedding.service';
     NotificationModule,
     AiCoreModule,
   ],
-  providers: [EmbeddingService, ClassificationService, ClassificationProcessor],
-  exports: [EmbeddingService, ClassificationService],
+  providers: [EmbeddingService, TransactionClassifierService, ClassificationProcessor],
+  exports: [EmbeddingService, TransactionClassifierService],
 })
 export class ClassificationPipelineModule {}

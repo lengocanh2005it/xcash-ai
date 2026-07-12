@@ -392,4 +392,88 @@ describe('CopilotAgentHarness', () => {
     await harness.finalContent();
     expect(executeTool).toHaveBeenCalledTimes(1);
   });
+
+  describe('seededToolCall', () => {
+    it('seeds a tool call before the first LLM turn and answers in one adapter call', async () => {
+      const adapter = new FakeAdapter('primary', () => [
+        contentChunk('Có 3 giao dịch chờ duyệt'),
+        doneChunk('stop'),
+      ]);
+      const executeTool = jest.fn().mockResolvedValue({ count: 3 });
+      const toolCalls: string[] = [];
+
+      const harness = new CopilotAgentHarness(
+        [adapter],
+        'system prompt',
+        [],
+        'có bao nhiêu giao dịch chờ duyệt',
+        [],
+        executeTool,
+        5,
+        { name: 'get_review_queue_count', args: {} },
+      );
+      harness.on('functionToolCall', (call: { name: string }) => toolCalls.push(call.name));
+
+      await expect(harness.finalContent()).resolves.toBe('Có 3 giao dịch chờ duyệt');
+      expect(toolCalls).toEqual(['get_review_queue_count']);
+      expect(executeTool).toHaveBeenCalledTimes(1);
+      expect(executeTool).toHaveBeenCalledWith('get_review_queue_count', {});
+      expect(adapter.callCount).toBe(1);
+    });
+
+    it('continues the loop when the LLM still requests another tool after seeding', async () => {
+      const adapter = new FakeAdapter('primary', (callIndex) => {
+        if (callIndex === 0) {
+          return [toolCallChunk('call_extra', 'get_banking_status', '{}'), doneChunk('tool_calls')];
+        }
+        return [contentChunk('Đã bổ sung trạng thái NH'), doneChunk('stop')];
+      });
+      const executeTool = jest.fn(async (name: string) => {
+        if (name === 'get_review_queue_count') return { count: 2 };
+        return { linked: true };
+      });
+      const toolCalls: string[] = [];
+
+      const harness = new CopilotAgentHarness(
+        [adapter],
+        'system prompt',
+        [],
+        'có bao nhiêu giao dịch chờ duyệt',
+        [],
+        executeTool,
+        5,
+        { name: 'get_review_queue_count', args: {} },
+      );
+      harness.on('functionToolCall', (call: { name: string }) => toolCalls.push(call.name));
+
+      await expect(harness.finalContent()).resolves.toBe('Đã bổ sung trạng thái NH');
+      expect(toolCalls).toEqual(['get_review_queue_count', 'get_banking_status']);
+      expect(executeTool).toHaveBeenCalledWith('get_review_queue_count', {});
+      expect(executeTool).toHaveBeenCalledWith('get_banking_status', {});
+      expect(adapter.callCount).toBe(2);
+    });
+
+    it('surfaces seeded tool errors as tool messages without throwing', async () => {
+      const adapter = new FakeAdapter('primary', () => [
+        contentChunk('Không lấy được số liệu review'),
+        doneChunk('stop'),
+      ]);
+      const executeTool = jest.fn().mockRejectedValue(new Error('db down'));
+
+      const harness = new CopilotAgentHarness(
+        [adapter],
+        'system prompt',
+        [],
+        'có bao nhiêu giao dịch chờ duyệt',
+        [],
+        executeTool,
+        5,
+        { name: 'get_review_queue_count', args: {} },
+      );
+
+      await expect(harness.finalContent()).resolves.toBe('Không lấy được số liệu review');
+      expect(executeTool).toHaveBeenCalledTimes(1);
+      expect(adapter.callCount).toBe(1);
+    });
+  });
 });

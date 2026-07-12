@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { Role } from '@xcash/shared-types';
 import { CopilotAgentHarness } from './copilot-agent.harness';
+import { matchReviewQueueCountIntent } from './copilot-intent-heuristic';
 import { executeTool, type ToolDeps } from './copilot-tool.executor';
 import { buildCopilotToolSchemas } from './copilot-tools.factory';
 import type { LlmAdapter, LlmMessage } from './llm-adapter.interface';
@@ -64,6 +65,10 @@ export class CopilotAgentFactoryService {
 
     const llmHistory: LlmMessage[] = history.map((h) => ({ role: h.role, content: h.content }));
 
+    const seededToolCall = matchReviewQueueCountIntent(message)
+      ? { name: 'get_review_queue_count', args: {} }
+      : undefined;
+
     return new CopilotAgentHarness(
       adapters,
       this.buildCopilotSystemPrompt(cassoSearchEnabled),
@@ -72,6 +77,7 @@ export class CopilotAgentFactoryService {
       tools,
       executeToolFn,
       5,
+      seededToolCall,
     );
   }
 }

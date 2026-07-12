@@ -44,6 +44,7 @@ export class CopilotAgentHarness extends EventEmitter {
     private readonly tools: LlmTool[],
     private readonly executeTool: ToolExecutor,
     private readonly maxIterations = 5,
+    private readonly seededToolCall?: { name: string; args: Record<string, unknown> },
   ) {
     super();
     if (adapters.length === 0) {
@@ -77,6 +78,10 @@ export class CopilotAgentHarness extends EventEmitter {
   }
 
   private async run(messages: LlmMessage[]): Promise<string> {
+    if (this.seededToolCall) {
+      await this.applySeededToolCall(messages);
+    }
+
     let lastError: unknown;
     for (let i = 0; i < this.adapters.length; i++) {
       const adapter = this.adapters[i];
@@ -91,6 +96,32 @@ export class CopilotAgentHarness extends EventEmitter {
       }
     }
     throw lastError instanceof Error ? lastError : new Error('Tất cả LLM adapter đều lỗi');
+  }
+
+  private async applySeededToolCall(messages: LlmMessage[]): Promise<void> {
+    const { name, args } = this.seededToolCall!;
+    // Yield so createCopilotRunner callers can attach `.on('functionToolCall')` first.
+    await Promise.resolve();
+    this.emit('functionToolCall', { name });
+
+    const toolCallId = 'seeded_call_0';
+    const cacheKey = `${name}:${JSON.stringify(args)}`;
+    let output: unknown;
+    try {
+      output = await this.executeTool(name, args);
+      this.toolResultCache.set(cacheKey, output);
+    } catch (err) {
+      output = { error: err instanceof Error ? err.message : String(err) };
+    }
+
+    messages.push({
+      role: 'assistant',
+      content: null,
+      tool_calls: [
+        { id: toolCallId, type: 'function', function: { name, arguments: JSON.stringify(args) } },
+      ],
+    });
+    messages.push({ role: 'tool', tool_call_id: toolCallId, content: JSON.stringify(output) });
   }
 
   private async runWithAdapter(adapter: LlmAdapter, messages: LlmMessage[]): Promise<string> {

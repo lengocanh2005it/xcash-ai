@@ -1,10 +1,8 @@
 import { Receipt, Search, Wallet } from 'lucide-react';
 import { Header } from '@/components/layout/Header';
-import { EmptyState } from '@/components/shared/EmptyState';
-import { PaginationBar } from '@/components/shared/PaginationBar';
+import { PaginatedListView } from '@/components/shared/PaginatedListView';
 import { PaymentStatusBadge } from '@/components/shared/PaymentStatusBadge';
 import { SummaryCard } from '@/components/shared/SummaryCard';
-import { TableSkeleton } from '@/components/shared/TableSkeleton';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -16,20 +14,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
 import { useFilteredPagination } from '@/hooks/useFilteredPagination';
 import { api } from '@/lib/api';
 import { formatTransactionDateTime } from '@/lib/date';
 import { formatVND } from '@/lib/format-vnd';
 import { PLAN_LABELS } from '@/lib/plans';
-import type { PaymentsResponse } from '@/types/partner';
+import type { PartnerPayment, PaymentsResponse } from '@/types/partner';
 
 const PAGE_SIZE = 20;
 const SEARCH_DEBOUNCE_MS = 350;
@@ -195,108 +185,81 @@ export default function PartnerPaymentsPage() {
             </div>
           </CardHeader>
           <CardContent>
-            {isLoading ? (
-              <TableSkeleton rows={8} columns={6} />
-            ) : isError ? (
-              <EmptyState
-                title="Không tải được dữ liệu"
-                description="Đã có lỗi xảy ra khi tải lịch sử thanh toán"
-                action={
-                  <Button variant="outline" onClick={() => refetch()}>
-                    Thử lại
-                  </Button>
-                }
-              />
-            ) : !items.length ? (
-              <EmptyState
-                title="Không có giao dịch nào"
-                description="Thử đổi từ khóa hoặc bộ lọc khác"
-              />
-            ) : (
-              <>
-                <div className="space-y-3 lg:hidden">
-                  {items.map((p) => (
-                    <Card key={p.id} className="py-4">
-                      <CardContent className="space-y-2 text-sm">
-                        <div className="flex items-start justify-between gap-2">
-                          <p className="font-medium">{p.businessName}</p>
-                          <PaymentStatusBadge status={p.status} />
-                        </div>
-                        <p className="font-mono text-xs text-muted-foreground">{p.orderCode}</p>
-                        <div className="flex flex-wrap items-center gap-2">
-                          <Badge variant="secondary">
-                            {PLAN_LABELS[p.targetPlan] ?? p.targetPlan}
-                          </Badge>
-                          <span className="text-muted-foreground">
-                            {ORDER_TYPE_LABELS[p.orderType] ?? p.orderType}
-                          </span>
-                        </div>
-                        <div className="flex items-center justify-between">
-                          <span className="font-medium tabular-nums">{formatVND(p.amount)}</span>
-                          <span className="text-xs text-muted-foreground">
-                            {formatTransactionDateTime(p.paidAt ?? p.createdAt)}
-                          </span>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  ))}
-                </div>
-
-                <div className="hidden lg:block">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Doanh nghiệp</TableHead>
-                        <TableHead>Mã đơn</TableHead>
-                        <TableHead>Gói</TableHead>
-                        <TableHead>Loại</TableHead>
-                        <TableHead className="text-right">Số tiền</TableHead>
-                        <TableHead>Trạng thái</TableHead>
-                        <TableHead>Thời gian</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {items.map((p) => (
-                        <TableRow key={p.id}>
-                          <TableCell className="font-medium">{p.businessName}</TableCell>
-                          <TableCell className="font-mono text-xs text-muted-foreground">
-                            {p.orderCode}
-                          </TableCell>
-                          <TableCell>
-                            <Badge variant="secondary">
-                              {PLAN_LABELS[p.targetPlan] ?? p.targetPlan}
-                            </Badge>
-                          </TableCell>
-                          <TableCell className="text-muted-foreground">
-                            {ORDER_TYPE_LABELS[p.orderType] ?? p.orderType}
-                          </TableCell>
-                          <TableCell className="text-right font-medium tabular-nums">
-                            {formatVND(p.amount)}
-                          </TableCell>
-                          <TableCell>
-                            <PaymentStatusBadge status={p.status} />
-                          </TableCell>
-                          <TableCell className="whitespace-nowrap text-muted-foreground">
-                            {formatTransactionDateTime(p.paidAt ?? p.createdAt)}
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </div>
-
-                <div className="mt-4">
-                  <PaginationBar
-                    page={page}
-                    totalPages={totalPages}
-                    total={total}
-                    label="Hiển thị {total} giao dịch"
-                    isFetching={isFetching}
-                    onPageChange={(p) => setPage(p)}
-                  />
-                </div>
-              </>
-            )}
+            <PaginatedListView<PartnerPayment>
+              items={items}
+              isLoading={isLoading}
+              isError={isError}
+              error={null}
+              refetch={() => refetch()}
+              skeletonRows={8}
+              skeletonColumns={6}
+              emptyTitle="Không có giao dịch nào"
+              emptyDescription="Thử đổi từ khóa hoặc bộ lọc khác"
+              hasActiveFilters={hasActiveFilters}
+              renderMobileItem={(p) => (
+                <Card key={p.id} className="py-4">
+                  <CardContent className="space-y-2 text-sm">
+                    <div className="flex items-start justify-between gap-2">
+                      <p className="font-medium">{p.businessName}</p>
+                      <PaymentStatusBadge status={p.status} />
+                    </div>
+                    <p className="font-mono text-xs text-muted-foreground">{p.orderCode}</p>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Badge variant="secondary">{PLAN_LABELS[p.targetPlan] ?? p.targetPlan}</Badge>
+                      <span className="text-muted-foreground">
+                        {ORDER_TYPE_LABELS[p.orderType] ?? p.orderType}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="font-medium tabular-nums">{formatVND(p.amount)}</span>
+                      <span className="text-xs text-muted-foreground">
+                        {formatTransactionDateTime(p.paidAt ?? p.createdAt)}
+                      </span>
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+              renderDesktopHeader={() => (
+                <tr>
+                  <th className="pb-2 pl-4 font-medium">Doanh nghiệp</th>
+                  <th className="pb-2 font-medium">Mã đơn</th>
+                  <th className="pb-2 font-medium">Gói</th>
+                  <th className="pb-2 font-medium">Loại</th>
+                  <th className="pb-2 font-medium text-right">Số tiền</th>
+                  <th className="pb-2 font-medium">Trạng thái</th>
+                  <th className="pb-2 pr-4 font-medium">Thời gian</th>
+                </tr>
+              )}
+              renderDesktopRow={(p) => (
+                <tr key={p.id}>
+                  <td className="py-2 pl-4 font-medium">{p.businessName}</td>
+                  <td className="py-2 font-mono text-xs text-muted-foreground">{p.orderCode}</td>
+                  <td className="py-2">
+                    <Badge variant="secondary">{PLAN_LABELS[p.targetPlan] ?? p.targetPlan}</Badge>
+                  </td>
+                  <td className="py-2 text-muted-foreground">
+                    {ORDER_TYPE_LABELS[p.orderType] ?? p.orderType}
+                  </td>
+                  <td className="py-2 text-right font-medium tabular-nums">
+                    {formatVND(p.amount)}
+                  </td>
+                  <td className="py-2">
+                    <PaymentStatusBadge status={p.status} />
+                  </td>
+                  <td className="py-2 pr-4 whitespace-nowrap text-muted-foreground">
+                    {formatTransactionDateTime(p.paidAt ?? p.createdAt)}
+                  </td>
+                </tr>
+              )}
+              pagination={{
+                page,
+                totalPages,
+                total,
+                label: 'Hiển thị {total} giao dịch',
+                isFetching,
+                onPageChange: setPage,
+              }}
+            />
           </CardContent>
         </Card>
       </div>

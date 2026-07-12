@@ -26,6 +26,7 @@ interface PaginatedListViewProps<T> {
     label: string;
     onPageChange: (page: number) => void;
     isFetching?: boolean;
+    compact?: boolean;
   };
   children?: ReactNode;
 }
@@ -113,6 +114,7 @@ export function PaginatedListView<T>({
             total={pagination.total}
             label={pagination.label}
             isFetching={pagination.isFetching}
+            compact={pagination.compact}
             onPageChange={pagination.onPageChange}
           />
         </div>

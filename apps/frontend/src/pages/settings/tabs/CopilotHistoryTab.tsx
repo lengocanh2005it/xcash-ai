@@ -1,27 +1,17 @@
 import type { CopilotConversationsListResponse } from '@xcash/shared-types';
 import { SubscriptionPlan } from '@xcash/shared-types';
 import axios from 'axios';
-import { Bot, ExternalLink, Loader2, MessageSquare, X } from 'lucide-react';
+import { ExternalLink, Loader2, MessageSquare, X } from 'lucide-react';
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { CopilotQuotaSummary } from '@/components/copilot/CopilotQuotaSummary';
-import { EmptyState } from '@/components/shared/EmptyState';
-import { PaginationBar } from '@/components/shared/PaginationBar';
+import { PaginatedListView } from '@/components/shared/PaginatedListView';
 import { PlanGate } from '@/components/shared/PlanGate';
-import { TableSkeleton } from '@/components/shared/TableSkeleton';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
 import { useAuth } from '@/hooks/useAuth';
 import { useFilteredPagination } from '@/hooks/useFilteredPagination';
 import { api } from '@/lib/api';
@@ -56,6 +46,14 @@ function formatMessagePreview(text: string) {
   return `${trimmed}...`;
 }
 
+interface ConversationItem {
+  id: string;
+  title: string;
+  lastMessage?: string;
+  messageCount: number;
+  updatedAt: string;
+}
+
 function CopilotHistoryTable() {
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -78,14 +76,10 @@ function CopilotHistoryTable() {
     });
 
   const hasDateFilter = Boolean(filters.fromDate || filters.toDate);
-  const items = data?.items ?? [];
+  const items = (data?.items ?? []) as ConversationItem[];
   const total = data?.total ?? 0;
   const totalPages = data?.totalPages ?? 1;
 
-  // Verify the conversation still exists before navigating — guards against a
-  // stale cached row whose conversation was already deleted elsewhere (e.g. the
-  // Copilot sidebar). Prevents a confusing empty Copilot screen and keeps the
-  // history list in sync by refetching when a dead row is clicked.
   const openConversation = async (id: string) => {
     if (!user?.id || openingId) return;
     setOpeningId(id);
@@ -107,54 +101,10 @@ function CopilotHistoryTable() {
 
   const clearFilters = () => resetFilters();
 
-  if (isLoading) {
-    return (
-      <div className="space-y-4">
-        <CopilotQuotaSummary variant="card" />
-        <TableSkeleton rows={6} columns={4} />
-      </div>
-    );
-  }
-
-  if (isError) {
-    return (
-      <div className="space-y-4">
-        <CopilotQuotaSummary variant="card" />
-        <EmptyState
-          icon={MessageSquare}
-          title="Không tải được lịch sử"
-          description="Vui lòng thử lại sau."
-          action={
-            <Button variant="outline" size="sm" onClick={() => refetch()}>
-              Thử lại
-            </Button>
-          }
-        />
-      </div>
-    );
-  }
-
-  if (!hasDateFilter && total === 0) {
-    return (
-      <div className="space-y-4">
-        <CopilotQuotaSummary variant="card" />
-        <EmptyState
-          icon={Bot}
-          title="Chưa có cuộc chat nào"
-          description="Bắt đầu trò chuyện với AI Copilot để xem lịch sử tại đây."
-          action={
-            <Button size="sm" onClick={() => navigate('/copilot')}>
-              Mở AI Copilot
-            </Button>
-          }
-        />
-      </div>
-    );
-  }
-
   return (
     <div className="space-y-4">
       <CopilotQuotaSummary variant="card" />
+
       <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div className="grid gap-3 sm:grid-cols-2 sm:max-w-md">
           <div className="space-y-1.5">
@@ -184,112 +134,102 @@ function CopilotHistoryTable() {
         )}
       </div>
 
-      {hasDateFilter && items.length === 0 && (
+      {hasDateFilter && items.length === 0 && !isLoading && (
         <p className="text-sm text-muted-foreground">
           Không có cuộc chat nào trong khoảng thời gian đã chọn.
         </p>
       )}
 
-      {items.length > 0 && (
-        <>
-          {/* Mobile card layout */}
-          <div className="space-y-3 lg:hidden">
-            {items.map((item) => (
-              <Card
-                key={item.id}
-                aria-busy={openingId === item.id}
-                className="cursor-pointer py-4 hover:bg-muted/50 transition-colors aria-busy:pointer-events-none aria-busy:opacity-60"
-                onClick={() => openConversation(item.id)}
-              >
-                <CardContent className="space-y-2 text-sm">
-                  <div className="flex items-start justify-between gap-2">
-                    <p className="font-medium truncate">{item.title}</p>
-                    {openingId === item.id ? (
-                      <Loader2 className="size-4 shrink-0 animate-spin text-muted-foreground" />
-                    ) : (
-                      <ExternalLink className="size-4 shrink-0 text-muted-foreground" />
-                    )}
-                  </div>
-                  {item.lastMessage && (
-                    <p className="text-xs text-muted-foreground truncate">
-                      {formatMessagePreview(item.lastMessage)}
-                    </p>
-                  )}
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs text-muted-foreground">
-                      {formatDateVN(item.updatedAt)}
-                    </span>
-                    <span className="text-xs text-muted-foreground">
-                      {item.messageCount} tin nhắn
-                    </span>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-
-          {/* Desktop table */}
-          <div className="hidden lg:block rounded-lg border">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Cập nhật</TableHead>
-                  <TableHead>Tiêu đề</TableHead>
-                  <TableHead className="text-right">
-                    <span className="block">Tin nhắn</span>
-                    <span className="block text-[10px] font-normal normal-case text-muted-foreground">
-                      Bạn + AI
-                    </span>
-                  </TableHead>
-                  <TableHead className="w-10" />
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {items.map((item) => (
-                  <TableRow
-                    key={item.id}
-                    aria-busy={openingId === item.id}
-                    className="cursor-pointer hover:bg-muted/50 aria-busy:pointer-events-none aria-busy:opacity-60"
-                    onClick={() => openConversation(item.id)}
-                  >
-                    <TableCell className="whitespace-nowrap text-muted-foreground">
-                      {formatTransactionDateTime(item.updatedAt)}
-                    </TableCell>
-                    <TableCell>
-                      <p className="font-medium truncate max-w-md">{item.title}</p>
-                      {item.lastMessage && (
-                        <p className="mt-0.5 text-xs text-muted-foreground truncate max-w-md">
-                          {formatMessagePreview(item.lastMessage)}
-                        </p>
-                      )}
-                    </TableCell>
-                    <TableCell className="text-right tabular-nums">{item.messageCount}</TableCell>
-                    <TableCell>
-                      {openingId === item.id ? (
-                        <Loader2 className="size-4 animate-spin text-muted-foreground" />
-                      ) : (
-                        <ExternalLink className="size-4 text-muted-foreground" />
-                      )}
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
-        </>
-      )}
-
-      {total > 0 && (
-        <div className="flex items-center justify-between pt-1">
-          <p className="text-xs text-muted-foreground">{total} kết quả</p>
-          <PaginationBar
-            page={page}
-            totalPages={totalPages}
-            compact
-            onPageChange={(p) => setPage(p)}
-          />
-        </div>
-      )}
+      <PaginatedListView<ConversationItem>
+        items={items}
+        isLoading={isLoading}
+        isError={isError}
+        error={null}
+        refetch={() => refetch()}
+        skeletonRows={6}
+        skeletonColumns={4}
+        emptyTitle="Chưa có cuộc chat nào"
+        emptyDescription="Bắt đầu trò chuyện với AI Copilot để xem lịch sử tại đây."
+        renderMobileItem={(item) => (
+          <Card
+            key={item.id}
+            aria-busy={openingId === item.id}
+            className="cursor-pointer py-4 hover:bg-muted/50 transition-colors aria-busy:pointer-events-none aria-busy:opacity-60"
+            onClick={() => openConversation(item.id)}
+          >
+            <CardContent className="space-y-2 text-sm">
+              <div className="flex items-start justify-between gap-2">
+                <p className="font-medium truncate">{item.title}</p>
+                {openingId === item.id ? (
+                  <Loader2 className="size-4 shrink-0 animate-spin text-muted-foreground" />
+                ) : (
+                  <ExternalLink className="size-4 shrink-0 text-muted-foreground" />
+                )}
+              </div>
+              {item.lastMessage && (
+                <p className="text-xs text-muted-foreground truncate">
+                  {formatMessagePreview(item.lastMessage)}
+                </p>
+              )}
+              <div className="flex items-center justify-between">
+                <span className="text-xs text-muted-foreground">
+                  {formatDateVN(item.updatedAt)}
+                </span>
+                <span className="text-xs text-muted-foreground">{item.messageCount} tin nhắn</span>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+        renderDesktopHeader={() => (
+          <tr>
+            <th className="pb-2 pl-4 font-medium">Cập nhật</th>
+            <th className="pb-2 font-medium">Tiêu đề</th>
+            <th className="pb-2 font-medium text-right">
+              <span className="block">Tin nhắn</span>
+              <span className="block text-[10px] font-normal normal-case text-muted-foreground">
+                Bạn + AI
+              </span>
+            </th>
+            <th className="pb-2 pr-4 w-10" />
+          </tr>
+        )}
+        renderDesktopRow={(item) => (
+          <tr
+            key={item.id}
+            aria-busy={openingId === item.id}
+            className="cursor-pointer hover:bg-muted/50 aria-busy:pointer-events-none aria-busy:opacity-60"
+            onClick={() => openConversation(item.id)}
+          >
+            <td className="py-2 pl-4 whitespace-nowrap text-muted-foreground">
+              {formatTransactionDateTime(item.updatedAt)}
+            </td>
+            <td className="py-2">
+              <p className="font-medium truncate max-w-md">{item.title}</p>
+              {item.lastMessage && (
+                <p className="mt-0.5 text-xs text-muted-foreground truncate max-w-md">
+                  {formatMessagePreview(item.lastMessage)}
+                </p>
+              )}
+            </td>
+            <td className="py-2 text-right tabular-nums">{item.messageCount}</td>
+            <td className="py-2 pr-4">
+              {openingId === item.id ? (
+                <Loader2 className="size-4 animate-spin text-muted-foreground" />
+              ) : (
+                <ExternalLink className="size-4 text-muted-foreground" />
+              )}
+            </td>
+          </tr>
+        )}
+        pagination={{
+          page,
+          totalPages,
+          total,
+          label: '{total} kết quả',
+          compact: true,
+          onPageChange: setPage,
+        }}
+      />
     </div>
   );
 }

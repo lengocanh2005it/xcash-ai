@@ -1,10 +1,13 @@
 import { ConflictException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { ClassificationType, Prisma, TransactionStatus } from '@prisma/client';
+import { Role } from '@xcash/shared-types';
 import { createAuditLog } from '../../common/util/audit-log.util';
 import { paginateParams, paginateResult } from '../../common/util/pagination.util';
 import { PrismaService } from '../../prisma/prisma.service';
 import { EmbeddingService } from '../ai/embedding.service';
 import type { CorrectClassificationDto } from './dto/review.dto';
+
+const CONFIRMABLE_ROLES = new Set<Role>([Role.ADMIN, Role.ACCOUNTANT]);
 
 @Injectable()
 export class ClassificationService {
@@ -233,6 +236,213 @@ export class ClassificationService {
     });
     this.triggerEmbedding(created.id, transaction.content, tenantId);
     return created;
+  }
+
+  // ── Copilot tool methods (soft returns, no HTTP exceptions) ──────────────
+
+  async getCopilotReviewQueueCount(tenantId: string, year?: number, month?: number) {
+    return {
+      count: await this.prisma.transactionClassification.count({
+        where: this.copilotReviewQueueWhere(tenantId, year, month),
+      }),
+      ...(year != null && month != null ? { period: { year, month } } : { scope: 'all' as const }),
+    };
+  }
+
+  async listCopilotReviewQueue(tenantId: string, limit = 10, year?: number, month?: number) {
+    const take = Math.min(20, Math.max(1, Number(limit) || 10));
+    const where = this.copilotReviewQueueWhere(tenantId, year, month);
+
+    const [classifications, total] = await Promise.all([
+      this.prisma.transactionClassification.findMany({
+        where,
+        include: {
+          transaction: {
+            select: {
+              id: true,
+              content: true,
+              amount: true,
+              transactionDate: true,
+              grantId: true,
+            },
+          },
+        },
+        orderBy: [{ transaction: { transactionDate: 'desc' } }, { createdAt: 'desc' }],
+        take,
+      }),
+      this.prisma.transactionClassification.count({ where }),
+    ]);
+
+    return {
+      total,
+      ...(year != null && month != null ? { period: { year, month } } : { scope: 'all' as const }),
+      items: classifications.map((c) => ({
+        id: c.transaction.id,
+        content: c.transaction.content,
+        amount: Number(c.transaction.amount),
+        transactionDate: c.transaction.transactionDate?.toISOString() ?? null,
+        source: c.transaction.grantId ? 'cas' : 'import',
+        debitAccount: c.debitAccount,
+        creditAccount: c.creditAccount,
+        confidence: c.confidenceScore,
+        status: c.status,
+      })),
+    };
+  }
+
+  async proposeConfirmClassification(tenantId: string, transactionId: string, role: Role) {
+    const classification = await this.prisma.transactionClassification.findFirst({
+      where: { tenantId, transactionId },
+      include: { transaction: { select: { content: true } } },
+    });
+
+    if (!classification) {
+      return {
+        transactionId,
+        classificationId: '',
+        debitAccount: '',
+        creditAccount: '',
+        confidence: 0,
+        status: 'not_found',
+        content: '',
+        amount: 0,
+        canConfirm: false,
+        reason: 'Không tìm thấy định khoản cho giao dịch này',
+      };
+    }
+
+    const base = {
+      transactionId,
+      classificationId: classification.id,
+      debitAccount: classification.debitAccount,
+      creditAccount: classification.creditAccount,
+      confidence: classification.confidenceScore,
+      status: classification.status,
+      content: classification.transaction.content,
+      amount: Number(classification.amount),
+    };
+
+    if (!CONFIRMABLE_ROLES.has(role)) {
+      return {
+        ...base,
+        canConfirm: false,
+        reason: 'Bạn không có quyền xác nhận giao dịch này (chỉ admin/kế toán)',
+      };
+    }
+
+    if (classification.status !== 'review') {
+      return {
+        ...base,
+        canConfirm: false,
+        reason: 'Giao dịch này đã được xử lý, không còn ở trạng thái chờ duyệt',
+      };
+    }
+
+    return { ...base, canConfirm: true };
+  }
+
+  async proposeCorrectClassification(
+    tenantId: string,
+    transactionId: string,
+    debitAccount: string,
+    creditAccount: string,
+    role: Role,
+  ) {
+    const classification = await this.prisma.transactionClassification.findFirst({
+      where: { tenantId, transactionId },
+      include: { transaction: { select: { content: true } } },
+    });
+
+    if (!classification) {
+      return {
+        transactionId,
+        classificationId: '',
+        debitAccount: '',
+        creditAccount: '',
+        proposedDebitAccount: debitAccount,
+        proposedCreditAccount: creditAccount,
+        confidence: 0,
+        status: 'not_found',
+        content: '',
+        amount: 0,
+        canCorrect: false,
+        reason: 'Không tìm thấy định khoản cho giao dịch này',
+      };
+    }
+
+    const base = {
+      transactionId,
+      classificationId: classification.id,
+      debitAccount: classification.debitAccount,
+      creditAccount: classification.creditAccount,
+      proposedDebitAccount: debitAccount,
+      proposedCreditAccount: creditAccount,
+      confidence: classification.confidenceScore,
+      status: classification.status,
+      content: classification.transaction.content,
+      amount: Number(classification.amount),
+    };
+
+    if (!CONFIRMABLE_ROLES.has(role)) {
+      return {
+        ...base,
+        canCorrect: false,
+        reason: 'Bạn không có quyền sửa định khoản giao dịch này (chỉ admin/kế toán)',
+      };
+    }
+
+    if (classification.status !== 'review') {
+      return {
+        ...base,
+        canCorrect: false,
+        reason: 'Giao dịch này đã được xử lý, không còn ở trạng thái chờ duyệt',
+      };
+    }
+
+    const validAccounts = await this.prisma.chartOfAccount.findMany({
+      where: { tenantId, accountCode: { in: [debitAccount, creditAccount] }, isActive: true },
+      select: { accountCode: true },
+    });
+    const validCodes = new Set(validAccounts.map((a) => a.accountCode));
+    const debitValid = validCodes.has(debitAccount);
+    const creditValid = validCodes.has(creditAccount);
+
+    if (!debitValid || !creditValid) {
+      const invalidCode = !debitValid ? debitAccount : creditAccount;
+      return {
+        ...base,
+        canCorrect: false,
+        reason: `Mã tài khoản ${invalidCode} không tồn tại hoặc không còn hoạt động trong hệ thống TT133`,
+      };
+    }
+
+    return { ...base, canCorrect: true };
+  }
+
+  private copilotReviewQueueWhere(tenantId: string, year?: number, month?: number) {
+    const where: {
+      tenantId: string;
+      status: 'review';
+      transaction?: { transactionDate: { gte: Date; lt: Date } };
+    } = { tenantId, status: 'review' };
+
+    if (
+      year != null &&
+      month != null &&
+      Number.isFinite(year) &&
+      Number.isFinite(month) &&
+      month >= 1 &&
+      month <= 12
+    ) {
+      where.transaction = {
+        transactionDate: {
+          gte: new Date(year, month - 1, 1),
+          lt: new Date(year, month, 1),
+        },
+      };
+    }
+
+    return where;
   }
 
   private async findInQueue(tenantId: string, classificationId: string) {

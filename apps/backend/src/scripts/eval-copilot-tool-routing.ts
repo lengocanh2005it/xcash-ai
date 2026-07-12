@@ -14,6 +14,7 @@
 import type { ConfigService } from '@nestjs/config';
 import type { Role } from '@xcash/shared-types';
 import type { AiUsageLogService } from '../modules/ai/ai-usage-log.service';
+import { CopilotAgentFactoryService } from '../modules/ai/copilot-agent-factory.service';
 import type { ToolDeps } from '../modules/ai/copilot-tool.executor';
 import { OpenAiService } from '../modules/ai/openai.service';
 
@@ -125,15 +126,21 @@ function fakeToolDeps(): { toolDeps: ToolDeps; calls: string[] } {
       getTopAccounts: track('get_top_accounts'),
       getSummaryByDateRange: track('get_period_summary'),
     } as never,
-    txQueryService: {
-      getReviewQueueCount: track('get_review_queue_count'),
-      listReviewQueue: track('list_review_queue'),
-      lookupChartAccount: track('lookup_chart_account'),
+    classificationService: {
+      getCopilotReviewQueueCount: track('get_review_queue_count'),
+      listCopilotReviewQueue: track('list_review_queue'),
+      proposeConfirmClassification: track('propose_confirm_transaction_classification'),
+      proposeCorrectClassification: track('propose_correct_transaction_classification'),
+    } as never,
+    chartOfAccountsService: {
+      findByCode: track('lookup_chart_account'),
+      listFiltered: track('list_chart_accounts'),
+    } as never,
+    transactionService: {
+      searchForCopilot: track('search_transactions'),
+    } as never,
+    bankingService: {
       getBankingStatus: track('get_banking_status'),
-      searchTransactions: track('search_transactions'),
-      proposeConfirmTransactionClassification: track('propose_confirm_transaction_classification'),
-      proposeCorrectTransactionClassification: track('propose_correct_transaction_classification'),
-      listChartAccounts: track('list_chart_accounts'),
     } as never,
     knowledgeService: {
       searchKnowledge: track('search_knowledge_base'),
@@ -151,11 +158,11 @@ function fakeToolDeps(): { toolDeps: ToolDeps; calls: string[] } {
 }
 
 async function runCase(
-  openAiService: OpenAiService,
+  agentFactory: CopilotAgentFactoryService,
   c: EvalCase,
 ): Promise<{ pass: boolean; actual: string[] }> {
   const { toolDeps, calls } = fakeToolDeps();
-  const runner = openAiService.createCopilotRunner(
+  const runner = agentFactory.createCopilotRunner(
     'eval-tenant',
     c.question,
     [],
@@ -183,10 +190,11 @@ async function main(): Promise<void> {
   const openAiService = new OpenAiService(fakeConfigService(), {
     record: () => {},
   } as unknown as AiUsageLogService);
+  const agentFactory = new CopilotAgentFactoryService(openAiService, fakeConfigService());
 
   let failCount = 0;
   for (const c of CASES) {
-    const { pass, actual } = await runCase(openAiService, c);
+    const { pass, actual } = await runCase(agentFactory, c);
     const icon = pass ? '✅' : '❌';
     console.log(`${icon} [${c.note}] "${c.question}"`);
     console.log(`   expected: [${c.expectedTools.join(', ')}]  actual: [${actual.join(', ')}]`);

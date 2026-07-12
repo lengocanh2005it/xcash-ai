@@ -160,4 +160,91 @@ export class TransactionService {
   private async enqueueReclassify(transactionDbId: string): Promise<void> {
     await this.webhookQueue.add(AI_CLASSIFY_JOB, { transactionDbId });
   }
+
+  // ── Copilot tool methods ─────────────────────────────────────────────────
+
+  async searchForCopilot(tenantId: string, args: Record<string, unknown>) {
+    const keyword = String(args.keyword ?? '').trim();
+    const sourceArg = String(args.source ?? 'all');
+    const classificationStatus = String(args.classificationStatus ?? 'all');
+    const accountCode = String(args.accountCode ?? '').trim();
+    const grantFilter =
+      sourceArg === 'cas'
+        ? { grantId: { not: null } }
+        : sourceArg === 'import'
+          ? { grantId: null }
+          : {};
+    const limit = Math.min(20, Math.max(1, Number(args.limit ?? 10)));
+
+    const classificationStatusArg =
+      classificationStatus !== 'all' &&
+      (classificationStatus === 'review' ||
+        classificationStatus === 'classified' ||
+        classificationStatus === 'pending')
+        ? (classificationStatus as TransactionStatus)
+        : undefined;
+
+    const classificationFilter: Prisma.TransactionWhereInput =
+      classificationStatusArg || accountCode
+        ? {
+            classification: {
+              is: {
+                ...(classificationStatusArg ? { status: classificationStatusArg } : {}),
+                ...(accountCode
+                  ? { OR: [{ debitAccount: accountCode }, { creditAccount: accountCode }] }
+                  : {}),
+              },
+            },
+          }
+        : {};
+
+    const where: Prisma.TransactionWhereInput = {
+      tenantId,
+      ...grantFilter,
+      ...classificationFilter,
+      ...(keyword
+        ? {
+            OR: [
+              { content: { contains: keyword, mode: 'insensitive' as const } },
+              { senderAccount: { contains: keyword, mode: 'insensitive' as const } },
+            ],
+          }
+        : {}),
+    };
+
+    const [items, total] = await Promise.all([
+      this.prisma.transaction.findMany({
+        where,
+        select: {
+          id: true,
+          transactionId: true,
+          content: true,
+          amount: true,
+          transactionDate: true,
+          grantId: true,
+          classification: {
+            select: { debitAccount: true, creditAccount: true, status: true },
+          },
+        },
+        orderBy: { transactionDate: 'desc' },
+        take: limit,
+      }),
+      this.prisma.transaction.count({ where }),
+    ]);
+
+    return {
+      total,
+      items: items.map((t) => ({
+        id: t.id,
+        bankTransactionId: t.transactionId,
+        content: t.content,
+        amount: Number(t.amount),
+        transactionDate: t.transactionDate?.toISOString() ?? null,
+        source: t.grantId ? 'cas' : 'import',
+        debitAccount: t.classification?.debitAccount ?? null,
+        creditAccount: t.classification?.creditAccount ?? null,
+        classificationStatus: t.classification?.status ?? null,
+      })),
+    };
+  }
 }

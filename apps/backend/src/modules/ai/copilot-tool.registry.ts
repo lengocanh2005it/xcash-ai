@@ -170,7 +170,7 @@ export const COPILOT_TOOLS: CopilotToolEntry[] = [
       },
     },
     execute: (deps, tenantId, args) =>
-      deps.txQueryService.getReviewQueueCount(
+      deps.classificationService.getCopilotReviewQueueCount(
         tenantId,
         args.year != null ? Number(args.year) : undefined,
         args.month != null ? Number(args.month) : undefined,
@@ -214,7 +214,7 @@ export const COPILOT_TOOLS: CopilotToolEntry[] = [
       },
     },
     execute: (deps, tenantId, args) =>
-      deps.txQueryService.listReviewQueue(
+      deps.classificationService.listCopilotReviewQueue(
         tenantId,
         Number(args.limit ?? 10),
         args.year != null ? Number(args.year) : undefined,
@@ -263,7 +263,7 @@ export const COPILOT_TOOLS: CopilotToolEntry[] = [
       },
     },
     execute: (deps, tenantId, args) =>
-      deps.txQueryService.lookupChartAccount(tenantId, String(args.accountCode)),
+      deps.chartOfAccountsService.findByCode(tenantId, String(args.accountCode)),
     formatSnippet: (data) => {
       if (data == null) return undefined;
       const d = data as {
@@ -293,7 +293,7 @@ export const COPILOT_TOOLS: CopilotToolEntry[] = [
         source: 'X-Cash AI',
       },
     },
-    execute: (deps, tenantId) => deps.txQueryService.getBankingStatus(tenantId),
+    execute: (deps, tenantId) => deps.bankingService.getBankingStatus(tenantId),
     formatSnippet: (data) => {
       if (data == null) return undefined;
       const d = data as {
@@ -384,7 +384,7 @@ export const COPILOT_TOOLS: CopilotToolEntry[] = [
         source: 'X-Cash AI',
       },
     },
-    execute: (deps, tenantId, args) => deps.txQueryService.searchTransactions(tenantId, args),
+    execute: (deps, tenantId, args) => deps.transactionService.searchForCopilot(tenantId, args),
     formatSnippet: (data) => {
       if (data == null) return undefined;
       const d = data as {
@@ -434,7 +434,7 @@ export const COPILOT_TOOLS: CopilotToolEntry[] = [
     },
     enabledBy: 'COPILOT_ACTION_TOOLS_ENABLED',
     execute: (deps, tenantId, args, role) =>
-      deps.txQueryService.proposeConfirmTransactionClassification(
+      deps.classificationService.proposeConfirmClassification(
         tenantId,
         String(args.transactionId),
         role ?? ('viewer' as Role),
@@ -474,7 +474,7 @@ export const COPILOT_TOOLS: CopilotToolEntry[] = [
     },
     enabledBy: 'COPILOT_ACTION_TOOLS_ENABLED',
     execute: (deps, tenantId, args, role) =>
-      deps.txQueryService.proposeCorrectTransactionClassification(
+      deps.classificationService.proposeCorrectClassification(
         tenantId,
         String(args.transactionId),
         String(args.debitAccount),
@@ -625,7 +625,7 @@ export const COPILOT_TOOLS: CopilotToolEntry[] = [
       },
     },
     execute: (deps, tenantId, args) =>
-      deps.txQueryService.listChartAccounts(
+      deps.chartOfAccountsService.listFiltered(
         tenantId,
         args.accountType as string | undefined,
         Number(args.limit ?? 50),

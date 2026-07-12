@@ -1,5 +1,5 @@
 import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
-import type { AccountType } from '@prisma/client';
+import { type AccountType, type Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import type { CreateAccountDto, UpdateAccountDto } from './dto/account.dto';
 import { TT133_ACCOUNTS } from './tt133-seed';
@@ -76,6 +76,33 @@ export class ChartOfAccountsService {
     return this.prisma.chartOfAccount.update({
       where: { id },
       data: { isActive: false },
+    });
+  }
+
+  // ── Copilot tool methods ─────────────────────────────────────────────────
+
+  async findByCode(tenantId: string, accountCode: string) {
+    return this.prisma.chartOfAccount.findFirst({
+      where: { tenantId, accountCode },
+      select: { accountCode: true, accountName: true, accountType: true, isActive: true },
+    });
+  }
+
+  async listFiltered(tenantId: string, accountType?: string, limit = 50) {
+    const validAccountTypes = ['asset', 'liability', 'equity', 'revenue', 'expense'];
+    const where: Prisma.ChartOfAccountWhereInput = {
+      tenantId,
+      isActive: true,
+      ...(accountType && validAccountTypes.includes(accountType)
+        ? { accountType: accountType as AccountType }
+        : {}),
+    };
+
+    return this.prisma.chartOfAccount.findMany({
+      where,
+      select: { accountCode: true, accountName: true, accountType: true },
+      orderBy: { accountCode: 'asc' },
+      take: Math.min(100, Math.max(1, limit)),
     });
   }
 }

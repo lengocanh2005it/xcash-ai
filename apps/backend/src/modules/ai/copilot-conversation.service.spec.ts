@@ -1,8 +1,8 @@
 import { NotFoundException } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import { PrismaService } from '../../prisma/prisma.service';
+import { ChatProviderService } from './chat-provider.service';
 import { CopilotConversationService } from './copilot-conversation.service';
-import { OpenAiService } from './openai.service';
 
 describe('CopilotConversationService', () => {
   let service: CopilotConversationService;
@@ -23,7 +23,7 @@ describe('CopilotConversationService', () => {
     },
   };
 
-  const openAiService = {
+  const chatProvider = {
     generateCopilotTitle: jest.fn(),
   };
 
@@ -34,7 +34,7 @@ describe('CopilotConversationService', () => {
       providers: [
         CopilotConversationService,
         { provide: PrismaService, useValue: prisma },
-        { provide: OpenAiService, useValue: openAiService },
+        { provide: ChatProviderService, useValue: chatProvider },
       ],
     }).compile();
 

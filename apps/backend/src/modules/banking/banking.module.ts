@@ -4,6 +4,7 @@ import { PrismaModule } from '../../prisma/prisma.module';
 import { WEBHOOK_QUEUE } from '../../queue/queue.module';
 import { RedisModule } from '../../redis/redis.module';
 import { BillingModule } from '../billing/billing.module';
+import { OnboardingModule } from '../onboarding/onboarding.module';
 import { BankingService } from './banking.service';
 import { CasWebhookHandler } from './cas-webhook.handler';
 import { WebhookController } from './webhook.controller';
@@ -14,6 +15,7 @@ import { WebhookController } from './webhook.controller';
     PrismaModule,
     RedisModule,
     BillingModule,
+    OnboardingModule,
   ],
   controllers: [WebhookController],
   providers: [BankingService, CasWebhookHandler],

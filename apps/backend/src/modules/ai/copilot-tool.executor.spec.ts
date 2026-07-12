@@ -5,9 +5,21 @@ const deps: ToolDeps = {
   reportService: {
     getSummary: jest.fn().mockResolvedValue({ summary: { totalRevenue: 1000 } }),
   } as never,
-  txQueryService: {
-    getReviewQueueCount: jest.fn().mockResolvedValue({ count: 5 }),
-    searchTransactions: jest.fn().mockResolvedValue({ total: 0, items: [] }),
+  classificationService: {
+    getCopilotReviewQueueCount: jest.fn().mockResolvedValue({ count: 5 }),
+    listCopilotReviewQueue: jest.fn().mockResolvedValue({ total: 0, items: [] }),
+    proposeConfirmClassification: jest.fn().mockResolvedValue({ classificationId: 'c1' }),
+    proposeCorrectClassification: jest.fn().mockResolvedValue({ classificationId: 'c1' }),
+  } as never,
+  chartOfAccountsService: {
+    findByCode: jest.fn().mockResolvedValue({ id: 'acc-1', code: '1111', name: 'Tiền mặt' }),
+    listFiltered: jest.fn().mockResolvedValue({ total: 0, items: [] }),
+  } as never,
+  transactionService: {
+    searchForCopilot: jest.fn().mockResolvedValue({ total: 0, items: [] }),
+  } as never,
+  bankingService: {
+    getBankingStatus: jest.fn().mockResolvedValue({ connected: false }),
   } as never,
   knowledgeService: {
     searchKnowledge: jest.fn().mockResolvedValue({ sections: [], totalFound: 0 }),

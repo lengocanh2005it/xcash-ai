@@ -3,12 +3,12 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../../prisma/prisma.service';
 import { RedisService } from '../../redis/redis.service';
+import { EmbeddingProviderService } from './embedding-provider.service';
 import {
   hasStrongKeywordKnowledgeMatch,
   type KnowledgeSearchResult,
   searchKnowledgeByKeyword,
 } from './knowledge';
-import { OpenAiService } from './openai.service';
 
 @Injectable()
 export class CopilotKnowledgeService {
@@ -17,7 +17,7 @@ export class CopilotKnowledgeService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly redisService: RedisService,
-    private readonly openAiService: OpenAiService,
+    private readonly embeddingProvider: EmbeddingProviderService,
     private readonly configService: ConfigService,
   ) {}
 
@@ -29,7 +29,7 @@ export class CopilotKnowledgeService {
       return keywordResult;
     }
 
-    if (!this.openAiService.isConfigured()) return keywordResult;
+    if (!this.embeddingProvider.isConfigured()) return keywordResult;
 
     try {
       const vector = await this.getOrCreateQueryEmbedding(query);
@@ -71,7 +71,7 @@ export class CopilotKnowledgeService {
       // cache miss — proceed to OpenAI
     }
 
-    const vector = await this.openAiService.createEmbedding(query);
+    const vector = await this.embeddingProvider.createEmbedding(query);
     if (!vector) return null;
 
     try {

@@ -1,166 +1,49 @@
-import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { CheckCircle, Pencil, SkipForward } from 'lucide-react';
 import { useState } from 'react';
-import { toast } from 'sonner';
 import { Header } from '@/components/layout/Header';
-import { ConfidenceBadge } from '@/components/shared/ConfidenceBadge';
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog';
-import { CopyIdButton } from '@/components/shared/CopyIdButton';
 import { EmptyState } from '@/components/shared/EmptyState';
 import { PaginationBar } from '@/components/shared/PaginationBar';
-import { SwipeableReviewCard } from '@/components/shared/SwipeableReviewCard';
 import { TableSkeleton } from '@/components/shared/TableSkeleton';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import {
-  Dialog,
-  DialogContent,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
 import { useAuth } from '@/hooks/useAuth';
-import { useFilteredPagination } from '@/hooks/useFilteredPagination';
-import { getApiData, postApiData } from '@/lib/api';
-import { formatDateVN } from '@/lib/date';
+import { useReviewQueue } from '@/hooks/useReviewQueue';
 import { canManageTransactions } from '@/lib/rbac';
-import type { ClassificationItem, ReviewQueueResponse } from '@/types/api/review';
-
-const PAGE_SIZE = 20;
-const SEARCH_DEBOUNCE_MS = 350;
-
-const CONFIDENCE_OPTIONS: Array<{
-  value: string;
-  label: string;
-  min?: number;
-  max?: number;
-}> = [
-  { value: 'all', label: 'Tất cả độ tin cậy' },
-  { value: 'low', label: 'Dưới 50%', max: 50 },
-  { value: 'mid', label: '50% – 85%', min: 50, max: 85 },
-];
-
-function formatAmount(amount: string | number) {
-  return Number(amount).toLocaleString('vi-VN', { style: 'currency', currency: 'VND' });
-}
-
-function buildReviewQueueUrl(params: { page: number; search: string; confidence: string }): string {
-  const query = new URLSearchParams({
-    page: String(params.page),
-    limit: String(PAGE_SIZE),
-  });
-  if (params.search.trim()) {
-    query.set('search', params.search.trim());
-  }
-  const band = CONFIDENCE_OPTIONS.find((o) => o.value === params.confidence);
-  if (band?.min != null) {
-    query.set('minConfidence', String(band.min));
-  }
-  if (band?.max != null) {
-    query.set('maxConfidence', String(band.max));
-  }
-  return `/review/queue?${query.toString()}`;
-}
-
-async function fetchReviewQueue(url: string): Promise<ReviewQueueResponse['data']> {
-  return getApiData<ReviewQueueResponse['data']>(url);
-}
-
-async function confirmReview(id: string) {
-  await postApiData<void>(`/review/${id}/confirm`);
-}
-
-async function correctReview(id: string, debitAccount: string, creditAccount: string) {
-  await postApiData<void>(`/review/${id}/correct`, { debitAccount, creditAccount });
-}
-
-async function skipReview(id: string) {
-  await postApiData<void>(`/review/${id}/skip`);
-}
-
-const ACCOUNT_CODE_PATTERN = /^\d{3,4}$/;
+import type { ClassificationItem } from '@/types/api/review';
+import { CorrectDialog } from './CorrectDialog';
+import { ReviewCardList } from './ReviewCardList';
+import { ReviewFilters } from './ReviewFilters';
+import { ReviewTable } from './ReviewTable';
 
 export default function ReviewPage() {
   const { user } = useAuth();
   const canReview = canManageTransactions(user?.role);
-  const queryClient = useQueryClient();
+
+  const {
+    data,
+    filters,
+    debouncedFilters,
+    setFilter,
+    resetFilters,
+    page,
+    setPage,
+    isLoading,
+    totalPages,
+    hasActiveFilters,
+    isSearchPending,
+    confirmMutation,
+    correctMutation,
+    skipMutation,
+    PAGE_SIZE,
+  } = useReviewQueue();
+
   const [correctDialog, setCorrectDialog] = useState<ClassificationItem | null>(null);
   const [confirmTarget, setConfirmTarget] = useState<ClassificationItem | null>(null);
   const [skipTarget, setSkipTarget] = useState<ClassificationItem | null>(null);
-  const [debitAccount, setDebitAccount] = useState('');
-  const [creditAccount, setCreditAccount] = useState('');
 
-  const { data, filters, debouncedFilters, setFilter, resetFilters, page, setPage, isLoading } =
-    useFilteredPagination({
-      queryKey: ['review-queue'],
-      queryFn: ({ filters, page }) =>
-        fetchReviewQueue(
-          buildReviewQueueUrl({ page, search: filters.search, confidence: filters.confidence }),
-        ),
-      defaultFilters: { search: '', confidence: 'all' },
-      debounceMs: SEARCH_DEBOUNCE_MS,
-      keepPrevious: true,
-      refetchInterval: 15_000,
-    });
+  const isAnyPending = confirmMutation.isPending || skipMutation.isPending;
 
-  const totalPages = data ? Math.max(1, Math.ceil(data.total / PAGE_SIZE)) : 1;
-  const hasActiveFilters = Boolean(
-    debouncedFilters.search.trim() || debouncedFilters.confidence !== 'all',
-  );
-  const isSearchPending = filters.search !== debouncedFilters.search;
-
-  const clearFilters = () => resetFilters();
-
-  const invalidate = () => {
-    queryClient.invalidateQueries({ queryKey: ['review-queue'] });
-    queryClient.invalidateQueries({ queryKey: ['review', 'count'] });
-  };
-
-  const confirmMutation = useMutation({
-    mutationFn: confirmReview,
-    onSuccess: () => {
-      toast.success('Đã xác nhận định khoản');
-      setConfirmTarget(null);
-      invalidate();
-    },
-    onError: () => toast.error('Không thể xác nhận'),
-  });
-
-  const correctMutation = useMutation({
-    mutationFn: ({ id, d, c }: { id: string; d: string; c: string }) => correctReview(id, d, c),
-    onSuccess: () => {
-      toast.success('Đã sửa và xác nhận định khoản');
-      setCorrectDialog(null);
-      invalidate();
-    },
-    onError: () => toast.error('Không thể sửa định khoản'),
-  });
-
-  const skipMutation = useMutation({
-    mutationFn: skipReview,
-    onSuccess: () => {
-      toast.success('Đã bỏ qua');
-      setSkipTarget(null);
-      invalidate();
-    },
-    onError: () => toast.error('Không thể bỏ qua'),
-  });
-
-  const openCorrect = (item: ClassificationItem) => {
-    setDebitAccount(item.debitAccount);
-    setCreditAccount(item.creditAccount);
-    setCorrectDialog(item);
-  };
+  const openCorrect = (item: ClassificationItem) => setCorrectDialog(item);
 
   return (
     <>
@@ -179,54 +62,17 @@ export default function ReviewPage() {
                 </span>
               ) : null}
             </CardTitle>
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-              <div className="space-y-1.5 lg:col-span-2">
-                <Label htmlFor="review-search">Tìm nội dung</Label>
-                <Input
-                  id="review-search"
-                  placeholder="Tìm theo nội dung giao dịch..."
-                  value={filters.search}
-                  onChange={(e) => setFilter('search', e.target.value)}
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="review-confidence">Độ tin cậy</Label>
-                <Select
-                  value={filters.confidence}
-                  onValueChange={(v) => setFilter('confidence', v)}
-                >
-                  <SelectTrigger id="review-confidence" className="w-full">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {CONFIDENCE_OPTIONS.map((o) => (
-                      <SelectItem key={o.value} value={o.value}>
-                        {o.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-            {hasActiveFilters ? (
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="text-xs text-muted-foreground">Đang lọc:</span>
-                {debouncedFilters.search.trim() ? (
-                  <Badge variant="secondary">"{debouncedFilters.search.trim()}"</Badge>
-                ) : null}
-                {debouncedFilters.confidence !== 'all' ? (
-                  <Badge variant="secondary">
-                    {CONFIDENCE_OPTIONS.find((o) => o.value === debouncedFilters.confidence)?.label}
-                  </Badge>
-                ) : null}
-                {isSearchPending ? (
-                  <span className="text-xs text-muted-foreground">Đang tìm...</span>
-                ) : null}
-                <Button variant="link" size="sm" className="h-auto px-1" onClick={clearFilters}>
-                  Xóa bộ lọc
-                </Button>
-              </div>
-            ) : null}
+            <ReviewFilters
+              search={filters.search}
+              confidence={filters.confidence}
+              debouncedSearch={debouncedFilters.search}
+              debouncedConfidence={debouncedFilters.confidence}
+              isSearchPending={isSearchPending}
+              hasActiveFilters={hasActiveFilters}
+              onSearchChange={(v) => setFilter('search', v)}
+              onConfidenceChange={(v) => setFilter('confidence', v)}
+              onClear={() => resetFilters()}
+            />
           </CardHeader>
           <CardContent>
             {isLoading ? (
@@ -245,7 +91,7 @@ export default function ReviewPage() {
                 }
                 action={
                   hasActiveFilters ? (
-                    <Button variant="outline" size="sm" onClick={clearFilters}>
+                    <Button variant="outline" size="sm" onClick={() => resetFilters()}>
                       Xóa bộ lọc
                     </Button>
                   ) : undefined
@@ -253,97 +99,22 @@ export default function ReviewPage() {
               />
             ) : (
               <>
-                <div className="space-y-3 lg:hidden">
-                  {data.items.map((item) => (
-                    <SwipeableReviewCard
-                      key={item.id}
-                      item={item}
-                      onConfirm={() => setConfirmTarget(item)}
-                      onSkip={() => setSkipTarget(item)}
-                      onCorrect={() => openCorrect(item)}
-                      disabled={confirmMutation.isPending || skipMutation.isPending}
-                      readOnly={!canReview}
-                    />
-                  ))}
-                </div>
-                <div className="hidden overflow-x-auto lg:block">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="border-b text-left text-muted-foreground">
-                        <th className="pb-3 pr-4 font-medium">Mã GD</th>
-                        <th className="pb-3 pr-4 font-medium">Ngày</th>
-                        <th className="pb-3 pr-4 font-medium">Nội dung</th>
-                        <th className="pb-3 pr-4 font-medium">Số tiền</th>
-                        <th className="pb-3 pr-4 font-medium">TK Nợ</th>
-                        <th className="pb-3 pr-4 font-medium">TK Có</th>
-                        <th className="pb-3 pr-4 font-medium">Độ tin cậy</th>
-                        {canReview ? <th className="pb-3 font-medium">Hành động</th> : null}
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y">
-                      {data.items.map((item) => (
-                        <tr key={item.id} className="hover:bg-muted/30">
-                          <td className="py-3 pr-4">
-                            <CopyIdButton id={item.transaction.id} />
-                          </td>
-                          <td className="py-3 pr-4 text-muted-foreground">
-                            {formatDateVN(item.transaction.transactionDate)}
-                          </td>
-                          <td
-                            className="max-w-[250px] truncate py-3 pr-4"
-                            title={item.transaction.content ?? ''}
-                          >
-                            {item.transaction.content ?? '—'}
-                          </td>
-                          <td className="py-3 pr-4 font-mono">
-                            {formatAmount(item.transaction.amount)}
-                          </td>
-                          <td className="py-3 pr-4 font-mono font-medium">{item.debitAccount}</td>
-                          <td className="py-3 pr-4 font-mono font-medium">{item.creditAccount}</td>
-                          <td className="py-3 pr-4">
-                            <ConfidenceBadge score={item.confidenceScore} />
-                          </td>
-                          {canReview ? (
-                            <td className="py-3">
-                              <div className="flex items-center gap-1">
-                                <Button
-                                  size="icon-sm"
-                                  variant="ghost"
-                                  title="Xác nhận"
-                                  aria-label="Xác nhận định khoản"
-                                  onClick={() => setConfirmTarget(item)}
-                                  disabled={confirmMutation.isPending}
-                                >
-                                  <CheckCircle className="size-4 text-green-600" />
-                                </Button>
-                                <Button
-                                  size="icon-sm"
-                                  variant="ghost"
-                                  title="Sửa"
-                                  aria-label="Sửa định khoản"
-                                  onClick={() => openCorrect(item)}
-                                >
-                                  <Pencil className="size-4 text-blue-600" />
-                                </Button>
-                                <Button
-                                  size="icon-sm"
-                                  variant="ghost"
-                                  title="Bỏ qua"
-                                  aria-label="Bỏ qua giao dịch"
-                                  onClick={() => setSkipTarget(item)}
-                                  disabled={skipMutation.isPending}
-                                >
-                                  <SkipForward className="size-4 text-muted-foreground" />
-                                </Button>
-                              </div>
-                            </td>
-                          ) : null}
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-
+                <ReviewCardList
+                  items={data.items}
+                  canReview={canReview}
+                  isPending={isAnyPending}
+                  onConfirm={setConfirmTarget}
+                  onCorrect={openCorrect}
+                  onSkip={setSkipTarget}
+                />
+                <ReviewTable
+                  items={data.items}
+                  canReview={canReview}
+                  isPending={isAnyPending}
+                  onConfirm={setConfirmTarget}
+                  onCorrect={openCorrect}
+                  onSkip={setSkipTarget}
+                />
                 {data ? (
                   <div className="mt-4 border-t pt-4">
                     <div className="flex items-center justify-between gap-3">
@@ -365,66 +136,12 @@ export default function ReviewPage() {
           </CardContent>
         </Card>
 
-        <Dialog open={!!correctDialog} onOpenChange={(open) => !open && setCorrectDialog(null)}>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Sửa định khoản</DialogTitle>
-            </DialogHeader>
-            {correctDialog ? (
-              <div className="space-y-4">
-                <p className="text-sm text-muted-foreground">{correctDialog.transaction.content}</p>
-                {correctDialog.reason ? (
-                  <p className="rounded-md bg-muted/50 px-3 py-2 text-xs text-muted-foreground">
-                    AI: {correctDialog.reason}
-                  </p>
-                ) : null}
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label>TK Nợ</Label>
-                    <Input
-                      value={debitAccount}
-                      onChange={(e) => setDebitAccount(e.target.value)}
-                      placeholder="vd: 112"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>TK Có</Label>
-                    <Input
-                      value={creditAccount}
-                      onChange={(e) => setCreditAccount(e.target.value)}
-                      placeholder="vd: 511"
-                    />
-                  </div>
-                </div>
-              </div>
-            ) : null}
-            <DialogFooter>
-              <Button variant="outline" onClick={() => setCorrectDialog(null)}>
-                Huỷ
-              </Button>
-              <Button
-                onClick={() => {
-                  if (!correctDialog) return;
-                  if (
-                    !ACCOUNT_CODE_PATTERN.test(debitAccount) ||
-                    !ACCOUNT_CODE_PATTERN.test(creditAccount)
-                  ) {
-                    toast.error('Mã tài khoản phải có 3–4 chữ số');
-                    return;
-                  }
-                  correctMutation.mutate({
-                    id: correctDialog.id,
-                    d: debitAccount,
-                    c: creditAccount,
-                  });
-                }}
-                disabled={correctMutation.isPending || !debitAccount || !creditAccount}
-              >
-                Xác nhận sửa
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
+        <CorrectDialog
+          item={correctDialog}
+          onClose={() => setCorrectDialog(null)}
+          onConfirm={(id, d, c) => correctMutation.mutate({ id, d, c })}
+          isPending={correctMutation.isPending}
+        />
 
         <ConfirmDialog
           open={confirmTarget !== null}

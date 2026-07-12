@@ -1,16 +1,23 @@
 import { Injectable, Logger } from '@nestjs/common';
+import type { Role } from '@xcash/shared-types';
 import type { Response } from 'express';
 import { CopilotQuotaManager } from '../../common/services/copilot-quota-manager';
 import type { AuthenticatedUser } from '../../common/types/authenticated-user.type';
+import { BankingService } from '../banking/banking.service';
 import { BillingService } from '../billing/billing.service';
+import { ChartOfAccountsService } from '../chart-of-accounts/chart-of-accounts.service';
+import { ClassificationService } from '../classification/classification.service';
 import { ReportDataService } from '../report/report-data.service';
 import { ReportExportService } from '../report/report-export.service';
+import { TransactionService } from '../transaction/transaction.service';
 import { AiUsageLogService } from './ai-usage-log.service';
+import { ChatProviderService } from './chat-provider.service';
 import {
   buildActivities,
   COPILOT_INITIAL_STREAM_ACTIVITY,
   getStreamingActivityMeta,
 } from './copilot-activity.helper';
+import { CopilotAgentFactoryService } from './copilot-agent-factory.service';
 import { CopilotConversationService } from './copilot-conversation.service';
 import {
   CopilotConversationSetupService,
@@ -18,7 +25,6 @@ import {
 } from './copilot-conversation-setup.service';
 import { CopilotKnowledgeService } from './copilot-knowledge.service';
 import type { ToolDeps } from './copilot-tool.executor';
-import { CopilotTransactionQueryService } from './copilot-tx-query.service';
 import { OpenAiService } from './openai.service';
 import { isQuotaOrBillingError } from './utils/llm-error.util';
 import { appendFallbackNotice, sanitizeCopilotOutput } from './utils/llm-output.util';
@@ -29,13 +35,18 @@ export class CopilotStreamService {
 
   constructor(
     private readonly openAiService: OpenAiService,
+    private readonly chatProvider: ChatProviderService,
+    private readonly agentFactory: CopilotAgentFactoryService,
     private readonly conversationService: CopilotConversationService,
     private readonly setupService: CopilotConversationSetupService,
     private readonly quotaManager: CopilotQuotaManager,
     private readonly aiUsageLogService: AiUsageLogService,
     private readonly reportService: ReportDataService,
     private readonly exportService: ReportExportService,
-    private readonly txQueryService: CopilotTransactionQueryService,
+    private readonly classificationService: ClassificationService,
+    private readonly chartOfAccountsService: ChartOfAccountsService,
+    private readonly transactionService: TransactionService,
+    private readonly bankingService: BankingService,
     private readonly knowledgeService: CopilotKnowledgeService,
     private readonly billingService: BillingService,
   ) {}
@@ -44,7 +55,10 @@ export class CopilotStreamService {
     return {
       reportService: this.reportService,
       exportService: this.exportService,
-      txQueryService: this.txQueryService,
+      classificationService: this.classificationService,
+      chartOfAccountsService: this.chartOfAccountsService,
+      transactionService: this.transactionService,
+      bankingService: this.bankingService,
       knowledgeService: this.knowledgeService,
       billingService: this.billingService,
     };
@@ -98,11 +112,10 @@ export class CopilotStreamService {
 
     try {
       if (useFunctionCalling) {
-        const result = await this.openAiService.chatCopilotWithTools(
+        const result = await this.chatProviderWithTools(
           tenantId,
           dto.message,
           history,
-          this.getToolDeps(),
           conversation.id,
           user.role,
           financialContext,
@@ -111,7 +124,7 @@ export class CopilotStreamService {
         activities = result.activities;
         meta = activities.length > 0 ? { activities } : undefined;
       } else {
-        reply = await this.openAiService.chatCopilot(
+        reply = await this.chatProvider.chatCopilot(
           dto.message,
           history,
           financialContext,
@@ -135,6 +148,77 @@ export class CopilotStreamService {
     });
 
     return { reply, meta, conversationId: conversation.id };
+  }
+
+  private async chatProviderWithTools(
+    tenantId: string,
+    message: string,
+    history: Array<{ role: 'user' | 'assistant'; content: string }>,
+    conversationId: string,
+    role: Role,
+    financialContext?: string,
+  ): Promise<{ reply: string; activities: ReturnType<typeof buildActivities> }> {
+    const calledTools: string[] = [];
+    const resultsCapture = new Map<string, unknown>();
+
+    const runner = this.agentFactory.createCopilotRunner(
+      tenantId,
+      message,
+      history,
+      this.getToolDeps(),
+      resultsCapture,
+      role,
+    );
+    if (!runner) {
+      const reply = await this.chatProvider.chatCopilot(
+        message,
+        history,
+        financialContext ?? '',
+        tenantId,
+        conversationId,
+      );
+      return { reply, activities: [] };
+    }
+
+    runner.on('functionToolCall', (call: { name: string }) => {
+      this.logger.debug(`Copilot tool called: ${call.name}`);
+      calledTools.push(call.name);
+    });
+
+    try {
+      const rawReply = sanitizeCopilotOutput(
+        await runner.finalContent(),
+        'Xin lỗi, tôi không thể trả lời lúc này.',
+      );
+      const { name: usedAdapter, fallback: usedFallback } = await runner.usedAdapterInfo();
+      const reply = usedFallback ? appendFallbackNotice(rawReply) : rawReply;
+      if (usedFallback) {
+        this.logger.warn(`Copilot trả lời qua fallback adapter: ${usedAdapter}`);
+      }
+      const usage = await runner.totalUsage();
+      if (usage) {
+        this.aiUsageLogService.record({
+          tenantId,
+          callType: 'copilot',
+          model:
+            usedAdapter === 'minimax'
+              ? this.openAiService.minimaxModel
+              : this.openAiService.chatModel,
+          tokensIn: usage.prompt_tokens,
+          tokensOut: usage.completion_tokens,
+          conversationId,
+        });
+      }
+
+      const activities = buildActivities(calledTools, resultsCapture);
+      return { reply, activities };
+    } catch (error) {
+      this.logger.error(
+        'Copilot agent harness failed (mọi LLM adapter đều lỗi)',
+        error instanceof Error ? error.message : String(error),
+      );
+      return { reply: 'Xin lỗi, có lỗi xảy ra. Vui lòng thử lại.', activities: [] };
+    }
   }
 
   async streamChat(
@@ -183,7 +267,7 @@ export class CopilotStreamService {
     let wasAborted = false;
     let accumulatedContent = '';
     let runnerInstance: NonNullable<
-      ReturnType<typeof this.openAiService.createCopilotRunner>
+      ReturnType<typeof this.agentFactory.createCopilotRunner>
     > | null = null;
 
     reqOnClose(() => {
@@ -193,7 +277,7 @@ export class CopilotStreamService {
 
     try {
       if (!useFunctionCalling) {
-        const reply = await this.openAiService.chatCopilot(
+        const reply = await this.chatProvider.chatCopilot(
           dto.message,
           history,
           financialContext,
@@ -205,7 +289,7 @@ export class CopilotStreamService {
       }
 
       const resultsCapture = new Map<string, unknown>();
-      const runner = this.openAiService.createCopilotRunner(
+      const runner = this.agentFactory.createCopilotRunner(
         tenantId,
         dto.message,
         history,
@@ -216,7 +300,7 @@ export class CopilotStreamService {
 
       if (!runner) {
         if (!wasAborted) {
-          const reply = await this.openAiService.chatCopilot(
+          const reply = await this.chatProvider.chatCopilot(
             dto.message,
             history,
             financialContext,
@@ -259,7 +343,7 @@ export class CopilotStreamService {
           this.aiUsageLogService.record({
             tenantId,
             callType: 'copilot',
-            model: this.openAiService.getChatModel(),
+            model: this.openAiService.chatModel,
             tokensIn: usage.prompt_tokens,
             tokensOut: usage.completion_tokens,
             conversationId: conversation.id,
@@ -280,7 +364,7 @@ export class CopilotStreamService {
             : 'Copilot stream runTools failed, falling back to simple chat',
           err instanceof Error ? err.message : String(err),
         );
-        const reply = await this.openAiService.chatCopilot(
+        const reply = await this.chatProvider.chatCopilot(
           dto.message,
           history,
           financialContext,

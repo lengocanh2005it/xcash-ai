@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
+import { EmbeddingProviderService } from './embedding-provider.service';
 import type { FewShotExample } from './openai.service';
-import { OpenAiService } from './openai.service';
 
 export interface ClassificationSimilarityRow {
   transaction_content: string;
@@ -14,7 +14,7 @@ export interface ClassificationSimilarityRow {
 export class EmbeddingService {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly openAiService: OpenAiService,
+    private readonly embeddingProvider: EmbeddingProviderService,
   ) {}
 
   private toVectorLiteral(embedding: number[]): string {
@@ -26,7 +26,7 @@ export class EmbeddingService {
     content: string,
     tenantId?: string,
   ): Promise<void> {
-    const embedding = await this.openAiService.createEmbedding(content, tenantId);
+    const embedding = await this.embeddingProvider.createEmbedding(content, tenantId);
     if (!embedding) return;
 
     const vectorLiteral = this.toVectorLiteral(embedding);
@@ -43,7 +43,7 @@ export class EmbeddingService {
     content: string,
     limit = 5,
   ): Promise<FewShotExample[]> {
-    const embedding = await this.openAiService.createEmbedding(content, tenantId);
+    const embedding = await this.embeddingProvider.createEmbedding(content, tenantId);
     if (!embedding) return [];
 
     const vectorLiteral = this.toVectorLiteral(embedding);

@@ -6,6 +6,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { WEBHOOK_QUEUE } from '../../queue/queue.module';
 import { RedisService } from '../../redis/redis.service';
 import { TransactionQuotaService } from '../billing/transaction-quota.service';
+import { OnboardingService } from '../onboarding/onboarding.service';
 import { BankingService } from './banking.service';
 import type { CasWebhookPayload } from './cas-webhook.handler';
 import { CasWebhookHandler } from './cas-webhook.handler';
@@ -58,6 +59,12 @@ describe('BankingService', () => {
     add: jest.fn().mockResolvedValue(undefined),
   };
 
+  const onboardingService = {
+    getOnboardingStatus: jest
+      .fn()
+      .mockResolvedValue({ connected: false, enabled: false, grantId: null }),
+  };
+
   const transactionQuotaService = {
     incrementUsage: jest.fn().mockResolvedValue({ oldUsed: 10 }),
     notifyAfterBatch: jest.fn().mockResolvedValue(undefined),
@@ -74,6 +81,7 @@ describe('BankingService', () => {
         { provide: CasWebhookHandler, useValue: webhookHandler },
         { provide: getQueueToken(WEBHOOK_QUEUE), useValue: webhookQueue },
         { provide: TransactionQuotaService, useValue: transactionQuotaService },
+        { provide: OnboardingService, useValue: onboardingService },
       ],
     }).compile();
 

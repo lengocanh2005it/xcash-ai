@@ -5,7 +5,7 @@ import type {
   CopilotConversationsListResponse,
 } from '@xcash/shared-types';
 import { PrismaService } from '../../prisma/prisma.service';
-import { OpenAiService } from './openai.service';
+import { ChatProviderService } from './chat-provider.service';
 
 function isSafeHttpUrl(url: string): boolean {
   return url.startsWith('https://') || url.startsWith('http://');
@@ -23,7 +23,7 @@ function sanitizeActivities(activities: CopilotActivity[]): CopilotActivity[] {
 export class CopilotConversationService {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly openAiService: OpenAiService,
+    private readonly chatProvider: ChatProviderService,
   ) {}
 
   async findOrCreate(tenantId: string, userId: string, conversationId?: string) {
@@ -82,7 +82,7 @@ export class CopilotConversationService {
   }
 
   triggerAutoTitle(conversationId: string, firstMessage: string, tenantId?: string): void {
-    void this.openAiService
+    void this.chatProvider
       .generateCopilotTitle(firstMessage, tenantId, conversationId)
       .then((title) =>
         this.prisma.copilotConversation.update({

@@ -1,10 +1,8 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
 import type { Response } from 'express';
+import { CopilotQuotaManager } from '../../common/services/copilot-quota-manager';
 import type { AuthenticatedUser } from '../../common/types/authenticated-user.type';
-import { PrismaService } from '../../prisma/prisma.service';
 import { BillingService } from '../billing/billing.service';
-import { NotificationService } from '../notification/notification.service';
 import { ReportDataService } from '../report/report-data.service';
 import { ReportExportService } from '../report/report-export.service';
 import { AiUsageLogService } from './ai-usage-log.service';
@@ -13,30 +11,17 @@ import {
   COPILOT_INITIAL_STREAM_ACTIVITY,
   getStreamingActivityMeta,
 } from './copilot-activity.helper';
-import { CopilotContextService } from './copilot-context.service';
 import { CopilotConversationService } from './copilot-conversation.service';
+import {
+  CopilotConversationSetupService,
+  type CopilotStreamMessage,
+} from './copilot-conversation-setup.service';
 import { CopilotKnowledgeService } from './copilot-knowledge.service';
 import type { ToolDeps } from './copilot-tool.executor';
 import { CopilotTransactionQueryService } from './copilot-tx-query.service';
 import { OpenAiService } from './openai.service';
 import { isQuotaOrBillingError } from './utils/llm-error.util';
 import { appendFallbackNotice, sanitizeCopilotOutput } from './utils/llm-output.util';
-
-interface CopilotStreamMessage {
-  message: string;
-  history: Array<{ role: 'user' | 'assistant'; content: string }>;
-  conversationId?: string;
-}
-
-interface ConversationSetup {
-  tenantId: string;
-  isNewConv: boolean;
-  useFunctionCalling: boolean;
-  conversation: Awaited<ReturnType<CopilotConversationService['findOrCreate']>>;
-  userMsg: Awaited<ReturnType<CopilotConversationService['saveUserMessage']>>;
-  history: CopilotStreamMessage['history'];
-  financialContext: Awaited<ReturnType<CopilotContextService['getFinancialContext']>>;
-}
 
 @Injectable()
 export class CopilotStreamService {
@@ -45,16 +30,14 @@ export class CopilotStreamService {
   constructor(
     private readonly openAiService: OpenAiService,
     private readonly conversationService: CopilotConversationService,
-    private readonly copilotContextService: CopilotContextService,
+    private readonly setupService: CopilotConversationSetupService,
+    private readonly quotaManager: CopilotQuotaManager,
     private readonly aiUsageLogService: AiUsageLogService,
     private readonly reportService: ReportDataService,
     private readonly exportService: ReportExportService,
     private readonly txQueryService: CopilotTransactionQueryService,
     private readonly knowledgeService: CopilotKnowledgeService,
     private readonly billingService: BillingService,
-    private readonly prisma: PrismaService,
-    private readonly notificationService: NotificationService,
-    private readonly configService: ConfigService,
   ) {}
 
   private getToolDeps(): ToolDeps {
@@ -67,43 +50,12 @@ export class CopilotStreamService {
     };
   }
 
-  private async setupConversation(
-    user: AuthenticatedUser,
-    dto: CopilotStreamMessage,
-  ): Promise<ConversationSetup> {
-    const tenantId = user.tenantId!;
-    const isNewConv = !dto.conversationId;
-    const useFunctionCalling =
-      this.configService.get<boolean>('COPILOT_USE_FUNCTION_CALLING') ?? false;
-
-    const userInfo = { name: user.name, role: user.role, businessName: user.businessName };
-    const [conversation, financialContext] = await Promise.all([
-      this.conversationService.findOrCreate(tenantId, user.id, dto.conversationId),
-      this.copilotContextService.getFinancialContext(tenantId, userInfo),
-    ]);
-    const userMsg = await this.conversationService.saveUserMessage(conversation.id, dto.message);
-
-    const history = dto.conversationId
-      ? await this.conversationService.getHistoryForContext(conversation.id, userMsg.id)
-      : dto.history;
-
-    return {
-      tenantId,
-      isNewConv,
-      useFunctionCalling,
-      conversation,
-      userMsg,
-      history,
-      financialContext,
-    };
-  }
-
   private async finalizeChat(opts: {
     conversationId: string;
     reply: string;
     activities: ReturnType<typeof buildActivities>;
     tenantId: string;
-    subMeta: { id: string } | undefined;
+    subMeta: { id: string; copilotQuota: number } | undefined;
     isNewConv: boolean;
     dto: CopilotStreamMessage;
     isPartial?: boolean;
@@ -122,42 +74,13 @@ export class CopilotStreamService {
         opts.dto.message,
         opts.tenantId,
       );
-    await this.incrementCopilotQuota(opts.tenantId, opts.subMeta);
-  }
-
-  private async incrementCopilotQuota(
-    tenantId: string,
-    subMeta: { id: string } | undefined,
-  ): Promise<void> {
-    if (!subMeta?.id) return;
-
-    const updated = await this.prisma.subscription.update({
-      where: { id: subMeta.id },
-      data: { copilotUsedThisCycle: { increment: 1 } },
-      select: { copilotUsedThisCycle: true, currentCycleStart: true, plan: true },
-    });
-
-    const planPricing = await this.prisma.planPricing.findUnique({
-      where: { plan: updated.plan },
-      select: { copilotQuota: true },
-    });
-
-    const quota = planPricing?.copilotQuota ?? -1;
-
-    void this.notificationService
-      .checkCopilotQuotaNotifications(
-        tenantId,
-        updated.copilotUsedThisCycle,
-        quota,
-        updated.currentCycleStart,
-      )
-      .catch(() => {});
+    await this.quotaManager.incrementAndNotify(opts.subMeta?.id, opts.tenantId);
   }
 
   async chat(
     user: AuthenticatedUser,
     dto: CopilotStreamMessage,
-    subMeta: { id: string } | undefined,
+    subMeta: { id: string; copilotQuota: number } | undefined,
   ) {
     const {
       tenantId,
@@ -167,7 +90,7 @@ export class CopilotStreamService {
       userMsg,
       history,
       financialContext,
-    } = await this.setupConversation(user, dto);
+    } = await this.setupService.prepare(user, dto);
 
     let reply: string;
     let activities: ReturnType<typeof buildActivities> = [];
@@ -217,12 +140,12 @@ export class CopilotStreamService {
   async streamChat(
     user: AuthenticatedUser,
     dto: CopilotStreamMessage,
-    subMeta: { id: string } | undefined,
+    subMeta: { id: string; copilotQuota: number } | undefined,
     res: Response,
     reqOnClose: (cb: () => void) => void,
   ): Promise<void> {
     const { tenantId, isNewConv, useFunctionCalling, conversation, history, financialContext } =
-      await this.setupConversation(user, dto);
+      await this.setupService.prepare(user, dto);
 
     res.setHeader('Content-Type', 'text/event-stream');
     res.setHeader('Cache-Control', 'no-cache');

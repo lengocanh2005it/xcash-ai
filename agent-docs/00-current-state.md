@@ -2,7 +2,9 @@
 
 > Mục đích: cho biết **chính xác** cái gì đã tồn tại trong repo ngay lúc này, để agent không cần `find`/`grep`/`ls` lại từ đầu mỗi session mới. File này phải được cập nhật mỗi khi có thay đổi cấu trúc đáng kể (thêm module, thêm page, đổi dependency lớn, thêm service hạ tầng). Nếu file này và thực tế code lệch nhau, **tin thực tế code**, và sửa lại file này ngay sau đó.
 
-Cập nhật lần cuối: **Post-merge fixes** — resolved cross-candidate conflicts after merging all 3 architecture PRs (#36 `refactor/report-3-layer-split`, #34 `feat/copilot-llm-provider-adapter`, #38 `worktree-copilot-export-report`). Re-created `copilot-tool.service.ts` wrapper with `ToolDeps` interface for PR #34 compatibility; added `exportService: ReportExportService` to `CopilotToolService`; installed `pdfmake` dependency; installed `vitest` devDependency for frontend. `pnpm verify` pass 11/11.
+Cập nhật lần cuối: **CopilotStreamService god-object decomposition** — extracted `CopilotConversationSetupService` (conversation + context + user message setup) and `CopilotQuotaManager` (quota increment + plan lookup + notification dispatch) from `CopilotStreamService`; slimmed stream service deps from 12→10; deleted dead code `copilot-tool.service.ts` + `copilot-agent.service.ts`; guard's `subMeta` extended to `{ id, copilotQuota }`; `CopilotQuotaManager` registered in `@Global()` `CommonServicesModule`. `pnpm verify` pass 11/11, 35 suites, 237 tests.
+
+Trước đó — **CopilotStreamService god-object decomposition** — extracted `CopilotConversationSetupService` (single `prepare()` method: findOrCreate conversation + saveUserMessage + getHistoryForContext + getFinancialContext + config lookup → returns `ConversationPreparation` DTO) and `CopilotQuotaManager` (incrementAndNotify: reads planPricing from SubscriptionQueryAdapter + bumps Redis counter + dispatches QuotaNotificationService) from CopilotStreamService; slimmed stream service constructor deps from 12→10; deleted dead code `copilot-tool.service.ts` (pass-through wrapper) + `copilot-agent.service.ts` (unused); extended guard's `subMeta` from `{ id }` to `{ id, copilotQuota }` so CopilotQuotaManager can read quota from request; `CopilotQuotaManager` registered in `@Global()` CommonServicesModule. `pnpm verify` pass 11/11, 35 suites, 237 tests.
 
 Trước đó — **Architecture candidates #3, #5, #8 hoàn thành** — #3 Redis extraction: thêm typed convenience methods (`get`, `set`, `del`, `incr`, etc.) vào `RedisService`, refactor 12 consumers dùng methods thay vì `client.*`. #5 Unified error handling: nâng cấp `AllExceptionsFilter` (Prisma error mapping P2002→409/P2025→404/P2003→409 + Sentry.captureException), tạo `otp-cooldown.util.ts` shared helper, refactor 3 auth services. #8 Webhook separation: tạo `CasWebhookHandler` (verifySignature + parsePayload), tách adapter concerns khỏi `BankingService` business logic, `WebhookController` dispatch qua handler. `pnpm verify` pass 29/29 tests.
 
@@ -384,15 +386,17 @@ paypilot-ai/                                   ← tên folder local có thể k
 │   │       │   ├── constants/
 │   │       │   │   ├── quota-policy.ts          # OVERAGE_PLANS, QUOTA_WARNING_RATIO, isOveragePlan() — shared across billing/banking ✅
 │   │       │   │   └── ai-pricing.ts            # AI_PRICING record + calcCostUsd(model, tokensIn, tokensOut) — on-the-fly cost calculation ✅
-│   │       │   ├── services/
-│   │   │   │   └── subscription-query.adapter.ts  # SubscriptionQueryAdapter — single seam for "active subscription by tenant" queries; findActive() trả ActiveSubscription kèm copilotQuota; findActivePlan() dùng chung cache sub:active:{tenantId}; Redis 60s cache ✅
+│   │           │   ├── services/
+│   │           │   │   ├── subscription-query.adapter.ts  # SubscriptionQueryAdapter — single seam for "active subscription by tenant" queries; findActive() trả ActiveSubscription kèm copilotQuota; findActivePlan() dùng chung cache sub:active:{tenantId}; Redis 60s cache ✅
+│   │           │   │   ├── copilot-quota-manager.ts      # CopilotQuotaManager — incrementAndNotify(subscriptionId, tenantId): bumps Redis counter + reads planPricing + dispatches QuotaNotificationService ✅
+│   │           │   │   └── copilot-quota-manager.spec.ts  # 6 tests: under quota, at quota, over quota, missing subscription, missing plan, notification dispatch ✅
 │   │       │   ├── decorators/                # @Roles, @RequiresPlan, @Public
 │   │           │   ├── common/
 │   │           │   │   ├── filters/all-exceptions.filter.ts  # Prisma error mapping (P2002→409, P2025→404, P2003→409) + Sentry.captureException ✅
 │   │           │   │   └── util/otp-cooldown.util.ts  # throwOtpCooldownException() shared helper ✅
 │   │           │   ├── guards/auth.guards.ts       # JwtAuthGuard, RolesGuard, PartnerGuard
 │   │       │   ├── guards/plan.guard.ts         # PlanGuard — uses SubscriptionQueryAdapter ✅
-│   │       │   ├── guards/copilot-quota.guard.ts  # CopilotQuotaGuard — uses SubscriptionQueryAdapter; reads copilotQuota from sub.copilotQuota (embedded in ActiveSubscription); removed own planPricing cache ✅
+│   │       │   ├── guards/copilot-quota.guard.ts  # CopilotQuotaGuard — uses SubscriptionQueryAdapter; reads copilotQuota from sub.copilotQuota (embedded in ActiveSubscription); subMeta = { id, copilotQuota }; removed own planPricing cache ✅
 │   │       │   ├── guards/copilot-throttler.guard.ts  # CopilotThrottlerGuard — per-user rate limit riêng cho Copilot (Phase 6) ✅
 │   │       │   ├── guards/tenant-throttler.guard.ts
 │   │       │   ├── filters/all-exceptions.filter.ts
@@ -424,7 +428,9 @@ paypilot-ai/                                   ← tên folder local có thể k
 │   │           │   ├── ai-usage-log.service.ts    # AiUsageLogService.record() — fire-and-forget AI token logging (seam duy nhất) ✅
 │   │           │   ├── ai-usage-log.service.spec.ts  # 4 tests: classify/embedding/copilot/error-swallow ✅
 │   │           │   ├── copilot.controller.ts      # POST /ai/copilot + POST /ai/copilot/stream + 4 conversation CRUD endpoints — CopilotQuotaGuard method-level (chat+stream only); controller deps 3 (CopilotStreamService, CopilotConversationService, RedisService) ✅
-│   │           │   ├── copilot-stream.service.ts  # chat() + streamChat() — toàn bộ streaming pipeline, tool calling, abort/partial, quota (extracted from controller) ✅
+│   │           │   ├── copilot-stream.service.ts  # chat() + streamChat() — streaming pipeline, tool calling, abort/partial, quota; deps 10 (slimmed from 12 via extracted services) ✅
+│   │           │   ├── copilot-conversation-setup.service.ts  # CopilotConversationSetupService — prepare(user, dto) → ConversationPreparation (findOrCreate conv + saveUserMessage + getHistoryForContext + getFinancialContext + config) ✅
+│   │           │   ├── copilot-conversation-setup.service.spec.ts  # 10 tests: new/existing conv, history, financial context, config ✅
 │   │           │   ├── copilot-activity.helper.ts # TOOL_ACTIVITIES, getStreamingActivityMeta(), buildActivities() — extracted from OpenAiService ✅
 │   │           │   ├── copilot-conversation.service.ts  # CRUD conversations + messages, cursor pagination, auto-title fire-and-forget, deleteMessage() dangling cleanup (Phase 6) ✅
 │   │           │   ├── copilot-context.service.ts # Fallback: preload summary tháng hiện tại (dùng khi flag=0)

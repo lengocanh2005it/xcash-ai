@@ -1,7 +1,6 @@
 import type { ConfigService } from '@nestjs/config';
 import type { Role } from '@xcash/shared-types';
 import { COPILOT_TOOLS } from './copilot-tool.registry';
-import type { CopilotToolService } from './copilot-tool.service';
 import type { LlmToolDefinition } from './llm/llm-provider.interface';
 import type { LlmTool } from './llm-adapter.interface';
 
@@ -26,15 +25,13 @@ export function buildCopilotToolSchemas(configService?: ConfigService): LlmTool[
 
 /**
  * Build plain JSON Schema tool definitions cho generic agent loop.
- * Không绑定 execute — agent loop tự dispatch qua CopilotToolService.
+ * Không绑定 execute — agent loop tự dispatch qua executeTool().
  */
 export function buildCopilotToolDefinitions(
-  toolService: CopilotToolService,
   tenantId: string,
   role?: Role,
   configService?: ConfigService,
 ): LlmToolDefinition[] {
-  void toolService;
   void tenantId;
   void role;
 

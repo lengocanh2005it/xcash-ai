@@ -20,7 +20,7 @@ export class CopilotQuotaGuard implements CanActivate {
     const request = context.switchToHttp().getRequest<
       Request & {
         user: AuthenticatedUser;
-        [COPILOT_SUBSCRIPTION_KEY]?: { id: string };
+        [COPILOT_SUBSCRIPTION_KEY]?: { id: string; copilotQuota: number };
       }
     >();
 
@@ -35,7 +35,7 @@ export class CopilotQuotaGuard implements CanActivate {
     // copilotQuota comes embedded in ActiveSubscription (fetched from PlanPricing
     // inside SubscriptionQueryAdapter, cached together under the same key).
     if (sub.copilotQuota === -1) {
-      request[COPILOT_SUBSCRIPTION_KEY] = { id: sub.id };
+      request[COPILOT_SUBSCRIPTION_KEY] = { id: sub.id, copilotQuota: sub.copilotQuota };
       return true;
     }
 
@@ -46,7 +46,7 @@ export class CopilotQuotaGuard implements CanActivate {
       );
     }
 
-    request[COPILOT_SUBSCRIPTION_KEY] = { id: sub.id };
+    request[COPILOT_SUBSCRIPTION_KEY] = { id: sub.id, copilotQuota: sub.copilotQuota };
     return true;
   }
 }

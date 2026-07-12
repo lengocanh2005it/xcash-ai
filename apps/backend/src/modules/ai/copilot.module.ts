@@ -10,6 +10,7 @@ import { AiCoreModule } from './ai-core.module';
 import { CopilotController } from './copilot.controller';
 import { CopilotContextService } from './copilot-context.service';
 import { CopilotConversationService } from './copilot-conversation.service';
+import { CopilotConversationSetupService } from './copilot-conversation-setup.service';
 import { CopilotKnowledgeService } from './copilot-knowledge.service';
 import { CopilotStreamService } from './copilot-stream.service';
 import { CopilotTransactionQueryService } from './copilot-tx-query.service';
@@ -20,6 +21,7 @@ import { CopilotTransactionQueryService } from './copilot-tx-query.service';
   providers: [
     CopilotContextService,
     CopilotConversationService,
+    CopilotConversationSetupService,
     CopilotKnowledgeService,
     CopilotTransactionQueryService,
     CopilotStreamService,

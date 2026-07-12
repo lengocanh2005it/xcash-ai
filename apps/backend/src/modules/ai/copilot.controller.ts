@@ -101,7 +101,7 @@ export class CopilotController {
   @Throttle({ default: { ttl: 60_000, limit: 30 } })
   async chat(@CurrentUser() user: AuthenticatedUser, @Body() dto: CopilotDto, @Req() req: Request) {
     const subMeta = (req as unknown as Record<string, unknown>)[COPILOT_SUBSCRIPTION_KEY] as
-      | { id: string }
+      | { id: string; copilotQuota: number }
       | undefined;
 
     return this.copilotStreamService.chat(user, dto, subMeta);
@@ -120,7 +120,7 @@ export class CopilotController {
     @Res() res: Response,
   ) {
     const subMeta = (req as unknown as Record<string, unknown>)[COPILOT_SUBSCRIPTION_KEY] as
-      | { id: string }
+      | { id: string; copilotQuota: number }
       | undefined;
 
     const sseKey = `copilot:sse:active:${user.id}`;

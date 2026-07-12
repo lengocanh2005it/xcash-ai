@@ -118,29 +118,49 @@ export class CopilotAgentHarness extends EventEmitter {
         tool_calls: result.toolCalls,
       });
 
+      // Emit theo thứ tự gốc trước khi thực thi — UI (activity card, SSE streaming) phụ thuộc
+      // thứ tự emit, không phải thứ tự hoàn thành của tool.
       for (const call of result.toolCalls) {
         this.emit('functionToolCall', { name: call.function.name });
-        const argsRaw = call.function.arguments || '{}';
-        const cacheKey = `${call.function.name}:${argsRaw}`;
+      }
 
-        let output: unknown;
-        if (this.toolResultCache.has(cacheKey)) {
-          output = this.toolResultCache.get(cacheKey);
-        } else {
-          try {
-            const args = JSON.parse(argsRaw) as Record<string, unknown>;
-            output = await this.executeTool(call.function.name, args);
-            this.toolResultCache.set(cacheKey, output);
-          } catch (err) {
-            output = { error: err instanceof Error ? err.message : String(err) };
+      // Resolve output của từng call song song, dedupe theo name+args cả liên-iteration
+      // (this.toolResultCache) lẫn trong cùng batch (batchPromises).
+      const batchPromises = new Map<string, Promise<unknown>>();
+      const outputs = await Promise.all(
+        result.toolCalls.map((call) => {
+          const argsRaw = call.function.arguments || '{}';
+          const cacheKey = `${call.function.name}:${argsRaw}`;
+
+          if (this.toolResultCache.has(cacheKey)) {
+            return Promise.resolve(this.toolResultCache.get(cacheKey));
           }
-        }
+
+          const inFlight = batchPromises.get(cacheKey);
+          if (inFlight) return inFlight;
+
+          const promise = (async (): Promise<unknown> => {
+            try {
+              const args = JSON.parse(argsRaw) as Record<string, unknown>;
+              const output = await this.executeTool(call.function.name, args);
+              this.toolResultCache.set(cacheKey, output);
+              return output;
+            } catch (err) {
+              return { error: err instanceof Error ? err.message : String(err) };
+            }
+          })();
+          batchPromises.set(cacheKey, promise);
+          return promise;
+        }),
+      );
+
+      result.toolCalls.forEach((call, i) => {
         messages.push({
           role: 'tool',
           tool_call_id: call.id,
-          content: JSON.stringify(output),
+          content: JSON.stringify(outputs[i]),
         });
-      }
+      });
     }
 
     // Chạm giới hạn vòng lặp mà model vẫn muốn gọi tool tiếp — ép 1 lượt cuối

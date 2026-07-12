@@ -293,4 +293,103 @@ describe('CopilotAgentHarness', () => {
     await harness.finalContent();
     expect(deltas).toEqual(['A', 'B']);
   });
+
+  it('emits functionToolCall in original order and executes independent tool calls concurrently', async () => {
+    const executionOrder: string[] = [];
+    const adapter = new FakeAdapter('primary', (callIndex) => {
+      if (callIndex === 0) {
+        return [
+          toolCallChunk('call_a', 'get_banking_status', '{}', 0),
+          toolCallChunk('call_b', 'get_month_summary', '{"year":2026,"month":7}', 1),
+          doneChunk('tool_calls'),
+        ];
+      }
+      return [contentChunk('Tổng hợp xong'), doneChunk('stop')];
+    });
+
+    const executeTool = jest.fn(async (name: string) => {
+      if (name === 'get_banking_status') {
+        // tool chậm hơn nhưng được gọi TRƯỚC trong tool_calls — nếu chạy tuần tự,
+        // get_month_summary phải đợi tool này xong mới bắt đầu.
+        await new Promise((resolve) => setTimeout(resolve, 20));
+      }
+      executionOrder.push(name);
+      return { ok: true };
+    });
+
+    const toolCallEvents: string[] = [];
+    const harness = new CopilotAgentHarness(
+      [adapter],
+      'system prompt',
+      [],
+      'trạng thái ngân hàng và doanh thu tháng này',
+      [],
+      executeTool,
+    );
+    harness.on('functionToolCall', (call: { name: string }) => toolCallEvents.push(call.name));
+
+    await expect(harness.finalContent()).resolves.toBe('Tổng hợp xong');
+
+    // Event functionToolCall theo đúng thứ tự gốc trong tool_calls, không theo thứ tự hoàn thành.
+    expect(toolCallEvents).toEqual(['get_banking_status', 'get_month_summary']);
+    // get_month_summary (nhanh hơn) hoàn thành trước get_banking_status (chậm hơn, chạy song song)
+    // — chứng minh 2 tool chạy đồng thời thay vì tuần tự.
+    expect(executionOrder).toEqual(['get_month_summary', 'get_banking_status']);
+  });
+
+  it('isolates a failing tool call from succeeding ones in the same batch', async () => {
+    const adapter = new FakeAdapter('primary', (callIndex) => {
+      if (callIndex === 0) {
+        return [
+          toolCallChunk('call_a', 'get_banking_status', '{}', 0),
+          toolCallChunk('call_b', 'get_month_summary', '{"year":2026,"month":7}', 1),
+          doneChunk('tool_calls'),
+        ];
+      }
+      return [contentChunk('Đã xử lý'), doneChunk('stop')];
+    });
+
+    const executeTool = jest.fn(async (name: string) => {
+      if (name === 'get_banking_status') throw new Error('banking API timeout');
+      return { revenue: 100 };
+    });
+
+    const harness = new CopilotAgentHarness(
+      [adapter],
+      'system prompt',
+      [],
+      'trạng thái ngân hàng và doanh thu tháng này',
+      [],
+      executeTool,
+    );
+
+    await expect(harness.finalContent()).resolves.toBe('Đã xử lý');
+    expect(executeTool).toHaveBeenCalledTimes(2);
+  });
+
+  it('dedupes identical name+args tool calls within the same batch (not just across iterations)', async () => {
+    const adapter = new FakeAdapter('primary', (callIndex) => {
+      if (callIndex === 0) {
+        return [
+          toolCallChunk('call_a', 'get_month_summary', '{"year":2026,"month":7}', 0),
+          toolCallChunk('call_b', 'get_month_summary', '{"year":2026,"month":7}', 1),
+          doneChunk('tool_calls'),
+        ];
+      }
+      return [contentChunk('OK'), doneChunk('stop')];
+    });
+    const executeTool = jest.fn().mockResolvedValue({ revenue: 1 });
+
+    const harness = new CopilotAgentHarness(
+      [adapter],
+      'system prompt',
+      [],
+      'doanh thu tháng này (hỏi trùng trong 1 lượt)',
+      [],
+      executeTool,
+    );
+
+    await harness.finalContent();
+    expect(executeTool).toHaveBeenCalledTimes(1);
+  });
 });

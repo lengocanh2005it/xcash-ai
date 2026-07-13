@@ -11,13 +11,13 @@ import { ReportModule } from '../report/report.module';
 import { TransactionModule } from '../transaction/transaction.module';
 import { AiCoreModule } from './ai-core.module';
 import { CopilotController } from './copilot.controller';
+import { CopilotBankingStatusService } from './copilot-banking-status.service';
 import { CopilotContextService } from './copilot-context.service';
 import { CopilotConversationService } from './copilot-conversation.service';
 import { CopilotConversationSetupService } from './copilot-conversation-setup.service';
 import { CopilotKnowledgeService } from './copilot-knowledge.service';
 import { CopilotStreamService } from './copilot-stream.service';
 import { CopilotToolDepsProvider } from './copilot-tool-deps.provider';
-import { CopilotTransactionQueryService } from './copilot-tx-query.service';
 
 @Module({
   imports: [
@@ -32,13 +32,13 @@ import { CopilotTransactionQueryService } from './copilot-tx-query.service';
   ],
   controllers: [CopilotController],
   providers: [
+    CopilotBankingStatusService,
     CopilotContextService,
     CopilotConversationService,
     CopilotConversationSetupService,
     CopilotKnowledgeService,
     CopilotStreamService,
     CopilotToolDepsProvider,
-    CopilotTransactionQueryService,
     PlanGuard,
     CopilotQuotaGuard,
     CopilotThrottlerGuard,

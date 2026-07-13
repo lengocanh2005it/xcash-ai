@@ -139,7 +139,7 @@ function fakeToolDeps(): { toolDeps: ToolDeps; calls: string[] } {
     transactionService: {
       searchForCopilot: track('search_transactions'),
     } as never,
-    copilotTxQueryService: {
+    bankingStatusService: {
       getBankingStatus: track('get_banking_status'),
     } as never,
     knowledgeService: {

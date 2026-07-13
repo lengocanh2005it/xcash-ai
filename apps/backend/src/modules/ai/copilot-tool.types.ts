@@ -5,15 +5,15 @@ import type { ClassificationService } from '../classification/classification.ser
 import type { ReportDataService } from '../report/report-data.service';
 import type { ReportExportService } from '../report/report-export.service';
 import type { TransactionService } from '../transaction/transaction.service';
+import type { CopilotBankingStatusService } from './copilot-banking-status.service';
 import type { CopilotKnowledgeService } from './copilot-knowledge.service';
-import type { CopilotTransactionQueryService } from './copilot-tx-query.service';
 
 export interface ToolDeps {
   reportService: ReportDataService;
   classificationService: ClassificationService;
   chartOfAccountsService: ChartOfAccountsService;
   transactionService: TransactionService;
-  copilotTxQueryService: CopilotTransactionQueryService;
+  bankingStatusService: CopilotBankingStatusService;
   knowledgeService: CopilotKnowledgeService;
   billingService: BillingService;
   exportService: ReportExportService;

@@ -5,9 +5,9 @@ import { ClassificationService } from '../classification/classification.service'
 import { ReportDataService } from '../report/report-data.service';
 import { ReportExportService } from '../report/report-export.service';
 import { TransactionService } from '../transaction/transaction.service';
+import { CopilotBankingStatusService } from './copilot-banking-status.service';
 import { CopilotKnowledgeService } from './copilot-knowledge.service';
 import type { ToolDeps } from './copilot-tool.types';
-import { CopilotTransactionQueryService } from './copilot-tx-query.service';
 
 @Injectable()
 export class CopilotToolDepsProvider {
@@ -17,7 +17,7 @@ export class CopilotToolDepsProvider {
     private readonly classificationService: ClassificationService,
     private readonly chartOfAccountsService: ChartOfAccountsService,
     private readonly transactionService: TransactionService,
-    private readonly copilotTxQueryService: CopilotTransactionQueryService,
+    private readonly bankingStatusService: CopilotBankingStatusService,
     private readonly knowledgeService: CopilotKnowledgeService,
     private readonly billingService: BillingService,
   ) {}
@@ -29,7 +29,7 @@ export class CopilotToolDepsProvider {
       classificationService: this.classificationService,
       chartOfAccountsService: this.chartOfAccountsService,
       transactionService: this.transactionService,
-      copilotTxQueryService: this.copilotTxQueryService,
+      bankingStatusService: this.bankingStatusService,
       knowledgeService: this.knowledgeService,
       billingService: this.billingService,
     };

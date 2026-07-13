@@ -101,7 +101,7 @@ export const accountTools: CopilotToolEntry[] = [
         source: 'X-Cash AI',
       },
     },
-    execute: (deps, tenantId) => deps.copilotTxQueryService.getBankingStatus(tenantId),
+    execute: (deps, tenantId) => deps.bankingStatusService.getBankingStatus(tenantId),
     formatSnippet: (data) => {
       if (data == null) return undefined;
       const d = data as {

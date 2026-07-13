@@ -1,6 +1,4 @@
-import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { ChevronLeft, ChevronRight, Eye, Search, X } from 'lucide-react';
-import { useCallback, useState } from 'react';
 import { AuditLogDetailSheet } from '@/components/audit/AuditLogDetailSheet';
 import { EmptyState } from '@/components/shared/EmptyState';
 import { TableSkeleton } from '@/components/shared/TableSkeleton';
@@ -15,36 +13,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { useDebouncedValue } from '@/hooks/useDebouncedValue';
-import { api } from '@/lib/api';
+import { useAuditLog } from '@/hooks/useAuditLog';
 import { formatDateVN } from '@/lib/date';
-
-export interface AuditLogItem {
-  id: string;
-  tenantId: string | null;
-  businessName: string | null;
-  entityType: string;
-  entityTypeLabel: string;
-  entityId: string;
-  action: string;
-  actionLabel: string;
-  actor: string;
-  actorLabel: string;
-  beforeState: Record<string, unknown> | null;
-  afterState: Record<string, unknown> | null;
-  createdAt: string;
-}
-
-interface AuditLogsResponse {
-  items: AuditLogItem[];
-  page: number;
-  limit: number;
-  total: number;
-  totalPages: number;
-}
-
-const PAGE_SIZE = 20;
-const SEARCH_DEBOUNCE_MS = 350;
 
 const ACTION_FILTER_OPTIONS = [
   { value: 'all', label: 'Tất cả hành động' },
@@ -87,74 +57,24 @@ export function AuditLogPanel({
   emptyTitle = 'Chưa có nhật ký',
   emptyDescription = 'Các thao tác trong hệ thống sẽ được ghi lại tại đây.',
 }: AuditLogPanelProps) {
-  const [page, setPage] = useState(1);
-  const [searchInput, setSearchInput] = useState('');
-  const [actionFilter, setActionFilter] = useState('all');
-  const [entityTypeFilter, setEntityTypeFilter] = useState('all');
-  const [fromDate, setFromDate] = useState('');
-  const [toDate, setToDate] = useState('');
-  const [selectedItem, setSelectedItem] = useState<AuditLogItem | null>(null);
-  const [sheetOpen, setSheetOpen] = useState(false);
-
-  const debouncedSearch = useDebouncedValue(
-    searchInput,
-    SEARCH_DEBOUNCE_MS,
-    useCallback(() => setPage(1), []),
-  );
-
-  const { data, isLoading, isFetching } = useQuery({
-    queryKey: [
-      'audit-logs',
-      endpoint,
-      page,
-      debouncedSearch,
-      actionFilter,
-      entityTypeFilter,
-      fromDate,
-      toDate,
-    ],
-    queryFn: () =>
-      api
-        .get<{ data: AuditLogsResponse }>(endpoint, {
-          params: {
-            page,
-            limit: PAGE_SIZE,
-            search: debouncedSearch.trim() || undefined,
-            action: actionFilter !== 'all' ? actionFilter : undefined,
-            entityType: entityTypeFilter !== 'all' ? entityTypeFilter : undefined,
-            fromDate: fromDate || undefined,
-            toDate: toDate || undefined,
-          },
-        })
-        .then((response) => response.data.data),
-    placeholderData: keepPreviousData,
-  });
-
-  const items = data?.items ?? [];
-  const total = data?.total ?? 0;
-  const totalPages = data?.totalPages ?? 1;
-  const isSearchPending = searchInput !== debouncedSearch;
-
-  const hasActiveFilters =
-    debouncedSearch.trim() !== '' ||
-    actionFilter !== 'all' ||
-    entityTypeFilter !== 'all' ||
-    fromDate !== '' ||
-    toDate !== '';
-
-  const clearFilters = () => {
-    setSearchInput('');
-    setActionFilter('all');
-    setEntityTypeFilter('all');
-    setFromDate('');
-    setToDate('');
-    setPage(1);
-  };
-
-  const openDetail = (item: AuditLogItem) => {
-    setSelectedItem(item);
-    setSheetOpen(true);
-  };
+  const {
+    items,
+    total,
+    totalPages,
+    isLoading,
+    isFetching,
+    isSearchPending,
+    hasActiveFilters,
+    filters,
+    setFilter,
+    clearFilters,
+    page,
+    setPage,
+    selectedItem,
+    sheetOpen,
+    setSheetOpen,
+    openDetail,
+  } = useAuditLog(endpoint);
 
   return (
     <div className="space-y-4">
@@ -168,21 +88,15 @@ export function AuditLogPanel({
                 ? 'Tìm theo người thực hiện, doanh nghiệp, mã đối tượng...'
                 : 'Tìm theo người thực hiện, mã đối tượng...'
             }
-            value={searchInput}
-            onChange={(event) => setSearchInput(event.target.value)}
+            value={filters.search}
+            onChange={(event) => setFilter('search', event.target.value)}
           />
         </div>
 
         <div className="flex flex-wrap items-end gap-3">
           <div className="space-y-1.5">
             <Label className="text-xs text-muted-foreground">Hành động</Label>
-            <Select
-              value={actionFilter}
-              onValueChange={(value) => {
-                setActionFilter(value);
-                setPage(1);
-              }}
-            >
+            <Select value={filters.action} onValueChange={(value) => setFilter('action', value)}>
               <SelectTrigger className="w-[200px]">
                 <SelectValue />
               </SelectTrigger>
@@ -199,11 +113,8 @@ export function AuditLogPanel({
           <div className="space-y-1.5">
             <Label className="text-xs text-muted-foreground">Đối tượng</Label>
             <Select
-              value={entityTypeFilter}
-              onValueChange={(value) => {
-                setEntityTypeFilter(value);
-                setPage(1);
-              }}
+              value={filters.entityType}
+              onValueChange={(value) => setFilter('entityType', value)}
             >
               <SelectTrigger className="w-[180px]">
                 <SelectValue />
@@ -223,11 +134,8 @@ export function AuditLogPanel({
             <Input
               type="date"
               className="w-[150px]"
-              value={fromDate}
-              onChange={(event) => {
-                setFromDate(event.target.value);
-                setPage(1);
-              }}
+              value={filters.fromDate}
+              onChange={(event) => setFilter('fromDate', event.target.value)}
             />
           </div>
 
@@ -236,11 +144,8 @@ export function AuditLogPanel({
             <Input
               type="date"
               className="w-[150px]"
-              value={toDate}
-              onChange={(event) => {
-                setToDate(event.target.value);
-                setPage(1);
-              }}
+              value={filters.toDate}
+              onChange={(event) => setFilter('toDate', event.target.value)}
             />
           </div>
 

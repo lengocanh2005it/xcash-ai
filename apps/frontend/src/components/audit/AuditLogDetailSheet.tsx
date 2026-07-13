@@ -1,5 +1,4 @@
 import type { ReactNode } from 'react';
-import type { AuditLogItem } from '@/components/audit/AuditLogPanel';
 import { Badge } from '@/components/ui/badge';
 import {
   Sheet,
@@ -8,6 +7,7 @@ import {
   SheetHeader,
   SheetTitle,
 } from '@/components/ui/sheet';
+import type { AuditLogItem } from '@/hooks/useAuditLog';
 
 function formatDateTime(iso: string): string {
   return new Date(iso).toLocaleString('vi-VN', {
